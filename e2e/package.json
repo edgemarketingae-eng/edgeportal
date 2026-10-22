@@ -1,0 +1,21 @@
+{
+  "name": "@edge/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e": "playwright test",
+    "stack": "tsx stack.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@edge/config": "workspace:*",
+    "@playwright/test": "1.63.0",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "mongodb-memory-server": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "name": "@edge/console",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3001 --hostname 0.0.0.0",
+    "build": "next build",
+    "start": "next start --port 3001",
+    "typecheck": "next typegen && tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@edge/contracts": "workspace:*",
+    "@edge/domain": "workspace:*",
+    "@edge/ui": "workspace:*",
+    "@edge/web": "workspace:*",
+    "lucide-react": "catalog:",
+    "next": "catalog:",
+    "qrcode": "^1.5.4",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "sonner": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@edge/config": "workspace:*",
+    "@tailwindcss/turbopack": "catalog:",
+    "@types/node": "catalog:",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "eslint": "catalog:",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:"
+  },
+  "type": "module"
+}

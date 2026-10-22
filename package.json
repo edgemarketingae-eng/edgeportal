@@ -1,0 +1,25 @@
+{
+  "name": "edge-academy",
+  "private": true,
+  "packageManager": "pnpm@10.26.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:db": "pnpm --filter @edge/devdb start",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "test:e2e": "pnpm --filter @edge/e2e e2e",
+    "format": "prettier --write \"**/*.{ts,tsx,mjs,json,css,md}\" --ignore-unknown",
+    "check": "turbo run typecheck lint test"
+  },
+  "devDependencies": {
+    "prettier": "catalog:",
+    "prettier-plugin-tailwindcss": "catalog:",
+    "turbo": "catalog:",
+    "typescript": "catalog:"
+  }
+}

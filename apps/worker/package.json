@@ -1,0 +1,33 @@
+{
+  "name": "@edge/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
+    "start": "node --env-file-if-exists=../../.env --import tsx src/index.ts",
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "bullmq": "catalog:",
+    "ioredis": "catalog:",
+    "@edge/db": "workspace:*",
+    "@edge/jobs": "workspace:*",
+    "@edge/services": "workspace:*",
+    "@edge/domain": "workspace:*"
+  },
+  "devDependencies": {
+    "@edge/config": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "tsdown": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "mongodb-memory-server": "catalog:",
+    "@edge/integrations": "workspace:*"
+  }
+}

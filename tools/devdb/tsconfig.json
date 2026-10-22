@@ -1,0 +1,4 @@
+{
+  "extends": "@edge/config/tsconfig/node.json",
+  "include": ["src"]
+}

@@ -1,0 +1,166 @@
+import { Bell, LogOut } from "lucide-react";
+import Link from "next/link";
+import type { ReactNode } from "react";
+import { Logo } from "../brand/logo";
+import { Avatar, AvatarFallback } from "../components/avatar";
+import { Button } from "../components/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "../components/dropdown-menu";
+import { MobileNav } from "./mobile-nav";
+import { NavLinks, type NavItem } from "./nav";
+
+export type { NavItem };
+
+export interface AreaLink {
+  href: string;
+  label: string;
+}
+
+function initials(name: string) {
+  return name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+/**
+ * Sidebar + header layout shared by both apps. Sign-out is a plain link to the app's
+ * /sign-out page, which calls the Better Auth client in the browser (it clears the cookie).
+ */
+export function AppShell({
+  items,
+  user,
+  areaLabel,
+  areas = [],
+  menuLinks = [],
+  unread = 0,
+  notificationsHref,
+  signOutHref = "/sign-out",
+  children,
+}: {
+  items: NavItem[];
+  user: { name: string; email: string };
+  areaLabel: string;
+  areas?: AreaLink[];
+  menuLinks?: AreaLink[];
+  unread?: number;
+  notificationsHref: string;
+  signOutHref?: string;
+  children: ReactNode;
+}) {
+  const logo = (
+    <Link href="/" aria-label="Home">
+      <Logo height={30} />
+    </Link>
+  );
+  return (
+    <div className="flex min-h-svh">
+      <aside className="border-sidebar-border bg-sidebar text-sidebar-foreground sticky top-0 hidden h-svh w-64 shrink-0 flex-col gap-6 border-r p-4 lg:flex">
+        <div className="px-2 pt-2">{logo}</div>
+        <p className="text-edge-mint/60 px-3 text-[11px] font-semibold tracking-[0.18em] uppercase">{areaLabel}</p>
+        <div className="flex-1 overflow-y-auto">
+          <NavLinks items={items} />
+        </div>
+        <div className="border-sidebar-border border-t pt-3">
+          <Link
+            href={signOutHref}
+            prefetch={false}
+            className="text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm"
+          >
+            <LogOut className="size-4" /> Sign out
+          </Link>
+        </div>
+      </aside>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="bg-card/95 sticky top-0 z-30 flex h-14 items-center gap-2 border-b px-3 backdrop-blur sm:px-6">
+          <MobileNav items={items} logo={logo} />
+          <span className="text-muted-foreground text-sm font-semibold lg:hidden">{areaLabel}</span>
+          <div className="ml-auto flex items-center gap-1">
+            <Button asChild variant="ghost" size="icon" aria-label={`Notifications${unread ? ` (${unread} unread)` : ""}`} className="relative">
+              <Link href={notificationsHref}>
+                <Bell />
+                {unread ? <span className="bg-edge-coral absolute top-1.5 right-1.5 size-2 rounded-full" /> : null}
+              </Link>
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="gap-2 px-2">
+                  <Avatar className="size-7">
+                    <AvatarFallback className="bg-edge-emerald text-xs text-white">{initials(user.name)}</AvatarFallback>
+                  </Avatar>
+                  <span className="hidden max-w-40 truncate text-sm sm:inline">{user.name}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="font-normal">
+                  <div className="truncate text-sm font-semibold">{user.name}</div>
+                  <div className="text-muted-foreground truncate text-xs">{user.email}</div>
+                </DropdownMenuLabel>
+                {areas.length > 1 ? (
+                  <>
+                    <DropdownMenuSeparator />
+                    {areas.map((a) => (
+                      <DropdownMenuItem key={a.href} asChild>
+                        <Link href={a.href}>{a.label}</Link>
+                      </DropdownMenuItem>
+                    ))}
+                  </>
+                ) : null}
+                <DropdownMenuSeparator />
+                {menuLinks.map((a) => (
+                  <DropdownMenuItem key={a.href} asChild>
+                    <Link href={a.href}>{a.label}</Link>
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuItem asChild>
+                  <Link href={signOutHref} prefetch={false}>
+                    Sign out
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </header>
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+      </div>
+    </div>
+  );
+}
+
+export function PageHeader({ title, description, actions }: { title: string; description?: ReactNode; actions?: ReactNode }) {
+  return (
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 className="font-display text-2xl uppercase sm:text-3xl">{title}</h1>
+        {description ? <p className="text-muted-foreground mt-1 text-sm">{description}</p> : null}
+      </div>
+      {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+    </div>
+  );
+}
+
+/** Placeholder while the signed-in shell streams in (keeps layout stable, no flash of content). */
+export function ShellSkeleton() {
+  return (
+    <div className="flex min-h-svh" aria-busy="true">
+      <aside className="bg-sidebar hidden w-64 shrink-0 lg:block" />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="bg-card/95 h-14 border-b" />
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
+          <PageSkeleton />
+        </main>
+      </div>
+    </div>
+  );
+}
+
+export function PageSkeleton() {
+  return (
+    <div className="grid animate-pulse gap-4" aria-hidden>
+      <div className="bg-muted h-8 w-56 rounded-md" />
+      <div className="bg-muted h-4 w-80 max-w-full rounded-md" />
+      <div className="bg-muted mt-2 h-40 rounded-xl" />
+      <div className="bg-muted h-40 rounded-xl" />
+    </div>
+  );
+}

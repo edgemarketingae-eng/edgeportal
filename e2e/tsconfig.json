@@ -1,0 +1,5 @@
+{
+  "extends": "@edge/config/tsconfig/node.json",
+  "compilerOptions": { "lib": ["dom", "ES2023"] },
+  "include": ["*.ts", "tests"]
+}

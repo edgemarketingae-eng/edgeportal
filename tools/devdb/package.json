@@ -1,0 +1,20 @@
+{
+  "name": "@edge/devdb",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "mongodb": "catalog:",
+    "mongodb-memory-server": "catalog:"
+  },
+  "devDependencies": {
+    "@edge/config": "workspace:*",
+    "@types/node": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:"
+  }
+}
