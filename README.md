@@ -9,6 +9,8 @@ Student portal, staff portal and admin panel for Edge Trading Academy (Phase 1).
 - **Mentors** schedule Google Meet classes for their batches and manage recordings, which are streamed from Google Drive.
 - **Admins** approve students and manage batches and fees. They also record bank or cash payments, watch the Odoo
   invoice sync, and manage staff, roles and settings. Every sensitive change is in the audit log.
+- **Sales** work in a separate CRM app: leads grouped into projects with their own teams, a drag-and-drop task
+  board, and one-click conversion of a lead into a student account. See [docs/CRM.md](docs/CRM.md).
 
 ## Architecture
 
@@ -19,6 +21,7 @@ apps/api        Express 5 API: Better Auth, /api/v1 routes, webhooks, media stre
 apps/worker     BullMQ workers and cron schedules (Asia/Dubai)
 apps/student    Next.js 16 student portal       (student.localhost:3000 in dev)
 apps/console    Next.js 16 staff portal + admin (console.localhost:3001 in dev)
+apps/crm        Next.js 16 sales CRM               (crm.localhost:3002 in dev)
 packages/domain        pure business rules: fees, enrollment state machine, entitlements, dates, money, permissions
 packages/contracts     Zod request/response schemas and route definitions shared by API and apps
 packages/db            Mongoose models, indexes, transactions (withTx / lockForUpdate), seed, test harness
@@ -35,7 +38,7 @@ deploy                 server setup + deploy scripts, PM2 processes, nginx site,
 
 How the pieces talk:
 
-- **Browser to app.** Each Next app is the only origin its browser talks to. `/api/auth/*`, `/api/v1/auth/*`,
+- **Browser to app.** Each Next app is the only origin its browser talks to (sessions are per host, so a person signs in to the console and to the CRM separately). `/api/auth/*`, `/api/v1/auth/*`,
   `/api/join/*` and `/api/checkout/return/*` are rewritten to the API, so session cookies stay on the app's own host.
 - **App to API.** Server Components and Server Actions call the internal `/api/v1/*` routes with
   `INTERNAL_API_TOKEN` and the forwarded session cookie (`@edge/web/server`). `/api/v1` is not exposed publicly.
@@ -56,14 +59,16 @@ pnpm install
 cp .env.example .env                 # optional: the defaults already work (everything mocked)
 pnpm dev:db                          # terminal 1: MongoDB replica set rs0 on :27017 (data in .data/mongo)
 pnpm --filter @edge/api migrate      # once: indexes + seed (roles, fee rates, demo course/batch, demo staff)
-pnpm dev                             # terminal 2: api :4000, worker, student :3000, console :3001
+pnpm dev                             # terminal 2: api :4000, worker, student :3000, console :3001, crm :3002
 ```
 
-`pnpm dev` and `npx turbo dev` are the same thing. Open <http://student.localhost:3000> and
-<http://console.localhost:3001>. Use the `.localhost` names: the two apps keep separate session cookies per host.
+`pnpm dev` and `npx turbo dev` are the same thing. Open <http://student.localhost:3000>,
+<http://console.localhost:3001> and <http://crm.localhost:3002>. Use the `.localhost` names: the apps keep
+separate session cookies per host.
 
 Demo accounts (development seed only, password `ChangeMe!2026`): `admin@edgeacademy.local` (super admin),
-`admissions@edgeacademy.local`, `finance@edgeacademy.local`, `mentor@edgeacademy.local`.
+`admissions@edgeacademy.local`, `finance@edgeacademy.local`, `mentor@edgeacademy.local`; for the CRM
+`crm-admin@edgeacademy.local`, `pm@edgeacademy.local` (project manager) and `sales@edgeacademy.local` (sales executive).
 
 ## Environment variables
 
@@ -77,9 +82,9 @@ Each environment has exactly one place for its settings:
 | `pnpm test:e2e` | nothing to set; [`e2e/stack.ts`](e2e/stack.ts) configures its isolated stack | |
 | Production (PM2 on the VPS) | `.env` at the repo root on the server, read by every process | [`deploy/env.production.example`](deploy/env.production.example) |
 
-**Development (`.env` at the repo root).** All four apps read the one file:
+**Development (`.env` at the repo root).** All five apps read the one file:
 - the API and worker through `--env-file-if-exists=../../.env` in their `package.json` scripts;
-- the student and console apps through `next.config.ts`.
+- the student, console and CRM apps through `next.config.ts`.
 
 Turborepo itself never loads `.env` files; it only hashes this one so builds are rebuilt when it changes.
 Variables already exported in your shell win over the file, and anything unset falls back to a built-in default.
@@ -102,7 +107,7 @@ In production the API refuses to start if any integration is still in mock mode 
 default. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 **Rules that apply everywhere:**
-- `INTERNAL_API_TOKEN` must be identical for the API and both Next apps.
+- `INTERNAL_API_TOKEN` must be identical for the API and the three Next apps.
 - `API_INTERNAL_URL` is compiled into the Next apps' rewrites at build time, so set it before `next build`
   (`deploy/deploy.sh` builds with the server's `.env`; the default `http://127.0.0.1:4000` is right there).
 
@@ -110,7 +115,7 @@ default. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ```bash
 pnpm check        # typecheck + lint + unit/integration tests (MongoMemoryReplSet; Redis db 15 for job tests)
-pnpm test:e2e     # Playwright: builds and starts an isolated stack (ports 3100/3101/4100, in-memory MongoDB, Redis db 14)
+pnpm test:e2e     # Playwright: builds and starts an isolated stack (ports 3100/3101/3102/4100, in-memory MongoDB, Redis db 14)
 ```
 
 To iterate on e2e tests, keep the stack running in one terminal with `pnpm --filter @edge/e2e stack`

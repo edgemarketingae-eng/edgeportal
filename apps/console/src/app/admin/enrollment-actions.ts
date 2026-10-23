@@ -1,10 +1,10 @@
 "use server";
 
 import { enrollmentRoutes, type Ok } from "@edge/contracts";
-import { text, type ActionState } from "@edge/web/actions";
+import { dialogError, text, type ActionState } from "@edge/web/actions";
 import { api } from "@edge/web/server";
 import { refresh } from "next/cache";
-import { dialogError } from "@/components/admin-ops/action-error";
+
 
 /** Call the API, then re-render the current route (and the nav's approval count) with fresh data. */
 async function run(call: () => Promise<Ok>): Promise<ActionState> {

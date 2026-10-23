@@ -21,6 +21,16 @@ export const PERMISSIONS = {
   "staff.manage": "Create and deactivate staff accounts",
   "roles.manage": "Edit roles and permissions",
   "audit.read": "View the audit log",
+  "crm.access": "Open the CRM",
+  "crm.read": "View leads, tasks and projects in scope",
+  "crm.write": "Create and edit leads, log activities, work tasks and claim unassigned leads",
+  "crm.assign": "Assign leads and tasks to others within scope",
+  "crm.convert": "Convert leads into student accounts",
+  "crm.all": "See every project and lead",
+  "crm.projects.manage": "Create and edit projects and their teams",
+  "crm.manage": "CRM settings, imports and merges",
+  "crm.staff.manage": "Create and manage CRM staff",
+  "crm.roles.manage": "Create and edit CRM roles",
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -28,6 +38,16 @@ export const ALL_PERMISSIONS = Object.keys(PERMISSIONS) as Permission[];
 
 export function isPermission(p: string): p is Permission {
   return p in PERMISSIONS;
+}
+
+/** CRM permissions are the `crm.*` keys; a CRM role grants nothing else, which is what lets CRM admins manage it. */
+export function isCrmPermission(p: string) {
+  return p.startsWith("crm.");
+}
+export const CRM_PERMISSIONS = ALL_PERMISSIONS.filter(isCrmPermission);
+
+export function isCrmRole(role: { permissions?: readonly string[] | null }) {
+  return !!role.permissions?.length && role.permissions.every(isCrmPermission);
 }
 
 /** System roles created by the seed. Admins can create more roles later. */
@@ -68,4 +88,27 @@ export const SYSTEM_ROLES: { key: string; name: string; description: string; per
     description: "Teaches batches and schedules live classes",
     permissions: ["staff.access", "class.schedule.own"],
   },
+  // CRM roles hold only crm.* keys (see isCrmRole), so CRM admins may manage them inside the CRM.
+  { key: "crm_admin", name: "CRM admin", description: "Everything in the CRM, including its staff and roles", permissions: CRM_PERMISSIONS },
+  {
+    key: "crm_manager",
+    name: "CRM manager",
+    description: "Sees every project, creates projects and assigns teams",
+    permissions: ["crm.access", "crm.read", "crm.write", "crm.assign", "crm.convert", "crm.all", "crm.projects.manage", "crm.manage"],
+  },
+  {
+    key: "project_manager",
+    name: "Project manager",
+    description: "Runs the projects assigned to them: their leads, team and tasks",
+    permissions: ["crm.access", "crm.read", "crm.write", "crm.assign", "crm.convert"],
+  },
+  {
+    key: "sales_executive",
+    name: "Sales executive",
+    description: "Works their own leads and follow-ups",
+    permissions: ["crm.access", "crm.read", "crm.write", "crm.convert"],
+  },
 ];
+
+/** System roles replaced by a newer key: the seed moves members over and deletes the old role. */
+export const RETIRED_SYSTEM_ROLES: { key: string; replacedBy: string }[] = [{ key: "sales", replacedBy: "sales_executive" }];

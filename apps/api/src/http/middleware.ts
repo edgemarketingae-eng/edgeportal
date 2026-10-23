@@ -24,7 +24,7 @@ export const internalOnly: RequestHandler = (req, _res, next) => {
 export const sameAppOrigin: RequestHandler = (req, _res, next) => {
   if (req.method === "GET" || req.method === "HEAD") return next();
   const origin = req.header("origin");
-  if (!origin || ![env.STUDENT_APP_URL, env.CONSOLE_APP_URL].includes(origin)) return next(new ApiError(403, "FORBIDDEN", "Invalid origin"));
+  if (!origin || ![env.STUDENT_APP_URL, env.CONSOLE_APP_URL, env.CRM_APP_URL].includes(origin)) return next(new ApiError(403, "FORBIDDEN", "Invalid origin"));
   next();
 };
 

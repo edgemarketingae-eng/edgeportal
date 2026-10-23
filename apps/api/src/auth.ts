@@ -20,14 +20,14 @@ const BLOCKED = new Set(["/phone-number/request-password-reset", "/phone-number/
 export function createAuth() {
   const { db, client } = nativeDb();
   const prod = env.NODE_ENV === "production";
-  const appHosts = [new URL(env.STUDENT_APP_URL).host, new URL(env.CONSOLE_APP_URL).host];
+  const appHosts = [new URL(env.STUDENT_APP_URL).host, new URL(env.CONSOLE_APP_URL).host, new URL(env.CRM_APP_URL).host];
 
   return betterAuth({
     appName: "Edge Trading Academy",
     secret: env.BETTER_AUTH_SECRET,
     // Requests arrive through each app's rewrite; links (e.g. password reset) point back at that app.
     baseURL: { allowedHosts: appHosts, fallback: env.STUDENT_APP_URL, protocol: prod ? "https" : "http" },
-    trustedOrigins: [env.STUDENT_APP_URL, env.CONSOLE_APP_URL],
+    trustedOrigins: [env.STUDENT_APP_URL, env.CONSOLE_APP_URL, env.CRM_APP_URL],
     database: mongodbAdapter(db, { client }),
     advanced: { trustedProxyHeaders: true, useSecureCookies: prod },
     session: { expiresIn: 60 * 60 * 24 * 30, updateAge: 60 * 60 * 24 },

@@ -45,7 +45,7 @@ export const authRoutes = {
   signInPassword: route({
     method: "POST",
     path: "/api/v1/auth/sign-in",
-    body: z.object({ identifier: z.string().trim().min(3, "Enter your email or mobile number"), password: z.string().min(1, "Enter your password"), app: z.enum(["student", "console"]) }),
+    body: z.object({ identifier: z.string().trim().min(3, "Enter your email or mobile number"), password: z.string().min(1, "Enter your password"), app: z.enum(["student", "console", "crm"]) }),
     response: z.object({ ok: z.literal(true), home: z.string().optional(), twoFactorRedirect: z.boolean().optional() }),
   }),
 };

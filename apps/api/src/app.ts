@@ -14,6 +14,7 @@ import { studentRouter } from "./routes/student";
 import { meRouter } from "./routes/me";
 import { checkoutReturnRouter, paymentsRouter, webhookRouter } from "./routes/payments";
 import { classesRouter, joinRouter, mediaRouter } from "./routes/classes";
+import { crmRouter, leadWebhookRouter } from "./routes/crm";
 
 export interface AppOptions {
   auth: Auth;
@@ -38,6 +39,7 @@ export function createApp({ auth, logger = true, extraRoutes }: AppOptions) {
   app.all("/api/auth/*splat", toNodeHandler(auth));
 
   // Raw-body and browser routes that must come before express.json().
+  app.use(leadWebhookRouter()); // /api/webhooks/leads/:source, before the single-segment :gateway route
   app.use(webhookRouter());
   app.use(checkoutReturnRouter());
   app.use(mediaRouter());
@@ -54,6 +56,7 @@ export function createApp({ auth, logger = true, extraRoutes }: AppOptions) {
   app.use(paymentsRouter());
   app.use(classesRouter());
   app.use(adminRouter());
+  app.use(crmRouter());
   app.use(devRouter());
 
   app.use((_req, res) => res.status(404).json({ error: { code: "NOT_FOUND", message: "Not found" } }));

@@ -10,15 +10,18 @@ export function FilterBar({
   q,
   placeholder = "Search name, email, mobile…",
   extra,
+  search = true,
 }: {
   children?: ReactNode;
   q?: string;
   placeholder?: string;
   extra?: ReactNode;
+  /** Set to false for lists that have no free-text search, only selects. */
+  search?: boolean;
 }) {
   return (
     <form className="mb-4 flex flex-wrap items-center gap-2" method="get">
-      <Input name="q" defaultValue={q} placeholder={placeholder} className="bg-card h-9 w-full sm:w-72" />
+      {search ? <Input name="q" defaultValue={q} placeholder={placeholder} className="bg-card h-9 w-full sm:w-72" /> : null}
       {children}
       <Button type="submit" size="sm" variant="outline">
         Apply

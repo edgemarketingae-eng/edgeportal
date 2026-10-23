@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { AuthAccount, AuthSession, AuthUser, Role, StaffProfile, Types, withTx } from "@edge/db";
 import type { Actor } from "@edge/domain/enums";
-import { isPermission } from "@edge/domain/auth/permissions";
+import { isCrmRole, isPermission } from "@edge/domain/auth/permissions";
 import { hashPassword } from "better-auth/crypto";
 import { audit } from "../audit";
 import { env } from "../env";
@@ -18,7 +18,12 @@ export function tempPassword() {
   return `Edge-${chars.slice(0, 4)}-${chars.slice(4, 8)}-${chars.slice(8, 12)}`;
 }
 
-async function rolesByKeys(keys: string[]) {
+/** Pure-CRM staff sign in at the CRM; everyone else at the staff console. */
+export function loginUrlFor(roles: { permissions?: string[] | null }[]) {
+  return `${roles.length && roles.every(isCrmRole) ? env.CRM_APP_URL : env.CONSOLE_APP_URL}/login`;
+}
+
+export async function rolesByKeys(keys: string[]) {
   const roles = await Role.find({ key: { $in: keys } }).lean();
   if (roles.length !== keys.length) throw new BusinessError("Unknown role selected");
   return roles;
@@ -34,14 +39,18 @@ async function isSuperAdmin(userId: string) {
  * Writes Better Auth's user + credential account documents directly, in exactly the shape its
  * MongoDB adapter produces (ObjectId _id/userId, accountId = user id hex string).
  */
-export async function createUserWithPassword(input: { name: string; email: string; password: string; mustChangePassword: boolean; emailVerified?: boolean }) {
+export async function createUserWithPasswordHash(input: { name: string; email: string; passwordHash: string; mustChangePassword?: boolean; emailVerified?: boolean }) {
   const _id = new Types.ObjectId();
   const at = new Date();
   await AuthUser.create([
-    { _id, name: input.name.trim(), email: input.email.trim().toLowerCase(), emailVerified: input.emailVerified ?? true, image: null, phoneNumber: null, phoneNumberVerified: false, twoFactorEnabled: false, mustChangePassword: input.mustChangePassword, disabledAt: null, createdAt: at, updatedAt: at },
+    { _id, name: input.name.trim(), email: input.email.trim().toLowerCase(), emailVerified: input.emailVerified ?? true, image: null, phoneNumber: null, phoneNumberVerified: false, twoFactorEnabled: false, mustChangePassword: !!input.mustChangePassword, disabledAt: null, createdAt: at, updatedAt: at },
   ]);
-  await AuthAccount.create([{ accountId: _id.toHexString(), providerId: "credential", userId: _id, password: await hashPassword(input.password), createdAt: at, updatedAt: at }]);
+  await AuthAccount.create([{ accountId: _id.toHexString(), providerId: "credential", userId: _id, password: input.passwordHash, createdAt: at, updatedAt: at }]);
   return _id;
+}
+
+export async function createUserWithPassword(input: { name: string; email: string; password: string; mustChangePassword: boolean; emailVerified?: boolean }) {
+  return createUserWithPasswordHash({ ...input, passwordHash: await hashPassword(input.password) });
 }
 
 export async function createStaff(input: { name: string; email: string; roleKeys: string[]; title?: string; workspaceEmail?: string; password?: string }, actor: Actor) {
@@ -58,7 +67,7 @@ export async function createStaff(input: { name: string; email: string; roleKeys
     await StaffProfile.create([{ _id: userId, title: input.title || null, workspaceEmail: input.workspaceEmail?.trim().toLowerCase() || null, roleIds: roles.map((r) => r._id) }]);
     await audit({ actor, action: "staff.create", entityType: "User", entityId: String(userId), after: { email, roles: input.roleKeys } });
     if (!input.password) {
-      await queueEmail({ to: email, userId: String(userId), template: "auth.staffWelcome", data: { name: input.name, email, tempPassword: password, loginUrl: `${env.CONSOLE_APP_URL}/login` } });
+      await queueEmail({ to: email, userId: String(userId), template: "auth.staffWelcome", data: { name: input.name, email, tempPassword: password, loginUrl: loginUrlFor(roles) } });
     }
     return userId;
   });
@@ -98,6 +107,8 @@ export async function resetStaffPassword(userId: string, actor: Actor & { type: 
   const _id = oid(userId, "Staff member");
   const user = await AuthUser.findById(_id).lean();
   if (!user) throw new NotFoundError("Staff member");
+  const profile = await StaffProfile.findById(_id).lean();
+  const roles = await Role.find({ _id: { $in: profile?.roleIds ?? [] } }).lean();
   const password = tempPassword();
   const hash = await hashPassword(password);
   await withTx(async () => {
@@ -107,7 +118,7 @@ export async function resetStaffPassword(userId: string, actor: Actor & { type: 
     await AuthUser.updateOne({ _id }, { $set: { mustChangePassword: true } });
     await AuthSession.deleteMany({ userId: _id });
     await audit({ actor, action: "staff.resetPassword", entityType: "User", entityId: userId });
-    await queueEmail({ to: user.email, userId, template: "auth.staffWelcome", data: { name: user.name, email: user.email, tempPassword: password, loginUrl: `${env.CONSOLE_APP_URL}/login` } });
+    await queueEmail({ to: user.email, userId, template: "auth.staffWelcome", data: { name: user.name, email: user.email, tempPassword: password, loginUrl: loginUrlFor(roles) } });
   });
   await flushOutbox();
   return password;

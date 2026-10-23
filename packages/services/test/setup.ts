@@ -10,6 +10,7 @@ Object.assign(process.env, {
   MEDIA_SIGNING_SECRET: "test-media-secret-0123456789",
   STUDENT_APP_URL: "http://student.localhost:3000",
   CONSOLE_APP_URL: "http://console.localhost:3001",
+  CRM_APP_URL: "http://crm.localhost:3002",
   OTP_MODE: "mock",
   EMAIL_MODE: "console",
   PAYMENTS_MODE: "mock",

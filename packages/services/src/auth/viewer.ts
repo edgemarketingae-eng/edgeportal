@@ -31,9 +31,10 @@ export function can(perms: Set<Permission> | Permission[], ...required: Permissi
   return required.every((p) => set.has(p));
 }
 
+/** Admins and anyone who can create accounts (CRM admins) must use an authenticator app. */
 export function twoFactorRequired(perms: Set<Permission>) {
   const required = env.REQUIRE_ADMIN_2FA ?? env.NODE_ENV === "production";
-  return required && perms.has("admin.access");
+  return required && (perms.has("admin.access") || perms.has("crm.staff.manage"));
 }
 
 export interface Viewer {
@@ -73,15 +74,13 @@ export async function loadViewer(userId: string): Promise<Viewer | null> {
 }
 
 /** Landing page per app; null means this account cannot use that app. */
-export function homesFor(v: Viewer): { student: string | null; console: string | null } {
+export function homesFor(v: Viewer): { student: string | null; console: string | null; crm: string | null } {
   const student = v.student ? (v.user.phoneNumberVerified && !v.student.pendingPhone ? "/dashboard" : "/verify-phone") : null;
+  const gated = (home: string) => (v.user.mustChangePassword ? "/change-password" : v.twoFactorRequired && !v.user.twoFactorEnabled ? "/security?required=1" : home);
   let consoleHome: string | null = null;
-  if (v.staff && (v.permissions.has("admin.access") || v.permissions.has("staff.access"))) {
-    if (v.user.mustChangePassword) consoleHome = "/change-password";
-    else if (v.twoFactorRequired && !v.user.twoFactorEnabled) consoleHome = "/security?required=1";
-    else consoleHome = v.permissions.has("admin.access") ? "/admin" : "/staff";
-  }
-  return { student, console: consoleHome };
+  if (v.staff && (v.permissions.has("admin.access") || v.permissions.has("staff.access"))) consoleHome = gated(v.permissions.has("admin.access") ? "/admin" : "/staff");
+  const crm = v.staff && v.permissions.has("crm.access") ? gated("/") : null;
+  return { student, console: consoleHome, crm };
 }
 
 export async function toViewerDto(v: Viewer): Promise<ViewerDto> {

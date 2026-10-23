@@ -24,6 +24,13 @@ export function toActionState(e: unknown, vals?: Record<string, string>): Action
   return { error: "Something went wrong. Please try again.", values: vals };
 }
 
+/** Dialog forms have no per-field error slots: surface the first field error as the form error. */
+export function dialogError(e: unknown): ActionState {
+  const state = toActionState(e);
+  if (!state.error && state.fieldErrors) state.error = Object.values(state.fieldErrors).find(Boolean) ?? "Please check the form.";
+  return state;
+}
+
 function isNextControlFlow(e: unknown) {
   const digest = (e as { digest?: unknown } | null)?.digest;
   return typeof digest === "string" && (digest.startsWith("NEXT_REDIRECT") || digest.startsWith("NEXT_HTTP_ERROR_FALLBACK") || digest === "NEXT_NOT_FOUND");

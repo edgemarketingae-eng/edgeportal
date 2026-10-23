@@ -1,4 +1,4 @@
-import type { Viewer } from "@edge/services";
+import type { CrmScope, Viewer } from "@edge/services";
 import type { Request } from "express";
 
 declare global {
@@ -7,6 +7,8 @@ declare global {
     interface Request {
       requestId: string;
       viewer?: Viewer | null;
+      /** Project-aware CRM scope, loaded once per request by the CRM routes. */
+      crmScope?: CrmScope;
       sessionToken?: string | null;
       valid?: { params?: unknown; query?: unknown; body?: unknown };
     }

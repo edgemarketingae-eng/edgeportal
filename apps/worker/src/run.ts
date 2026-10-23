@@ -11,6 +11,10 @@ const CONCURRENCY: Partial<Record<QueueName, number>> = {
   "recordings.cacheFill": 1,
   "enrollment.autolock": 1,
   "enrollment.reminders": 1,
+  "crm.followUpDigest": 1,
+  "crm.staleSweep": 1,
+  "crm.batchUrgency": 1,
+  "crm.autoLink": 2,
 };
 
 export interface WorkerOptions {

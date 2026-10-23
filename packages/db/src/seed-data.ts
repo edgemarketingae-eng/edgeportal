@@ -1,6 +1,7 @@
-import { SYSTEM_ROLES } from "@edge/domain/auth/permissions";
+import { RETIRED_SYSTEM_ROLES, SYSTEM_ROLES } from "@edge/domain/auth/permissions";
+import { Project } from "./models/crm";
 import { FeeRate } from "./models/payments";
-import { Role } from "./models/people";
+import { Role, StaffProfile } from "./models/people";
 
 /** Gateway fee rates: public list prices until the client confirms its contracts (editable in Settings). */
 export const FEE_RATES = [
@@ -12,7 +13,7 @@ export const FEE_RATES = [
   { key: "MANUAL", gateway: "MANUAL", label: "Bank transfer / cash", description: "Recorded by finance staff", pct: "0", fixedMinor: 0, countries: [], excludeCountries: [], sortOrder: 99 },
 ] as const;
 
-/** Idempotent: system roles are kept in sync; fee rates are only inserted when missing. */
+/** Idempotent: system roles are kept in sync; fee rates and the default CRM project are only inserted when missing. */
 export async function seedBaseData() {
   for (const r of SYSTEM_ROLES) {
     await Role.updateOne(
@@ -21,6 +22,19 @@ export async function seedBaseData() {
       { upsert: true },
     );
   }
+  // Retired system roles: move members to the replacement role, then drop the old one.
+  for (const { key, replacedBy } of RETIRED_SYSTEM_ROLES) {
+    const [old, repl] = await Promise.all([Role.findOne({ key }).lean(), Role.findOne({ key: replacedBy }).lean()]);
+    if (!old || !repl) continue;
+    await StaffProfile.updateMany({ roleIds: old._id }, { $addToSet: { roleIds: repl._id } });
+    await StaffProfile.updateMany({ roleIds: old._id }, { $pull: { roleIds: old._id } });
+    await Role.deleteOne({ _id: old._id });
+  }
+  await Project.updateOne(
+    { isDefault: true },
+    { $setOnInsert: { name: "General", code: "GENERAL", description: "Inbound and unassigned leads. Open to every CRM user.", status: "ACTIVE", isDefault: true, managerIds: [], memberIds: [] } },
+    { upsert: true },
+  );
   for (const f of FEE_RATES) {
     await FeeRate.updateOne({ key: f.key }, { $setOnInsert: { ...f, countries: [...f.countries], excludeCountries: [...f.excludeCountries] } }, { upsert: true });
   }

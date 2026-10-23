@@ -68,6 +68,7 @@ export async function applyPaymentSuccess(paymentId: string, opts: { externalPay
       dedupeKey: `payment-received:${paymentId}`,
     });
     await enqueueInTx("odoo.sync", { paymentId }, { dedupeId: `odoo-${paymentId}` });
+    await enqueueInTx("crm.autoLink", { userId: String(e.studentId), reason: "payment", paymentId }, { dedupeId: `crm-link-${paymentId}` });
     if (t.effects.includes("PENDING_APPROVAL")) {
       await notifyPermissionHolders("enrollment.approve", {
         title: "New student awaiting approval",

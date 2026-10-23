@@ -20,6 +20,22 @@ export const SETTINGS = {
     }),
     default: { courseProductId: null, feeProductId: null, taxStandardId: null, taxZeroRatedId: null, journalIds: {} as Record<string, number> },
   },
+  "crm.config": {
+    schema: z.object({
+      followUpSlaHours: z.number().int().min(1).max(720),
+      staleAfterDays: z.number().int().min(1).max(365),
+      batchUrgencyDays: z.number().int().min(0).max(60),
+      roundRobin: z.boolean(),
+      lostReasons: z.array(z.string()),
+    }),
+    default: {
+      followUpSlaHours: 24,
+      staleAfterDays: 7,
+      batchUrgencyDays: 7,
+      roundRobin: false,
+      lostReasons: ["Budget", "Timing", "Not interested", "Unreachable", "Chose another academy", "Duplicate"],
+    },
+  },
   "academy.profile": {
     schema: z.object({ name: z.string(), supportEmail: z.string(), supportWhatsapp: z.string(), website: z.string() }),
     default: { name: "Edge Trading Academy", supportEmail: "support@edgeacademy.ae", supportWhatsapp: "", website: "https://edgeacademy.ae" },

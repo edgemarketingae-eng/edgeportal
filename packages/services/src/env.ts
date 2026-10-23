@@ -18,6 +18,7 @@ const schema = z
     MEDIA_SIGNING_SECRET: z.string().min(16).default("dev-only-media-secret-0123"),
     STUDENT_APP_URL: z.url().default("http://student.localhost:3000"),
     CONSOLE_APP_URL: z.url().default("http://console.localhost:3001"),
+    CRM_APP_URL: z.url().default("http://crm.localhost:3002"),
     API_PUBLIC_URL: z.url().default("http://localhost:4000"),
     TZ_DEFAULT: z.string().default("Asia/Dubai"),
     ALLOW_MOCK_IN_PRODUCTION: z.stringbool().default(false),
@@ -64,6 +65,9 @@ const schema = z
 
     MAILERLITE_MODE: mode.default("mock"),
     MAILERLITE_API_KEY: z.string().optional(),
+
+    /** Shared secret for POST /api/webhooks/leads/:source (website lead forms). Unset = endpoint disabled. */
+    LEAD_WEBHOOK_SECRET: z.string().min(16).optional(),
   })
   .superRefine((e, ctx) => {
     if (e.NODE_ENV !== "production" || e.ALLOW_MOCK_IN_PRODUCTION) return;

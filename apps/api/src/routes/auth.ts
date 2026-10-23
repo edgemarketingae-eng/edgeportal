@@ -1,7 +1,8 @@
 import { ApiError, authRoutes } from "@edge/contracts";
 import { AuthSession, AuthUser, StudentProfile, Types } from "@edge/db";
 import { parsePhone } from "@edge/domain/phone";
-import { assertOtpAllowed, ensureCurrentEnrollment, env, homesFor, loadViewer } from "@edge/services";
+import { enqueueInTx } from "@edge/jobs";
+import { assertOtpAllowed, ensureCurrentEnrollment, env, flushOutbox, homesFor, loadViewer } from "@edge/services";
 import { fromNodeHeaders } from "better-auth/node";
 import { Router, type Request, type Response } from "express";
 import { rateLimit } from "express-rate-limit";
@@ -25,12 +26,12 @@ function forwardCookies(res: Response, headers: Headers | undefined) {
   for (const c of headers?.getSetCookie() ?? []) res.append("Set-Cookie", c);
 }
 
-const wrongApp = (app: "student" | "console") =>
-  new ApiError(
-    403,
-    "FORBIDDEN",
-    app === "console" ? "This is the staff console. Students sign in at the student portal." : `Staff accounts sign in at the staff console (${env.CONSOLE_APP_URL}).`,
-  );
+/** The account exists but cannot use this app: point them at the one they can use. */
+const wrongApp = (app: "student" | "console" | "crm", homes: ReturnType<typeof homesFor> | null) => {
+  const where = homes?.console ? `the staff console (${env.CONSOLE_APP_URL})` : homes?.crm ? `the CRM (${env.CRM_APP_URL})` : homes?.student ? `the student portal (${env.STUDENT_APP_URL})` : null;
+  const label = app === "student" ? "the student portal" : app === "crm" ? "the CRM" : "the staff console";
+  return new ApiError(403, "FORBIDDEN", `This account cannot sign in to ${label}.${where ? ` Sign in at ${where} instead.` : " Contact the academy."}`);
+};
 
 export function authRouter(auth: Auth) {
   const router = Router();
@@ -66,6 +67,13 @@ export function authRouter(auth: Auth) {
       throw e;
     }
     forwardCookies(res, result.headers);
+    // CRM: link a matching lead to this new student (outbox row; never blocks sign-up).
+    try {
+      await enqueueInTx("crm.autoLink", { userId, phone: phone.e164, email: d.email.toLowerCase(), reason: "signup" }, { dedupeId: `crm-link-signup-${userId}` });
+      await flushOutbox();
+    } catch (e) {
+      req.log?.warn({ err: e }, "crm auto-link enqueue failed");
+    }
     try {
       await assertOtpAllowed(phone.e164, clientIp(req));
       await auth.api.sendPhoneNumberOTP({ body: { phoneNumber: phone.e164 }, headers: policyHeaders(req, d.channel) });
@@ -161,10 +169,11 @@ export function authRouter(auth: Auth) {
       return { ok: true as const, twoFactorRedirect: true };
     }
     const viewer = body.user ? await loadViewer(body.user.id) : null;
-    const home = viewer ? homesFor(viewer)[app] : null;
+    const homes = viewer ? homesFor(viewer) : null;
+    const home = homes?.[app] ?? null;
     if (!home) {
       if (body.token) await AuthSession.deleteOne({ token: body.token }); // do not leave a session for the wrong app
-      throw wrongApp(app);
+      throw wrongApp(app, homes);
     }
     forwardCookies(res, out.headers);
     return { ok: true as const, home };

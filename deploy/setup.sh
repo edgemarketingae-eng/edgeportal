@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time server setup for Ubuntu 24.04. Safe to re-run. From the repo root, as the deploy user:
+# One-time server setup for Ubuntu 24.04. Safe to re-run. From the repo root, as the edge user:
 #   ./deploy/setup.sh you@edgeverse.ae        (email for certificate expiry notices)
 # Installs Node 24, pnpm, PM2, Redis, nginx, certbot and ffmpeg; turns on the firewall; gets the
 # HTTPS certificate; enables deploy/nginx.conf. Then: fill in .env and run ./deploy/deploy.sh.
@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 ROOT="$PWD"
 EMAIL="${1:?usage: ./deploy/setup.sh <email for certificate expiry notices>}"
 # The same hostnames are in deploy/nginx.conf and in .env (*_APP_URL, API_PUBLIC_URL).
-DOMAINS=(portal.edgeverse.ae console.edgeverse.ae api.edgeverse.ae)
+DOMAINS=(portal.edgeverse.ae console.edgeverse.ae crm.edgeverse.ae api.edgeverse.ae)
 step() { echo; echo "▸ $*"; }
 
 step "Packages"
@@ -37,7 +37,7 @@ fi
 echo 'vm.overcommit_memory = 1' | sudo tee /etc/sysctl.d/99-edge.conf >/dev/null
 sudo sysctl -q --system
 
-step "Firewall: SSH, HTTP and HTTPS only (keeps ports 3000, 3001 and 4000 private)"
+step "Firewall: SSH, HTTP and HTTPS only (keeps ports 3000, 3001, 3002 and 4000 private)"
 sudo ufw allow OpenSSH >/dev/null
 sudo ufw allow 'Nginx Full' >/dev/null
 sudo ufw --force enable
@@ -49,7 +49,7 @@ pm2 set pm2-logrotate:max_size 20M >/dev/null
 pm2 set pm2-logrotate:retain 14 >/dev/null
 pm2 set pm2-logrotate:compress true >/dev/null
 
-step "DNS: the three hostnames must point at this server"
+step "DNS: the four hostnames must point at this server"
 ip=$(curl -4fsS https://ifconfig.me)
 for d in "${DOMAINS[@]}"; do
   got=$(getent ahostsv4 "$d" | awk 'NR==1{print $1}' || true)
@@ -61,12 +61,21 @@ done
 echo "  ✓ all point at $ip"
 
 step "HTTPS certificate"
-# certonly: certbot gets and renews the certificate but never edits deploy/nginx.conf.
-if ! sudo test -d /etc/letsencrypt/live/edge-academy; then
+# certonly: certbot gets and renews the certificate but never edits deploy/nginx.conf. When a hostname was
+# added to DOMAINS after the first setup (crm.edgeverse.ae, for example), --expand re-issues the certificate
+# under the same name, so nginx.conf keeps working.
+covered=$(sudo certbot certificates --cert-name edge-academy 2>/dev/null | sed -n 's/^ *Domains: //p' || true)
+missing=0
+for d in "${DOMAINS[@]}"; do
+  case " $covered " in *" $d "*) ;; *) missing=1 ;; esac
+done
+if [ "$missing" = 1 ]; then
   domain_args=()
   for d in "${DOMAINS[@]}"; do domain_args+=(-d "$d"); done
   sudo certbot certonly --nginx --non-interactive --agree-tos -m "$EMAIL" \
-    --cert-name edge-academy "${domain_args[@]}" --deploy-hook "systemctl reload nginx"
+    --cert-name edge-academy --expand "${domain_args[@]}" --deploy-hook "systemctl reload nginx"
+else
+  echo "  ✓ certificate already covers: $covered"
 fi
 
 step "nginx site"

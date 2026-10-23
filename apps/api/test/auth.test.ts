@@ -32,7 +32,7 @@ describe("student sign-up and phone verification", () => {
     expect(me.body.user.phoneNumberVerified).toBe(true);
     expect(me.body.user.phoneNumber).toBe(s.phone);
     expect(me.body.student.pendingPhone).toBeNull();
-    expect(me.body.homes).toEqual({ student: "/dashboard", console: null });
+    expect(me.body.homes).toEqual({ student: "/dashboard", console: null, crm: null });
     const e = await Enrollment.findOne({ studentId: me.body.user.id }).lean();
     expect(String(e?.batchId)).toBe(String(batch._id));
     expect(e?.status).toBe("PENDING_PAYMENT");

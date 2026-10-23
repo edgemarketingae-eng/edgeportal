@@ -15,17 +15,18 @@ Operations (jobs, backups, provider details, everyday admin tasks) are in [RUNBO
 |---|---|---|
 | `portal.edgeverse.ae` | Student portal | PM2 `edge-student` on 127.0.0.1:3000 |
 | `console.edgeverse.ae` | Staff portal and admin panel | PM2 `edge-console` on 127.0.0.1:3001 |
+| `crm.edgeverse.ae` | Sales CRM ([CRM.md](CRM.md)) | PM2 `edge-crm` on 127.0.0.1:3002 |
 | `api.edgeverse.ae` | Only `/api/health`, `/api/webhooks/*` and `/api/media/*` (signed video links); everything else is 404 | PM2 `edge-api` on :4000 |
 | (none) | Background jobs, schedules, recordings | PM2 `edge-worker` |
 
-nginx terminates HTTPS (certbot certificate) and proxies the three hosts. Redis holds the job queues. Everything
+nginx terminates HTTPS (certbot certificate) and proxies the four hosts. Redis holds the job queues. Everything
 is configured from one file, `.env` at the repo root. The files behind this live in [`deploy/`](../deploy):
 
 | File | What it is |
 |---|---|
 | `deploy/setup.sh` | One-time server setup: packages, firewall, Redis, PM2 on boot, HTTPS certificate, nginx site |
 | `deploy/deploy.sh` | Every deploy: install, build, migrate, restart, health check |
-| `deploy/ecosystem.config.cjs` | The four PM2 processes |
+| `deploy/ecosystem.config.cjs` | The five PM2 processes |
 | `deploy/nginx.conf` | The nginx site (linked into `/etc/nginx/sites-enabled` by `setup.sh`) |
 | `deploy/env.production.example` | Template for the server's `.env` |
 
@@ -33,8 +34,8 @@ is configured from one file, `.env` at the repo root. The files behind this live
 
 ### 1. DNS
 
-At the DNS host for `edgeverse.ae`, add three `A` records pointing to the VPS public IPv4 address:
-`portal`, `console` and `api` (TTL 300). Don't add `AAAA` records. If the zone is on Cloudflare, set the records
+At the DNS host for `edgeverse.ae`, add four `A` records pointing to the VPS public IPv4 address:
+`portal`, `console`, `crm` and `api` (TTL 300). Don't add `AAAA` records. If the zone is on Cloudflare, set the records
 to **DNS only** (grey cloud). If the zone has `CAA` records, add `0 issue "letsencrypt.org"`.
 
 ### 2. MongoDB Atlas
@@ -48,15 +49,15 @@ to **DNS only** (grey cloud). If the zone has `CAA` records, add `0 issue "letse
 
 ### 3. Server login
 
-Log in as root once, create a deploy user with your SSH key, then use only that user:
+Log in as root once, create the `edge` user with your SSH key, then use only that user:
 
 ```bash
-adduser deploy && usermod -aG sudo deploy
-mkdir -p /home/deploy/.ssh && cp ~/.ssh/authorized_keys /home/deploy/.ssh/
-chown -R deploy:deploy /home/deploy/.ssh && chmod 700 /home/deploy/.ssh && chmod 600 /home/deploy/.ssh/authorized_keys
+adduser edge && usermod -aG sudo edge
+mkdir -p /home/edge/.ssh && cp ~/.ssh/authorized_keys /home/edge/.ssh/
+chown -R edge:edge /home/edge/.ssh && chmod 700 /home/edge/.ssh && chmod 600 /home/edge/.ssh/authorized_keys
 ```
 
-After confirming `ssh deploy@<VPS_IP>` works, turn off password and root logins:
+After confirming `ssh edge@<VPS_IP>` works, turn off password and root logins:
 
 ```bash
 printf 'PasswordAuthentication no\nPermitRootLogin no\n' | sudo tee /etc/ssh/sshd_config.d/99-hardening.conf
@@ -65,7 +66,7 @@ sudo systemctl restart ssh
 
 ### 4. Get the code
 
-The repository must be on GitHub (private). On the server, as `deploy`, create a read-only deploy key:
+The repository must be on GitHub (private). On the server, as `edge`, create a read-only deploy key:
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/edge_deploy -N "" && cat ~/.ssh/edge_deploy.pub
@@ -75,7 +76,7 @@ Add it in GitHub: repository → Settings → Deploy keys (leave "Allow write ac
 
 ```bash
 printf 'Host github.com\n  IdentityFile ~/.ssh/edge_deploy\n' >> ~/.ssh/config
-sudo mkdir -p /var/www/edge-academy && sudo chown deploy:deploy /var/www/edge-academy
+sudo mkdir -p /var/www/edge-academy && sudo chown $USER:$USER /var/www/edge-academy
 git clone git@github.com:<ORG>/<REPO>.git /var/www/edge-academy
 ```
 
@@ -87,7 +88,8 @@ cd /var/www/edge-academy
 ```
 
 It installs Node 24, pnpm, PM2, Redis, nginx, certbot and ffmpeg, enables the firewall (SSH, HTTP, HTTPS only),
-adds swap, makes PM2 start on boot, gets the HTTPS certificate, enables the nginx site and creates `.env` from
+adds swap, makes PM2 start on boot, gets the HTTPS certificate (or expands it when a hostname was added later),
+enables the nginx site and creates `.env` from
 the template. It stops with a message if DNS doesn't point at the server yet; fix that and run it again (it's
 safe to re-run).
 
@@ -105,6 +107,7 @@ Fill in every empty value. The comments in the file explain each one. Generate t
 ```bash
 for k in INTERNAL_API_TOKEN BETTER_AUTH_SECRET MEDIA_SIGNING_SECRET; do echo "$k=$(openssl rand -base64 48)"; done
 echo "TABBY_WEBHOOK_HEADER_VALUE=$(openssl rand -hex 32)"
+echo "LEAD_WEBHOOK_SECRET=$(openssl rand -hex 32)"
 ```
 
 - `MONGODB_URI`: the connection string from step 2 (with `/edge`).
@@ -131,8 +134,8 @@ curl -s -o /dev/null -w '%{http_code}\n' https://api.edgeverse.ae/api/v1/me     
 sudo certbot renew --dry-run                                                     # renewal works
 ```
 
-Open `https://portal.edgeverse.ae` and `https://console.edgeverse.ae` in a browser. Optionally `sudo reboot` and
-check that `pm2 status` shows all four processes online afterwards.
+Open `https://portal.edgeverse.ae`, `https://console.edgeverse.ae` and `https://crm.edgeverse.ae` in a browser.
+Optionally `sudo reboot` and check that `pm2 status` shows all five processes online afterwards.
 
 ### 9. First sign-in
 
@@ -141,6 +144,8 @@ check that `pm2 status` shows all four processes online afterwards.
 2. In `.env`, set `SEED_ADMIN_PASSWORD=` (empty). It's only needed while no staff account exists.
 3. Admin → Settings: organisation details (the seeded defaults mention `edgeacademy.ae`), fee rates, Odoo IDs.
    Then create staff, the course and the current batch. See [RUNBOOK §3](RUNBOOK.md#3-provider-setup).
+4. Sales staff (CRM roles) sign in at `https://crm.edgeverse.ae/login`. Roles, projects and the board are
+   described in [CRM.md](CRM.md).
 
 ## Going live
 
@@ -152,6 +157,7 @@ Webhook URLs to register with the payment providers:
 | Nomod | `https://api.edgeverse.ae/api/webhooks/nomod` |
 | Tabby | `https://api.edgeverse.ae/api/webhooks/tabby` |
 | Tamara | none to register: sent with every checkout |
+| Website lead form | `https://api.edgeverse.ae/api/webhooks/leads/website` (signed with `LEAD_WEBHOOK_SECRET`, see [CRM](CRM.md)) |
 
 Events, secrets and the other providers (Twilio, MailerSend, Google, Odoo, MailerLite) are in
 [RUNBOOK §3](RUNBOOK.md#3-provider-setup). With test keys, run one payment per method end to end. Test payments
@@ -187,8 +193,8 @@ few seconds. Deploy outside class times.
 ## Everyday commands
 
 ```bash
-pm2 status                         # are all four online?
-pm2 logs edge-api --lines 200      # logs (also edge-worker, edge-student, edge-console)
+pm2 status                         # are all five online?
+pm2 logs edge-api --lines 200      # logs (also edge-worker, edge-student, edge-console, edge-crm)
 pm2 restart edge-worker            # restart one process
 pm2 monit                          # live CPU / memory
 sudo systemctl status nginx redis-server
@@ -212,7 +218,8 @@ Start with `pm2 status` and `pm2 logs <name> --lines 100`.
 | `setup.sh`: "resolves to … expected …" | DNS isn't pointing at the server yet. Wait for the A records, re-run |
 | Certificate request fails | DNS wrong, port 80 blocked by a provider firewall, Cloudflare proxy on, or a CAA record. Fix, re-run `setup.sh` |
 | `502 Bad Gateway` | The app behind that host is down: `pm2 status`, then `pm2 logs` for it |
-| Sign-in loops back to login, or `403 Invalid origin` | `STUDENT_APP_URL` / `CONSOLE_APP_URL` must be exactly `https://portal.edgeverse.ae` / `https://console.edgeverse.ae`; then `pm2 restart all` |
+| Sign-in loops back to login, or `403 Invalid origin` | `STUDENT_APP_URL` / `CONSOLE_APP_URL` / `CRM_APP_URL` must be exactly `https://portal.edgeverse.ae` / `https://console.edgeverse.ae` / `https://crm.edgeverse.ae`; then `pm2 restart all` |
+| CRM password-reset email links to the student portal | `CRM_APP_URL` is missing or wrong in `.env` (the API only trusts the hosts it knows); fix it, `pm2 restart all` |
 | Payment stays pending | Check the provider's webhook delivery log and `pm2 logs edge-api`; use Admin → Payments → "Re-check with gateway" |
 | Tamara stays in test mode after go-live | `TAMARA_API_URL` still points at the sandbox |
 | Build killed (`exit code 137`) | Out of memory. `setup.sh` adds 4 GB swap; check `free -h` |

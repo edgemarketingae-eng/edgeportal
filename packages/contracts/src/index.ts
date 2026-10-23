@@ -12,3 +12,4 @@ export * from "./staff";
 export * from "./settings";
 export * from "./payments";
 export * from "./classes";
+export * from "./crm";

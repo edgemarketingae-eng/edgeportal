@@ -1,4 +1,4 @@
-import { AuthUser, Batch, Course, seedBaseData, StaffProfile } from "@edge/db";
+import { AuthUser, Batch, Course, Project, seedBaseData, StaffProfile } from "@edge/db";
 import { createStaff } from "./staff/service";
 
 /**
@@ -25,6 +25,9 @@ export async function seed(opts: { production: boolean; adminEmail?: string; adm
     { email: "mentor@edgeacademy.local", name: "Demo Mentor", roleKeys: ["mentor"], title: "Senior Mentor", workspaceEmail: "mentor@edgeacademy.ae" },
     { email: "admissions@edgeacademy.local", name: "Admissions Desk", roleKeys: ["admissions"] },
     { email: "finance@edgeacademy.local", name: "Finance Desk", roleKeys: ["finance"] },
+    { email: "crm-admin@edgeacademy.local", name: "CRM Admin", roleKeys: ["crm_admin"] },
+    { email: "pm@edgeacademy.local", name: "Demo Project Manager", roleKeys: ["project_manager"] },
+    { email: "sales@edgeacademy.local", name: "Sales Desk", roleKeys: ["sales_executive"] },
   ];
   for (const d of demo) {
     if (!(await AuthUser.exists({ email: d.email }))) await createStaff({ ...d, password: "ChangeMe!2026" }, { type: "SYSTEM", id: "seed" });
@@ -34,6 +37,23 @@ export async function seed(opts: { production: boolean; adminEmail?: string; adm
     { $setOnInsert: { code: "FX-PRO", slug: "fx-pro", title: "Forex Pro Trader Program", description: "Price action, risk management and live market sessions." } },
     { upsert: true, returnDocument: "after" },
   ).lean();
+  const [pm, sales] = await Promise.all([AuthUser.findOne({ email: "pm@edgeacademy.local" }).lean(), AuthUser.findOne({ email: "sales@edgeacademy.local" }).lean()]);
+  await Project.updateOne(
+    { code: "FX-PRO-NOV26" },
+    {
+      $setOnInsert: {
+        name: "Forex Pro - November 2026 drive",
+        code: "FX-PRO-NOV26",
+        description: "Fill the November batch.",
+        status: "ACTIVE",
+        courseId: course!._id,
+        targetConversions: 40,
+        managerIds: pm ? [pm._id] : [],
+        memberIds: sales ? [sales._id] : [],
+      },
+    },
+    { upsert: true },
+  );
   const mentor = await AuthUser.findOne({ email: "mentor@edgeacademy.local" }).lean();
   await Batch.updateOne(
     { code: "FX-PRO-B1" },

@@ -1,6 +1,6 @@
 /**
  * Isolated end-to-end stack: an in-memory MongoDB replica set, local Redis (db 14, flushed on
- * start), the API and worker from source, and production builds of both Next apps on their own
+ * start), the API and worker from source, and production builds of the three Next apps on their own
  * ports and dist dir. It never touches the dev database or a running `pnpm dev`.
  *
  *   pnpm --filter @edge/e2e stack                       # start it and keep it running
@@ -116,7 +116,7 @@ process.on("SIGINT", () => void stop(0));
 process.on("SIGTERM", () => void stop(0));
 
 try {
-  for (const port of [E2E.apiPort, E2E.studentPort, E2E.consolePort]) await assertPortFree(port);
+  for (const port of [E2E.apiPort, E2E.studentPort, E2E.consolePort, E2E.crmPort]) await assertPortFree(port);
   await flushRedis(E2E.redisDb);
   replSet = await MongoMemoryReplSet.create({ replSet: { count: 1, storageEngine: "wiredTiger" } });
 
@@ -130,6 +130,7 @@ try {
     INTERNAL_API_TOKEN: E2E.internalToken,
     STUDENT_APP_URL: E2E.student,
     CONSOLE_APP_URL: E2E.console,
+    CRM_APP_URL: E2E.crm,
     API_PUBLIC_URL: E2E.api,
     DEV_ROUTES: "true",
     REQUIRE_ADMIN_2FA: "false",
@@ -157,16 +158,19 @@ try {
   start("api", bin("api", "tsx"), ["src/index.ts"], app("api"), serverEnv);
   start("worker", bin("worker", "tsx"), ["src/index.ts"], app("worker"), serverEnv);
 
+  const webApps = [
+    ["student", E2E.studentPort],
+    ["console", E2E.consolePort],
+    ["crm", E2E.crmPort],
+  ] as const;
   if (!process.env.E2E_SKIP_BUILD) {
-    await Promise.all([
-      run("build:student", bin("student", "next"), ["build"], app("student"), webEnv(E2E.studentPort)),
-      run("build:console", bin("console", "next"), ["build"], app("console"), webEnv(E2E.consolePort)),
-    ]);
+    // One build at a time: three parallel `next build`s need more memory than a laptop or CI runner has to spare.
+    for (const [name, port] of webApps) await run(`build:${name}`, bin(name, "next"), ["build"], app(name), webEnv(port));
   }
   // Playwright starts testing as soon as the console answers, so the API must be up before the apps.
   await waitFor(`${E2E.api}/api/health`);
   // Run the standalone server exactly as the Docker image does (static + public copied next to it).
-  for (const [name, port] of [["student", E2E.studentPort], ["console", E2E.consolePort]] as const) {
+  for (const [name, port] of webApps) {
     const dist = path.join(app(name), ".next-e2e");
     const server = path.join(dist, "standalone", "apps", name);
     cpSync(path.join(dist, "static"), path.join(server, ".next-e2e", "static"), { recursive: true });
@@ -176,6 +180,7 @@ try {
 
   await waitFor(`http://127.0.0.1:${E2E.studentPort}/login`);
   await waitFor(`http://127.0.0.1:${E2E.consolePort}/login`);
+  await waitFor(`http://127.0.0.1:${E2E.crmPort}/login`);
   console.log("[stack] ready");
 } catch (e) {
   console.error("[stack]", (e as Error).message);

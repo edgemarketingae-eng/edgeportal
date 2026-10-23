@@ -10,5 +10,6 @@ export * from "./models/enrollment";
 export * from "./models/payments";
 export * from "./models/classes";
 export * from "./models/ops";
+export * from "./models/crm";
 export { Types } from "mongoose";
 export type { ClientSession } from "mongoose";

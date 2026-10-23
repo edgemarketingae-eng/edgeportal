@@ -5,7 +5,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-APPS=(student console)
+APPS=(student console crm)
 fail() { echo "✗ $*" >&2; exit 1; }
 step() { echo; echo "▸ $*"; }
 
@@ -28,8 +28,8 @@ env -u NODE_ENV CI=true MONGOMS_DISABLE_POSTINSTALL=1 pnpm install --frozen-lock
 export NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
 unset NEXT_DIST_DIR DEV_ROUTES
 
-step "Building the student and console apps (the live site keeps running)"
-pnpm --filter @edge/student --filter @edge/console --workspace-concurrency=1 build
+step "Building the student, console and CRM apps (the live site keeps running)"
+pnpm --filter @edge/student --filter @edge/console --filter @edge/crm --workspace-concurrency=1 build
 
 step "Staging the new builds"
 # next build empties .next when it starts, so the servers run from a copy in .live/.
@@ -64,6 +64,7 @@ wait_for() {
 wait_for http://127.0.0.1:4000/api/health
 wait_for http://127.0.0.1:3000/login
 wait_for http://127.0.0.1:3001/login
+wait_for http://127.0.0.1:3002/login
 
 pm2 status
 echo

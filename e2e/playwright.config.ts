@@ -17,7 +17,7 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
     command: "./node_modules/.bin/tsx stack.ts",
-    url: `http://127.0.0.1:${E2E.consolePort}/login`,
+    url: `http://127.0.0.1:${E2E.crmPort}/login`, // started last by stack.ts: when it answers, everything is up
     reuseExistingServer: !!process.env.E2E_REUSE_STACK,
     timeout: 600_000,
     stdout: "pipe",

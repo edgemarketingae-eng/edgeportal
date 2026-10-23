@@ -30,3 +30,5 @@ export * from "./classes/service";
 export * from "./recordings/token";
 export * from "./recordings/cache";
 export * from "./recordings/service";
+export * from "./crm/index";
+export * from "./staff/crm-team";

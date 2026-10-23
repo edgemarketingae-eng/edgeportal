@@ -9,6 +9,7 @@ import { createAuth } from "../src/auth";
 
 export const STUDENT = "http://student.localhost:3000";
 export const CONSOLE = "http://console.localhost:3001";
+export const CRM = "http://crm.localhost:3002";
 export const INTERNAL = { "x-internal-token": "test-internal-token-0123456789abcdef" };
 
 export class CaptureEmail implements EmailSender {

@@ -56,6 +56,10 @@ export const StudentDetail = z.object({
   enrollment: EnrollmentDto.nullable(),
   events: z.array(EnrollmentEventDto),
   batches: z.array(z.object({ id: z.string(), label: z.string() })),
+  /** CRM origin when this student came through a lead. */
+  lead: z
+    .object({ id: z.string(), href: z.string(), source: z.string(), sourceDetail: z.string().nullable(), campaign: z.string().nullable(), ownerName: z.string().nullable(), projectName: z.string().nullable(), createdAt: z.string(), convertedAt: z.string().nullable() })
+    .nullable(),
 });
 export type StudentDetail = z.infer<typeof StudentDetail>;
 

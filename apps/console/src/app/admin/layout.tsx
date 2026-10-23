@@ -33,6 +33,7 @@ async function AdminShell({ children }: { children: React.ReactNode }) {
   ];
   const areas: AreaLink[] = [{ href: "/admin", label: "Admin panel" }];
   if (can(v, "staff.access")) areas.push({ href: "/staff", label: "Staff portal" });
+  if (can(v, "crm.access")) areas.push({ href: process.env.CRM_APP_URL ?? "http://crm.localhost:3002", label: "CRM" });
   return (
     <AppShell
       items={items.filter((i) => i.show)}

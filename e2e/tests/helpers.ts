@@ -16,6 +16,14 @@ export async function staffSignIn(page: Page, email: string, password = E2E.staf
   await page.getByRole("button", { name: "Sign in" }).click();
 }
 
+/** Sign in at the CRM host (its own session cookie, separate from the console's). */
+export async function crmSignIn(page: Page, email: string, password = E2E.staffPassword) {
+  await page.goto(`${E2E.crm}/login`);
+  await page.getByLabel("Work email").fill(email);
+  await page.locator('input[name="password"]').fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+}
+
 /** Date and time fields for "now + minutes" in Dubai (UTC+4, no DST). */
 export function dubaiNowPlus(minutes: number) {
   const d = new Date(Date.now() + minutes * 60_000 + 4 * 3600_000).toISOString();

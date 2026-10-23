@@ -5,7 +5,7 @@
 | Piece | Where |
 |---|---|
 | MongoDB | MongoDB Atlas (replica set; transactions are required) |
-| api, worker, student, console | One VPS, run by PM2 ([`deploy/ecosystem.config.cjs`](../deploy/ecosystem.config.cjs)) |
+| api, worker, student, console, crm | One VPS, run by PM2 ([`deploy/ecosystem.config.cjs`](../deploy/ecosystem.config.cjs)) |
 | redis, nginx | The same VPS, as system services ([`deploy/nginx.conf`](../deploy/nginx.conf); certificates from certbot) |
 
 Suggested VPS: 4 vCPU, 16 GB RAM and 200 GB NVMe. The video cache can use up to `MEDIA_CACHE_MAX_GB`.
@@ -17,6 +17,7 @@ Setting up a server and deploying are described in [DEPLOYMENT.md](DEPLOYMENT.md
 |---|---|
 | `portal.edgeverse.ae` | student app |
 | `console.edgeverse.ae` | staff portal and admin panel |
+| `crm.edgeverse.ae` | sales CRM (leads, projects, task board; see [CRM.md](CRM.md)) |
 | `api.edgeverse.ae` | only `/api/health`, `/api/webhooks/*` (payment providers) and `/api/media/*` (signed video URLs) |
 
 Everything else in the API is reached through the apps. Auth, OTP, Meet join and checkout return go through
@@ -31,8 +32,9 @@ git pull && ./deploy/deploy.sh                 # update
 git checkout v1.2.0 && ./deploy/deploy.sh      # roll back to a tag (git checkout main to return)
 ```
 
-`deploy.sh` installs, builds the two Next apps, runs `migrate`, restarts PM2 and checks health. `migrate` creates
-collections and indexes, then applies the idempotent seed: roles, fee rates and the first super admin from
+`deploy.sh` installs, builds the three Next apps, runs `migrate`, restarts PM2 and checks health. `migrate` creates
+collections and indexes, then applies the idempotent seed: roles (retiring renamed ones), the CRM's default
+project, fee rates and the first super admin from
 `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`. That admin must change the password and turn on two-factor at first
 sign-in. Index changes are additive (`migrate` never drops indexes), so an older release runs against a newer
 database.
@@ -41,8 +43,8 @@ database.
 
 | Service | Role |
 |---|---|
-| nginx | HTTPS for the three hosts; streams video unbuffered |
-| edge-student, edge-console | Next.js standalone servers (ports 3000 and 3001, loopback only), served from `.live/` |
+| nginx | HTTPS for the four hosts; streams video unbuffered |
+| edge-student, edge-console, edge-crm | Next.js standalone servers (ports 3000, 3001 and 3002, loopback only), served from `.live/` |
 | edge-api | Express API on port 4000 (firewalled); serves cached recordings from `.media-cache` |
 | edge-worker | BullMQ jobs: emails, Odoo, MailerLite, payment reconcile, auto-lock, reminders, recordings (uses ffmpeg) |
 | redis | job queues (AOF persistence; `noeviction`) |
@@ -63,6 +65,10 @@ The video cache (`.media-cache` at the repo root) is shared by api (reads) and w
 | recordings.cacheEvict | hourly at :40 | keeps the video cache under `MEDIA_CACHE_MAX_GB` |
 | mailerlite.fullSync | 02:30 daily | full resync of consenting students |
 | outbox.sweep | every minute | publishes any outbox rows not yet sent to Redis |
+| crm.followUpDigest | 09:00 daily | each assignee gets their CRM tasks due today or overdue (see docs/CRM.md) |
+| crm.batchUrgency | 09:15 daily | auto tasks before a batch of interest starts; rolls interest off closed batches |
+| crm.staleSweep | 09:30 daily | open leads with no activity for the configured days turn Cold |
+| crm.inboxSweep | every 5 min | reprocesses website lead submissions that failed or stalled |
 
 Jobs are at-least-once and every handler is idempotent. Emails, Odoo invoices and payment application are
 deduplicated in the database, so a retry never double-sends or double-books.
@@ -134,7 +140,7 @@ Fee rates (Admin > Settings) must match each provider's contract. The seeded val
 
 Create a Verify service and enable SMS (and WhatsApp if wanted). Restrict geo permissions to the countries you
 serve (AE, SA, ...). Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_VERIFY_SERVICE_SID`.
-The API also throttles OTP sends per number and per IP.
+The API also throttles OTP sends per number and per IP. Step-by-step setup: [TWILIO.md](TWILIO.md).
 
 ### Email
 
@@ -151,7 +157,7 @@ The API also throttles OTP sends per number and per IP.
 - **Payment stuck as pending:** open it in Admin > Payments and use "Re-check with gateway".
 - **Recording not playing:** Admin > Recordings shows the cache state. Errors usually mean the Drive file is not
   shared with the host account.
-- **Logs:** `pm2 logs edge-api --lines 200` (or `edge-worker`, `edge-student`, `edge-console`; files in
+- **Logs:** `pm2 logs edge-api --lines 200` (or `edge-worker`, `edge-student`, `edge-console`, `edge-crm`; files in
   `~/.pm2/logs`, rotated daily). API logs are JSON with a `requestId`, which matches the `x-request-id` response header.
 - **Uptime monitoring:** point a checker at `https://api.edgeverse.ae/api/health`.
 

@@ -16,7 +16,7 @@ export const ViewerDto = z.object({
   staff: z.object({ title: z.string().nullable(), workspaceEmail: z.string().nullable() }).nullable(),
   twoFactorRequired: z.boolean(),
   unreadNotifications: z.number().int(),
-  homes: z.object({ student: z.string().nullable(), console: z.string().nullable() }),
+  homes: z.object({ student: z.string().nullable(), console: z.string().nullable(), crm: z.string().nullable() }),
 });
 export type ViewerDto = z.infer<typeof ViewerDto>;
 

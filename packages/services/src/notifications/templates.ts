@@ -39,6 +39,8 @@ export interface TemplateData {
   "enrollment.unlocked": { name: string; batchName: string; dashboardUrl: string };
   "class.scheduled": { name: string; title: string; batchName: string; startsAt: string; classesUrl: string };
   "class.cancelled": { name: string; title: string; startsAt: string; reason?: string | null };
+  "crm.studentWelcome": { name: string; email: string; batchName: string | null; setPasswordUrl: string; expiresDays: number };
+  "crm.followUpDigest": { name: string; dueToday: number; overdue: number; items: { leadName: string; title: string; dueAt: string; href: string }[]; tasksUrl: string };
 }
 
 export type TemplateName = keyof TemplateData;
@@ -209,6 +211,31 @@ export function renderEmail<T extends TemplateName>(template: T, data: TemplateD
         `Hi ${esc(x.name)},`,
         `The live class <b>${esc(x.title)}</b> on ${formatDateTime(x.startsAt)} has been cancelled.${x.reason ? ` Reason: ${esc(x.reason)}` : ""}`,
       ]);
+    }
+    case "crm.studentWelcome": {
+      const x = d as unknown as TemplateData["crm.studentWelcome"];
+      return build(
+        "Your Edge Academy student account",
+        "Welcome to Edge Academy",
+        [
+          `Hi ${esc(x.name)},`,
+          `We created your student portal account${x.batchName ? ` for <b>${esc(x.batchName)}</b>` : ""}. Your sign-in email is <b>${esc(x.email)}</b>.`,
+          `Choose your password with the button below (the link works for ${x.expiresDays} days). After signing in, verify your mobile number: press “Resend code” on the verification page and enter the code we send you.`,
+          "Once your mobile is verified you can pay your course fee online or with the payment details our team shares with you.",
+        ],
+        { label: "Set my password", url: x.setPasswordUrl },
+      );
+    }
+    case "crm.followUpDigest": {
+      const x = d as unknown as TemplateData["crm.followUpDigest"];
+      const total = x.dueToday + x.overdue;
+      const lines = [
+        `Hi ${esc(x.name)},`,
+        `You have <b>${total}</b> follow-up${total === 1 ? "" : "s"} due today${x.overdue ? `, including <b>${x.overdue}</b> overdue` : ""}.`,
+        ...x.items.map((i) => `• <a href="${esc(i.href)}">${esc(i.leadName)}</a> — ${esc(i.title)} (${formatDateTime(i.dueAt)})`),
+      ];
+      if (x.items.length < total) lines.push(`…and ${total - x.items.length} more.`);
+      return build(`${total} follow-up${total === 1 ? "" : "s"} due today`, "Today's follow-ups", lines, { label: "Open my follow-ups", url: x.tasksUrl });
     }
   }
   throw new Error(`Unknown template ${template as string}`);

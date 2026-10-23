@@ -37,5 +37,6 @@ module.exports = {
     fromSource("edge-worker", "worker", {}, 30_000), // time for running jobs to finish
     nextApp("edge-student", "student", 3000),
     nextApp("edge-console", "console", 3001),
+    nextApp("edge-crm", "crm", 3002),
   ],
 };

@@ -1,5 +1,6 @@
 import type { StudentFilters, StudentListItem } from "@edge/contracts";
-import { AuditLog, AuthUser, Batch, ClassSession, Course, Enrollment, EnrollmentEvent, Payment, StudentProfile, Types } from "@edge/db";
+import { AuditLog, AuthUser, Batch, ClassSession, Course, Enrollment, EnrollmentEvent, Lead, Payment, Project, StudentProfile, Types } from "@edge/db";
+import { env } from "../env";
 import { now } from "@edge/domain/clock";
 import { dubaiDateOnly, formatDate } from "@edge/domain/dates";
 import { toCsv } from "@edge/domain/csv";
@@ -125,7 +126,23 @@ export async function getStudentDetail(id: string) {
     }));
   }
   const batches = await Batch.find({ status: { $ne: "ARCHIVED" } }).sort({ startDate: -1 }).lean();
+  const leadDoc = await Lead.findOne({ studentId: _id, mergedIntoId: null }).lean();
+  const [leadOwner, leadProject] = leadDoc ? await Promise.all([leadDoc.ownerId ? AuthUser.findById(leadDoc.ownerId, { name: 1 }).lean() : null, Project.findById(leadDoc.projectId, { name: 1 }).lean()]) : [null, null];
+  const lead = leadDoc
+    ? {
+        id: String(leadDoc._id),
+        href: `${env.CRM_APP_URL}/leads/${leadDoc._id}`,
+        source: leadDoc.source,
+        sourceDetail: leadDoc.sourceDetail ?? null,
+        campaign: leadDoc.utm?.campaign ?? null,
+        ownerName: leadOwner?.name ?? null,
+        projectName: leadProject?.name ?? null,
+        createdAt: iso(leadDoc.createdAt)!,
+        convertedAt: iso(leadDoc.convertedAt),
+      }
+    : null;
   return {
+    lead,
     student: {
       id,
       name: user.name,

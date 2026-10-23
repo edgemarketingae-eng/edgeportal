@@ -14,6 +14,11 @@ export const QUEUES = {
   RECORDINGS_CACHE_FILL: "recordings.cacheFill",
   RECORDINGS_CACHE_EVICT: "recordings.cacheEvict",
   OUTBOX_SWEEP: "outbox.sweep",
+  CRM_AUTO_LINK: "crm.autoLink",
+  CRM_FOLLOWUP_DIGEST: "crm.followUpDigest",
+  CRM_STALE_SWEEP: "crm.staleSweep",
+  CRM_BATCH_URGENCY: "crm.batchUrgency",
+  CRM_INBOX_SWEEP: "crm.inboxSweep",
 } as const;
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
@@ -33,6 +38,11 @@ export interface JobPayloads {
   "recordings.cacheFill": { recordingId: string };
   "recordings.cacheEvict": Record<string, never>;
   "outbox.sweep": Record<string, never>;
+  "crm.autoLink": { userId: string; phone?: string | null; email?: string | null; reason: "signup" | "verified" | "payment" | "manual"; paymentId?: string | null };
+  "crm.followUpDigest": { asOf?: string };
+  "crm.staleSweep": { asOf?: string };
+  "crm.batchUrgency": { asOf?: string };
+  "crm.inboxSweep": Record<string, never>;
 }
 
 export interface SendOptions {
@@ -53,4 +63,8 @@ export const SCHEDULES: { id: string; queue: QueueName; pattern: string; data?: 
   { id: "recordings-cache-evict", queue: QUEUES.RECORDINGS_CACHE_EVICT, pattern: "40 * * * *" },
   { id: "mailerlite-full-sync", queue: QUEUES.MAILERLITE_FULL_SYNC, pattern: "30 2 * * *" },
   { id: "outbox-sweep", queue: QUEUES.OUTBOX_SWEEP, pattern: "* * * * *" },
+  { id: "crm-followup-digest-daily", queue: QUEUES.CRM_FOLLOWUP_DIGEST, pattern: "0 9 * * *" },
+  { id: "crm-batch-urgency-daily", queue: QUEUES.CRM_BATCH_URGENCY, pattern: "15 9 * * *" },
+  { id: "crm-stale-sweep-daily", queue: QUEUES.CRM_STALE_SWEEP, pattern: "30 9 * * *" },
+  { id: "crm-inbox-sweep", queue: QUEUES.CRM_INBOX_SWEEP, pattern: "*/5 * * * *" },
 ];

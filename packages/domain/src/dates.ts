@@ -39,3 +39,21 @@ export function daysUntil(dateOnly: Date, from: Date) {
   const today = new Date(`${dubaiDateString(from)}T00:00:00.000Z`);
   return Math.round((dateOnly.getTime() - today.getTime()) / 86_400_000);
 }
+
+/** Dubai midnight (start of the calendar day of `d`, plus `days`) as an instant. UTC+4, no DST. */
+export function startOfDubaiDay(d: Date, days = 0): Date {
+  return new Date(dubaiDateOnly(d, days).getTime() - 4 * 3600_000);
+}
+
+/** "YYYY-MM-DDTHH:mm" from a datetime-local input, read as Dubai wall-clock time. Null when malformed. */
+export function fromDubaiLocal(s: string): Date | null {
+  const v = s.trim().slice(0, 16);
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v)) return null;
+  const d = new Date(`${v}:00+04:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** An instant as Dubai wall-clock "YYYY-MM-DDTHH:mm" for datetime-local inputs. */
+export function toDubaiLocal(d: Date | string): string {
+  return format(new TZDate(new Date(d), ACADEMY_TZ), "yyyy-MM-dd'T'HH:mm");
+}

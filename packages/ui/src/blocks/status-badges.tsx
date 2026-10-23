@@ -1,3 +1,4 @@
+import { LEAD_STAGE_LABELS, LEAD_TEMPERATURE_LABELS } from "@edge/domain/crm/labels";
 import { Badge } from "../components/badge";
 
 const ENROLLMENT: Record<string, { label: string; className: string }> = {
@@ -41,6 +42,38 @@ const SYNC: Record<string, string> = {
   FAILED: "bg-destructive/10 text-destructive border-destructive/30",
   SKIPPED: "bg-muted text-muted-foreground",
 };
+
+const LEAD_STAGE: Record<string, string> = {
+  NEW: "bg-sky-50 text-sky-800 border-sky-300",
+  CONTACTED: "bg-muted text-muted-foreground",
+  QUALIFIED: "bg-edge-mint/40 text-edge-emerald border-edge-green/40",
+  CONSULTATION: "bg-violet-50 text-violet-800 border-violet-300",
+  NEGOTIATION: "bg-amber-50 text-amber-800 border-amber-300",
+  CONVERTED: "bg-edge-green/20 text-edge-emerald border-edge-green/40",
+  LOST: "bg-destructive/10 text-destructive border-destructive/30",
+};
+
+export function LeadStageBadge({ stage }: { stage: string }) {
+  return (
+    <Badge variant="outline" className={LEAD_STAGE[stage] ?? ""}>
+      {(LEAD_STAGE_LABELS as Record<string, string>)[stage] ?? stage}
+    </Badge>
+  );
+}
+
+const TEMPERATURE: Record<string, string> = {
+  HOT: "bg-edge-coral/20 text-red-700 border-edge-coral/60",
+  WARM: "bg-amber-50 text-amber-800 border-amber-300",
+  COLD: "bg-sky-50 text-sky-800 border-sky-300",
+};
+
+export function TemperatureBadge({ temperature }: { temperature: string }) {
+  return (
+    <Badge variant="outline" className={TEMPERATURE[temperature] ?? ""}>
+      {(LEAD_TEMPERATURE_LABELS as Record<string, string>)[temperature] ?? temperature}
+    </Badge>
+  );
+}
 
 export function SyncBadge({ status }: { status: string }) {
   return (

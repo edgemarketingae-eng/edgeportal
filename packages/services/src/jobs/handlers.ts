@@ -8,6 +8,9 @@ import { sweepOdooPending, syncPaymentToOdoo } from "../odoo/sync";
 import { syncAllStudents, syncStudentToMailerLite } from "../mailerlite/sync";
 import { evictCache, fillCache } from "../recordings/cache";
 import { discoverMeetRecordings } from "../recordings/service";
+import { linkLeadForStudent } from "../crm/autolink";
+import { sweepLeadInbox } from "../crm/ingest";
+import { runBatchUrgency, runFollowUpDigest, runStaleSweep } from "../crm/jobs";
 
 /**
  * Job handlers keyed by queue, shared by the worker and the dev-only job route.
@@ -32,6 +35,11 @@ export const baseHandlers: Handlers = {
   "google.discoverRecordings": () => discoverMeetRecordings(),
   "recordings.cacheFill": (d) => fillCache(d.recordingId),
   "recordings.cacheEvict": () => evictCache(),
+  "crm.autoLink": (d) => linkLeadForStudent(d.userId, d),
+  "crm.followUpDigest": (d) => runFollowUpDigest(asOf(d)),
+  "crm.staleSweep": (d) => runStaleSweep(asOf(d)),
+  "crm.batchUrgency": (d) => runBatchUrgency(asOf(d)),
+  "crm.inboxSweep": () => sweepLeadInbox(),
 };
 
 const extra: Handlers = {};

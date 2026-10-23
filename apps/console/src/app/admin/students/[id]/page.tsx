@@ -1,4 +1,5 @@
 import { adminRoutes, paymentRoutes } from "@edge/contracts";
+import { LEAD_SOURCE_LABELS } from "@edge/domain/crm/labels";
 import { formatDate, formatDateTime } from "@edge/domain/dates";
 import { formatMoney } from "@edge/domain/money";
 import { GATEWAY_LABELS, KIND_LABELS, PaymentStatusBadge } from "@edge/ui/blocks/payment-status-badge";
@@ -30,7 +31,7 @@ export default async function StudentDetailPage(props: PageProps<"/admin/student
   const v = await requireStaff("student.read");
   const { id } = await props.params;
   const canSeePayments = can(v, "payment.read");
-  const [{ student: s, enrollment: e, events, batches }, payments] = await Promise.all([
+  const [{ student: s, enrollment: e, events, batches, lead }, payments] = await Promise.all([
     load(() => api(adminRoutes.student, { params: { id } })),
     canSeePayments ? load(() => api(paymentRoutes.adminStudentPayments, { params: { id } })) : null,
   ]);
@@ -149,6 +150,25 @@ export default async function StudentDetailPage(props: PageProps<"/admin/student
               <p className="text-muted-foreground">Registered</p>
               <p>{formatDateTime(s.createdAt)}</p>
             </div>
+            {lead && can(v, "crm.access") ? (
+              <div className="border-t pt-3">
+                <p className="text-muted-foreground">Lead origin</p>
+                <p className="font-semibold">
+                  {(LEAD_SOURCE_LABELS as Record<string, string>)[lead.source] ?? lead.source}
+                  {lead.sourceDetail ? <span className="text-muted-foreground font-normal"> · {lead.sourceDetail}</span> : null}
+                </p>
+                <p className="text-muted-foreground text-xs">
+                  {lead.projectName ? `${lead.projectName} · ` : ""}
+                  {lead.campaign ? `Campaign ${lead.campaign} · ` : ""}
+                  {lead.ownerName ? `Owner ${lead.ownerName} · ` : ""}
+                  Lead since {formatDate(lead.createdAt)}
+                  {lead.convertedAt ? `, converted ${formatDate(lead.convertedAt)}` : ""}
+                </p>
+                <a href={lead.href} className="text-edge-emerald text-xs font-semibold hover:underline">
+                  Open in the CRM
+                </a>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       </div>
