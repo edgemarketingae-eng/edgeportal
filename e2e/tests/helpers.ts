@@ -1,5 +1,5 @@
 import { createHmac } from "node:crypto";
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 import { E2E } from "../config";
 
 export async function studentSignIn(page: Page, identifier: string, password: string) {
@@ -22,6 +22,17 @@ export async function crmSignIn(page: Page, email: string, password = E2E.staffP
   await page.getByLabel("Work email").fill(email);
   await page.locator('input[name="password"]').fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
+}
+
+type Marked = Window & { __edgeNoReload?: boolean };
+
+/** Runs `action` and asserts it navigated client-side: a full page reload would wipe the marker. */
+export async function expectNoReload(page: Page, action: () => Promise<void>) {
+  await page.evaluate(() => {
+    (window as Marked).__edgeNoReload = true;
+  });
+  await action();
+  expect(await page.evaluate(() => (window as Marked).__edgeNoReload === true), "the page reloaded").toBe(true);
 }
 
 /** Date and time fields for "now + minutes" in Dubai (UTC+4, no DST). */

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { E2E } from "../config";
-import { crmSignIn, studentSignIn } from "./helpers";
+import { crmSignIn, expectNoReload, studentSignIn } from "./helpers";
 
 /**
  * CRM journey on the CRM host: the CRM admin sets up a project and a CRM account -> a sales executive on
@@ -31,7 +31,10 @@ test("1. the CRM admin creates a project with the sales desk on it and a CRM-onl
   await page.goto(`${E2E.crm}/team`);
   await page.getByLabel("Full name").fill(account.name);
   await page.getByLabel("Login email").fill(account.email);
-  await page.getByRole("group", { name: "CRM roles" }).getByLabel(/^Sales executive/).check();
+  await page
+    .getByRole("group", { name: "CRM roles" })
+    .getByLabel(/^Sales executive/)
+    .check();
   await page.getByRole("group", { name: "Add to projects" }).getByLabel(project.name).check();
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByText(/Account created/)).toBeVisible();
@@ -88,7 +91,47 @@ test("2. the sales executive sees only their projects, creates a lead, logs a ca
   await expect(todo.getByRole("link", { name: task })).toHaveCount(0);
 });
 
-test("3. the CRM admin finds the lead across projects and converts it into a student", async ({ page }) => {
+test("3. filters and view links update the lists in place, without reloading the page", async ({ page }) => {
+  await crmSignIn(page, "sales@edgeacademy.local");
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.goto(`${E2E.crm}/leads`);
+  const search = page.getByRole("searchbox", { name: "Search" });
+
+  await expectNoReload(page, async () => {
+    // A select applies on change.
+    await page.getByLabel("Stage", { exact: true }).selectOption("CONTACTED");
+    await expect(page).toHaveURL(/stage=CONTACTED/);
+    await expect(page.getByRole("link", { name: lead.name })).toBeVisible();
+
+    // The search box applies shortly after typing stops, keeping the other filters.
+    await search.fill(lead.name);
+    await expect.poll(() => new URL(page.url()).searchParams.get("q")).toBe(lead.name);
+    await expect(page).toHaveURL(/stage=CONTACTED/);
+    await expect(page.locator("tbody tr")).toHaveCount(1);
+    await expect(page.getByRole("link", { name: lead.name })).toBeVisible();
+
+    // A view link replaces the query, and the filter controls follow the URL.
+    await page.getByRole("link", { name: "Mine", exact: true }).click();
+    await expect(page).toHaveURL(/\/leads\?owner=me$/);
+    await expect(page.getByLabel("Owner", { exact: true })).toHaveValue("me");
+    await expect(page.getByLabel("Stage", { exact: true })).toHaveValue("");
+    await expect(search).toHaveValue("");
+  });
+
+  await page.goto(`${E2E.crm}/tasks`);
+  await expectNoReload(page, async () => {
+    await page.getByLabel("Priority", { exact: true }).selectOption("MEDIUM");
+    await expect(page).toHaveURL(/priority=MEDIUM/);
+    await expect(page.locator('[data-column="IN_PROGRESS"]').getByRole("link", { name: task })).toBeVisible();
+
+    await page.getByRole("link", { name: "List", exact: true }).click();
+    await expect(page).toHaveURL(/view=list/);
+    await expect(page).toHaveURL(/priority=MEDIUM/);
+    await expect(page.getByRole("link", { name: task })).toBeVisible();
+  });
+});
+
+test("4. the CRM admin finds the lead across projects and converts it into a student", async ({ page }) => {
   await crmSignIn(page, "crm-admin@edgeacademy.local");
   await expect(page).toHaveURL(/\/dashboard$/); // let the sign-in redirect finish before navigating away
   await page.goto(`${E2E.crm}/leads?q=${encodeURIComponent(lead.name)}&view=all`);
@@ -101,7 +144,7 @@ test("3. the CRM admin finds the lead across projects and converts it into a stu
   await expect(page.getByText("Converted", { exact: true }).first()).toBeVisible();
 });
 
-test("4. the new student sets a password, verifies the mobile and sees the dashboard", async ({ page, request }) => {
+test("5. the new student sets a password, verifies the mobile and sees the dashboard", async ({ page, request }) => {
   const mail = await request.get(`${E2E.api}/api/dev/last-email?to=${encodeURIComponent(lead.email)}`);
   expect(mail.ok()).toBe(true);
   const { payload } = await mail.json();

@@ -2,7 +2,7 @@ import { adminRoutes, catalogRoutes } from "@edge/contracts";
 import { formatDate } from "@edge/domain/dates";
 import { ENROLLMENT_STATUSES, PAYMENT_STATES } from "@edge/domain/enums";
 import { formatMoney } from "@edge/domain/money";
-import { FilterBar, FilterSelect } from "@edge/ui/blocks/filter-bar";
+import { FilterBar, FilterResults, FilterScope, FilterSelect } from "@edge/ui/blocks/filter-bar";
 import { EnrollmentBadge, PaymentStateBadge } from "@edge/ui/blocks/status-badges";
 import { Button } from "@edge/ui/components/button";
 import { Card } from "@edge/ui/components/card";
@@ -49,7 +49,7 @@ export default async function StudentsPage(props: PageProps<"/admin/students">) 
   const qs = new URLSearchParams(Object.entries(sp).filter(([, v]) => typeof v === "string") as [string, string][]).toString();
 
   return (
-    <>
+    <FilterScope>
       <PageHeader
         title="Students"
         description={`${total} student${total === 1 ? "" : "s"}`}
@@ -66,54 +66,56 @@ export default async function StudentsPage(props: PageProps<"/admin/students">) 
         <FilterSelect name="payment" label="Payment" value={f.payment} options={PAYMENT_OPTIONS} />
         <FilterSelect name="batch" label="Batch" value={f.batch} options={batches.map((b) => [b.id, b.name])} />
       </FilterBar>
-      <Card className="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Student</TableHead>
-              <TableHead className="hidden md:table-cell">Mobile</TableHead>
-              <TableHead>Batch</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="hidden lg:table-cell">Payment</TableHead>
-              <TableHead className="hidden text-right lg:table-cell">Paid</TableHead>
-              <TableHead className="hidden xl:table-cell">Joined</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.length === 0 ? (
+      <FilterResults>
+        <Card className="p-0">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={7} className="text-muted-foreground py-10 text-center">
-                  No students match these filters.
-                </TableCell>
+                <TableHead>Student</TableHead>
+                <TableHead className="hidden md:table-cell">Mobile</TableHead>
+                <TableHead>Batch</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="hidden lg:table-cell">Payment</TableHead>
+                <TableHead className="hidden text-right lg:table-cell">Paid</TableHead>
+                <TableHead className="hidden xl:table-cell">Joined</TableHead>
               </TableRow>
-            ) : (
-              rows.map((s) => {
-                const e = s.enrollment;
-                return (
-                  <TableRow key={s.id}>
-                    <TableCell>
-                      <Link href={`/admin/students/${s.id}`} className="text-edge-emerald font-semibold hover:underline">
-                        {s.name}
-                      </Link>
-                      <div className="text-muted-foreground text-xs">{s.email}</div>
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      {s.phoneNumber ?? <span className="text-muted-foreground">{s.pendingPhone ? "unverified" : "-"}</span>}
-                    </TableCell>
-                    <TableCell>{e?.batchName ?? <span className="text-muted-foreground">None</span>}</TableCell>
-                    <TableCell>{e ? <EnrollmentBadge status={e.status} lockReason={e.lockReason} /> : null}</TableCell>
-                    <TableCell className="hidden lg:table-cell">{e ? <PaymentStateBadge state={e.paymentState} /> : null}</TableCell>
-                    <TableCell className="hidden text-right tabular-nums lg:table-cell">
-                      {e ? formatMoney(e.paidCourseMinor, e.currency) : "-"}
-                    </TableCell>
-                    <TableCell className="hidden xl:table-cell">{formatDate(s.createdAt)}</TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-      </Card>
-    </>
+            </TableHeader>
+            <TableBody>
+              {rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-muted-foreground py-10 text-center">
+                    No students match these filters.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                rows.map((s) => {
+                  const e = s.enrollment;
+                  return (
+                    <TableRow key={s.id}>
+                      <TableCell>
+                        <Link href={`/admin/students/${s.id}`} className="text-edge-emerald font-semibold hover:underline">
+                          {s.name}
+                        </Link>
+                        <div className="text-muted-foreground text-xs">{s.email}</div>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {s.phoneNumber ?? <span className="text-muted-foreground">{s.pendingPhone ? "unverified" : "-"}</span>}
+                      </TableCell>
+                      <TableCell>{e?.batchName ?? <span className="text-muted-foreground">None</span>}</TableCell>
+                      <TableCell>{e ? <EnrollmentBadge status={e.status} lockReason={e.lockReason} /> : null}</TableCell>
+                      <TableCell className="hidden lg:table-cell">{e ? <PaymentStateBadge state={e.paymentState} /> : null}</TableCell>
+                      <TableCell className="hidden text-right tabular-nums lg:table-cell">
+                        {e ? formatMoney(e.paidCourseMinor, e.currency) : "-"}
+                      </TableCell>
+                      <TableCell className="hidden xl:table-cell">{formatDate(s.createdAt)}</TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </Card>
+      </FilterResults>
+    </FilterScope>
   );
 }

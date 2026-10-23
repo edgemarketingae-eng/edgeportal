@@ -2,7 +2,7 @@ import { crmRoutes, type TaskDto } from "@edge/contracts";
 import { TASK_PRIORITIES } from "@edge/domain/crm/enums";
 import { FOLLOWUP_TYPE_LABELS, TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from "@edge/domain/crm/labels";
 import { daysUntil, dubaiDateOnly, formatDateTime } from "@edge/domain/dates";
-import { FilterBar, FilterSelect } from "@edge/ui/blocks/filter-bar";
+import { FilterBar, FilterLink, FilterResults, FilterScope, FilterSelect } from "@edge/ui/blocks/filter-bar";
 import { Button } from "@edge/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@edge/ui/components/card";
 import { PageHeader } from "@edge/ui/shell/app-shell";
@@ -32,7 +32,9 @@ export default async function TasksPage(props: PageProps<"/tasks">) {
   const filters = { project: one("project"), assignee: one("assignee"), priority: TASK_PRIORITIES.find((p) => p === one("priority")) };
   const canWrite = can(v, "crm.write");
   const options = await load(() => api(crmRoutes.options));
-  const qs = new URLSearchParams(Object.entries(sp).filter(([k, x]) => typeof x === "string" && x && k !== "view" && k !== "status") as [string, string][]);
+  const qs = new URLSearchParams(
+    Object.entries(sp).filter(([k, x]) => typeof x === "string" && x && k !== "view" && k !== "status") as [string, string][],
+  );
   const link = (extra: Record<string, string>) => `/tasks?${new URLSearchParams({ ...Object.fromEntries(qs), ...extra }).toString()}`;
   const assignees = uniq(Object.values(options.teams).flat());
 
@@ -40,14 +42,24 @@ export default async function TasksPage(props: PageProps<"/tasks">) {
     <>
       <PageHeader
         title="Tasks"
-        description={view === "board" ? "Drag cards between columns to change their status" : status === "open" ? "Open tasks by due date" : "Recently closed"}
+        description={
+          view === "board"
+            ? "Drag cards between columns to change their status"
+            : status === "open"
+              ? "Open tasks by due date"
+              : "Recently closed"
+        }
         actions={
           <>
             <Button asChild size="sm" variant={view === "board" ? "default" : "outline"}>
-              <Link href={link({ view: "board" })}>Board</Link>
+              <FilterLink href={link({ view: "board" })} aria-current={view === "board" ? "page" : undefined}>
+                Board
+              </FilterLink>
             </Button>
             <Button asChild size="sm" variant={view === "list" ? "default" : "outline"}>
-              <Link href={link({ view: "list" })}>List</Link>
+              <FilterLink href={link({ view: "list" })} aria-current={view === "list" ? "page" : undefined}>
+                List
+              </FilterLink>
             </Button>
             {canWrite ? <AddTaskDialog options={options} meId={v.user.id} label="New task" /> : null}
           </>
@@ -57,8 +69,18 @@ export default async function TasksPage(props: PageProps<"/tasks">) {
         <input type="hidden" name="view" value={view} />
         {status === "done" ? <input type="hidden" name="status" value="done" /> : null}
         <FilterSelect name="project" label="Project" value={filters.project} options={options.projects.map((p) => [p.id, p.name])} />
-        <FilterSelect name="assignee" label="Assignee" value={filters.assignee} options={[["me", "Me"], ["unassigned", "Unassigned"], ...assignees.map((a) => [a.id, a.name] as [string, string])]} />
-        <FilterSelect name="priority" label="Priority" value={filters.priority} options={TASK_PRIORITIES.map((p) => [p, TASK_PRIORITY_LABELS[p]])} />
+        <FilterSelect
+          name="assignee"
+          label="Assignee"
+          value={filters.assignee}
+          options={[["me", "Me"], ["unassigned", "Unassigned"], ...assignees.map((a) => [a.id, a.name] as [string, string])]}
+        />
+        <FilterSelect
+          name="priority"
+          label="Priority"
+          value={filters.priority}
+          options={TASK_PRIORITIES.map((p) => [p, TASK_PRIORITY_LABELS[p]])}
+        />
       </FilterBar>
     </>
   );
@@ -66,10 +88,12 @@ export default async function TasksPage(props: PageProps<"/tasks">) {
   if (view === "board") {
     const board = await load(() => api(crmRoutes.board, { query: filters }));
     return (
-      <>
+      <FilterScope>
         {header}
-        <TaskBoard board={board} canWrite={canWrite} />
-      </>
+        <FilterResults>
+          <TaskBoard board={board} canWrite={canWrite} />
+        </FilterResults>
+      </FilterScope>
     );
   }
 
@@ -102,7 +126,15 @@ export default async function TasksPage(props: PageProps<"/tasks">) {
           </span>
         </p>
         <p className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
-          {status === "open" ? t.dueAt ? <FollowUpDue at={t.dueAt} /> : <span>no due date</span> : <span>{t.completedAt ? `${TASK_STATUS_LABELS[t.status]} ${formatDateTime(t.completedAt)}` : TASK_STATUS_LABELS[t.status]}</span>}
+          {status === "open" ? (
+            t.dueAt ? (
+              <FollowUpDue at={t.dueAt} />
+            ) : (
+              <span>no due date</span>
+            )
+          ) : (
+            <span>{t.completedAt ? `${TASK_STATUS_LABELS[t.status]} ${formatDateTime(t.completedAt)}` : TASK_STATUS_LABELS[t.status]}</span>
+          )}
           {t.assignee ? <span>· {t.assignee.name}</span> : <span>· unassigned</span>}
         </p>
       </div>
@@ -117,39 +149,57 @@ export default async function TasksPage(props: PageProps<"/tasks">) {
   );
 
   return (
-    <>
+    <FilterScope>
       {header}
       <div className="mb-3 flex gap-2">
         <Button asChild size="sm" variant={status === "open" ? "default" : "outline"}>
-          <Link href={link({ view: "list" })}>Open</Link>
+          <FilterLink href={link({ view: "list" })} aria-current={status === "open" ? "page" : undefined}>
+            Open
+          </FilterLink>
         </Button>
         <Button asChild size="sm" variant={status === "done" ? "default" : "outline"}>
-          <Link href={link({ view: "list", status: "done" })}>Closed</Link>
+          <FilterLink href={link({ view: "list", status: "done" })} aria-current={status === "done" ? "page" : undefined}>
+            Closed
+          </FilterLink>
         </Button>
       </div>
-      {status === "done" ? (
-        <Card>
-          <CardContent className="pt-6">{tasks.length ? <ul className="divide-y text-sm">{tasks.map(row)}</ul> : <p className="text-muted-foreground text-sm">Nothing closed yet.</p>}</CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4">
-          {groups.map((g) => {
-            const list = grouped.get(g)!;
-            if (!list.length && g !== "Today") return null;
-            return (
-              <Card key={g} className={g === "Overdue" && list.length ? "border-destructive/40" : undefined}>
-                <CardHeader>
-                  <CardTitle>
-                    {g} <span className="text-muted-foreground text-sm font-normal">({list.length})</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>{list.length ? <ul className="divide-y text-sm">{list.map(row)}</ul> : <p className="text-muted-foreground text-sm">Nothing due today.</p>}</CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-    </>
+      <FilterResults>
+        {status === "done" ? (
+          <Card>
+            <CardContent className="pt-6">
+              {tasks.length ? (
+                <ul className="divide-y text-sm">{tasks.map(row)}</ul>
+              ) : (
+                <p className="text-muted-foreground text-sm">Nothing closed yet.</p>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4">
+            {groups.map((g) => {
+              const list = grouped.get(g)!;
+              if (!list.length && g !== "Today") return null;
+              return (
+                <Card key={g} className={g === "Overdue" && list.length ? "border-destructive/40" : undefined}>
+                  <CardHeader>
+                    <CardTitle>
+                      {g} <span className="text-muted-foreground text-sm font-normal">({list.length})</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {list.length ? (
+                      <ul className="divide-y text-sm">{list.map(row)}</ul>
+                    ) : (
+                      <p className="text-muted-foreground text-sm">Nothing due today.</p>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </FilterResults>
+    </FilterScope>
   );
 }
 

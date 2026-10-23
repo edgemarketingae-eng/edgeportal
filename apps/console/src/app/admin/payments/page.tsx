@@ -2,7 +2,7 @@ import { paymentRoutes } from "@edge/contracts";
 import { formatDateTime } from "@edge/domain/dates";
 import { GATEWAYS, PAYMENT_STATUSES, SYNC_STATUSES } from "@edge/domain/enums";
 import { formatMoney } from "@edge/domain/money";
-import { FilterBar, FilterSelect } from "@edge/ui/blocks/filter-bar";
+import { FilterBar, FilterResults, FilterScope, FilterSelect } from "@edge/ui/blocks/filter-bar";
 import { GATEWAY_LABELS, KIND_LABELS, PaymentStatusBadge } from "@edge/ui/blocks/payment-status-badge";
 import { SyncBadge } from "@edge/ui/blocks/status-badges";
 import { Card } from "@edge/ui/components/card";
@@ -29,7 +29,7 @@ export default async function AdminPaymentsPage(props: PageProps<"/admin/payment
   };
   const { rows, summary } = await load(() => api(paymentRoutes.adminPayments, { query: f }));
   return (
-    <>
+    <FilterScope>
       <PageHeader
         title="Payments"
         description={`Succeeded in this view: ${formatMoney(summary.totalMinor)} · VAT on courses ${formatMoney(summary.courseVatMinor)} · processing fees ${formatMoney(summary.feesMinor)}`}
@@ -64,54 +64,56 @@ export default async function AdminPaymentsPage(props: PageProps<"/admin/payment
           ]}
         />
       </FilterBar>
-      <Card className="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Student</TableHead>
-              <TableHead className="hidden md:table-cell">Type</TableHead>
-              <TableHead className="hidden md:table-cell">Method</TableHead>
-              <TableHead className="text-right">Total</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="hidden lg:table-cell">Odoo</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.length === 0 ? (
+      <FilterResults>
+        <Card className="p-0">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={7} className="text-muted-foreground py-10 text-center">
-                  No payments match.
-                </TableCell>
+                <TableHead>Date</TableHead>
+                <TableHead>Student</TableHead>
+                <TableHead className="hidden md:table-cell">Type</TableHead>
+                <TableHead className="hidden md:table-cell">Method</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="hidden lg:table-cell">Odoo</TableHead>
               </TableRow>
-            ) : (
-              rows.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell>
-                    <Link href={`/admin/payments/${p.id}`} className="text-edge-emerald hover:underline">
-                      {formatDateTime(p.succeededAt ?? p.createdAt)}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <Link href={`/admin/students/${p.studentId}`} className="hover:underline">
-                      {p.studentName}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell">{KIND_LABELS[p.kind]}</TableCell>
-                  <TableCell className="hidden md:table-cell">{GATEWAY_LABELS[p.gateway]}</TableCell>
-                  <TableCell className="text-right font-semibold tabular-nums">{formatMoney(p.totalMinor, p.currency)}</TableCell>
-                  <TableCell>
-                    <PaymentStatusBadge status={p.status} />
-                  </TableCell>
-                  <TableCell className="hidden lg:table-cell">
-                    {p.status === "SUCCEEDED" ? <SyncBadge status={p.odoo.status} /> : null}
+            </TableHeader>
+            <TableBody>
+              {rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-muted-foreground py-10 text-center">
+                    No payments match.
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </Card>
-    </>
+              ) : (
+                rows.map((p) => (
+                  <TableRow key={p.id}>
+                    <TableCell>
+                      <Link href={`/admin/payments/${p.id}`} className="text-edge-emerald hover:underline">
+                        {formatDateTime(p.succeededAt ?? p.createdAt)}
+                      </Link>
+                    </TableCell>
+                    <TableCell>
+                      <Link href={`/admin/students/${p.studentId}`} className="hover:underline">
+                        {p.studentName}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">{KIND_LABELS[p.kind]}</TableCell>
+                    <TableCell className="hidden md:table-cell">{GATEWAY_LABELS[p.gateway]}</TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums">{formatMoney(p.totalMinor, p.currency)}</TableCell>
+                    <TableCell>
+                      <PaymentStatusBadge status={p.status} />
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell">
+                      {p.status === "SUCCEEDED" ? <SyncBadge status={p.odoo.status} /> : null}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </Card>
+      </FilterResults>
+    </FilterScope>
   );
 }
