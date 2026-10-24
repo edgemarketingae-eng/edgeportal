@@ -70,11 +70,14 @@ const schema = z
     LEAD_WEBHOOK_SECRET: z.string().min(16).optional(),
   })
   .superRefine((e, ctx) => {
+    if (e.EMAIL_MODE === "mailersend" && !e.MAILERSEND_API_KEY) {
+      ctx.addIssue({ code: "custom", path: ["MAILERSEND_API_KEY"], message: "MAILERSEND_API_KEY is required for EMAIL_MODE=mailersend" });
+    }
     if (e.NODE_ENV !== "production" || e.ALLOW_MOCK_IN_PRODUCTION) return;
     for (const key of ["OTP_MODE", "PAYMENTS_MODE", "ODOO_MODE", "GOOGLE_MODE", "MAILERLITE_MODE"] as const) {
       if (e[key] === "mock") ctx.addIssue({ code: "custom", path: [key], message: `${key}=mock is not allowed in production` });
     }
-    if (e.EMAIL_MODE === "console") ctx.addIssue({ code: "custom", path: ["EMAIL_MODE"], message: "EMAIL_MODE=console is not allowed in production" });
+    // EMAIL_MODE=console is allowed in production until MailerSend is set up: emails go to the worker log.
     for (const key of ["INTERNAL_API_TOKEN", "BETTER_AUTH_SECRET", "MEDIA_SIGNING_SECRET"] as const) {
       if (e[key].startsWith("dev-")) ctx.addIssue({ code: "custom", path: [key], message: `${key} must be set in production` });
     }
