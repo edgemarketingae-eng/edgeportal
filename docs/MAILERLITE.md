@@ -116,7 +116,7 @@ starts the worker too). Keep test subscribers out of the production account.
 With `MAILERLITE_MODE=live` on the server:
 
 1. Check that Admin > Settings shows "MailerLite: live".
-2. Sign up at `https://portal.edgeverse.ae/signup` with your own email, leave the marketing box ticked and verify the
+2. Sign up at `https://portal.edgeacademy.ae/signup` with your own email, leave the marketing box ticked and verify the
    phone number.
 3. Within a minute, MailerLite > Subscribers should show the email as Active, with name, phone and country. It should
    be in `Portal · All students`, `Portal · Batch <code>`, `Portal · Status: Awaiting payment` and

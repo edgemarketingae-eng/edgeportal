@@ -13,10 +13,10 @@ Operations (jobs, backups, provider details, everyday admin tasks) are in [RUNBO
 
 | Hostname | Serves | On the server |
 |---|---|---|
-| `portal.edgeverse.ae` | Student portal | PM2 `edge-student` on 127.0.0.1:3000 |
-| `console.edgeverse.ae` | Staff portal and admin panel | PM2 `edge-console` on 127.0.0.1:3001 |
-| `crm.edgeverse.ae` | Sales CRM ([CRM.md](CRM.md)) | PM2 `edge-crm` on 127.0.0.1:3002 |
-| `api.edgeverse.ae` | Only `/api/health`, `/api/webhooks/*` and `/api/media/*` (signed video links); everything else is 404 | PM2 `edge-api` on :4000 |
+| `portal.edgeacademy.ae` | Student portal | PM2 `edge-student` on 127.0.0.1:3000 |
+| `console.edgeacademy.ae` | Staff portal and admin panel | PM2 `edge-console` on 127.0.0.1:3001 |
+| `crm.edgeacademy.ae` | Sales CRM ([CRM.md](CRM.md)) | PM2 `edge-crm` on 127.0.0.1:3002 |
+| `api.edgeacademy.ae` | Only `/api/health`, `/api/webhooks/*` and `/api/media/*` (signed video links); everything else is 404 | PM2 `edge-api` on :4000 |
 | (none) | Background jobs, schedules, recordings | PM2 `edge-worker` |
 
 nginx terminates HTTPS (certbot certificate) and proxies the four hosts. Redis holds the job queues. Everything
@@ -34,7 +34,7 @@ is configured from one file, `.env` at the repo root. The files behind this live
 
 ### 1. DNS
 
-At the DNS host for `edgeverse.ae`, add four `A` records pointing to the VPS public IPv4 address:
+At the DNS host for `edgeacademy.ae`, add four `A` records pointing to the VPS public IPv4 address:
 `portal`, `console`, `crm` and `api` (TTL 300). Don't add `AAAA` records. If the zone is on Cloudflare, set the records
 to **DNS only** (grey cloud). If the zone has `CAA` records, add `0 issue "letsencrypt.org"`.
 
@@ -84,7 +84,7 @@ git clone git@github.com:<ORG>/<REPO>.git /var/www/edge-academy
 
 ```bash
 cd /var/www/edge-academy
-./deploy/setup.sh you@edgeverse.ae      # email for certificate expiry notices
+./deploy/setup.sh you@edgeacademy.ae      # email for certificate expiry notices
 ```
 
 It installs Node 24, pnpm, PM2, Redis, nginx, certbot and ffmpeg, enables the firewall (SSH, HTTP, HTTPS only),
@@ -129,22 +129,22 @@ stops there and says why; the site keeps running on the previous version.
 ### 8. Check it works
 
 ```bash
-curl -s https://api.edgeverse.ae/api/health                                      # {"ok":true,"db":"up",...}
-curl -s -o /dev/null -w '%{http_code}\n' https://api.edgeverse.ae/api/v1/me     # 404 (must not be public)
+curl -s https://api.edgeacademy.ae/api/health                                      # {"ok":true,"db":"up",...}
+curl -s -o /dev/null -w '%{http_code}\n' https://api.edgeacademy.ae/api/v1/me     # 404 (must not be public)
 sudo certbot renew --dry-run                                                     # renewal works
 ```
 
-Open `https://portal.edgeverse.ae`, `https://console.edgeverse.ae` and `https://crm.edgeverse.ae` in a browser.
+Open `https://portal.edgeacademy.ae`, `https://console.edgeacademy.ae` and `https://crm.edgeacademy.ae` in a browser.
 Optionally `sudo reboot` and check that `pm2 status` shows all five processes online afterwards.
 
 ### 9. First sign-in
 
-1. Sign in at `https://console.edgeverse.ae/login` with the seed admin. Change the password and set up two-factor
+1. Sign in at `https://console.edgeacademy.ae/login` with the seed admin. Change the password and set up two-factor
    (admin pages stay locked until you do). Store the backup codes.
 2. In `.env`, set `SEED_ADMIN_PASSWORD=` (empty). It's only needed while no staff account exists.
 3. Admin → Settings: organisation details (the seeded defaults mention `edgeacademy.ae`), fee rates, Odoo IDs.
    Then create staff, the course and the current batch. See [RUNBOOK §3](RUNBOOK.md#3-provider-setup).
-4. Sales staff (CRM roles) sign in at `https://crm.edgeverse.ae/login`. Roles, projects and the board are
+4. Sales staff (CRM roles) sign in at `https://crm.edgeacademy.ae/login`. Roles, projects and the board are
    described in [CRM.md](CRM.md).
 
 ## Going live
@@ -153,11 +153,11 @@ Webhook URLs to register with the payment providers:
 
 | Provider | Webhook URL |
 |---|---|
-| Stripe | `https://api.edgeverse.ae/api/webhooks/stripe` |
-| Nomod | `https://api.edgeverse.ae/api/webhooks/nomod` |
-| Tabby | `https://api.edgeverse.ae/api/webhooks/tabby` |
+| Stripe | `https://api.edgeacademy.ae/api/webhooks/stripe` |
+| Nomod | `https://api.edgeacademy.ae/api/webhooks/nomod` |
+| Tabby | `https://api.edgeacademy.ae/api/webhooks/tabby` |
 | Tamara | none to register: sent with every checkout |
-| Website lead form | `https://api.edgeverse.ae/api/webhooks/leads/website` (signed with `LEAD_WEBHOOK_SECRET`, see [CRM](CRM.md)) |
+| Website lead form | `https://api.edgeacademy.ae/api/webhooks/leads/website` (signed with `LEAD_WEBHOOK_SECRET`, see [CRM](CRM.md)) |
 
 Events, secrets and the other providers (Twilio, MailerSend, Google, Odoo, MailerLite) are in
 [RUNBOOK §3](RUNBOOK.md#3-provider-setup). With test keys, run one payment per method end to end. Test payments
@@ -218,7 +218,7 @@ Start with `pm2 status` and `pm2 logs <name> --lines 100`.
 | `setup.sh`: "resolves to … expected …" | DNS isn't pointing at the server yet. Wait for the A records, re-run |
 | Certificate request fails | DNS wrong, port 80 blocked by a provider firewall, Cloudflare proxy on, or a CAA record. Fix, re-run `setup.sh` |
 | `502 Bad Gateway` | The app behind that host is down: `pm2 status`, then `pm2 logs` for it |
-| Sign-in loops back to login, or `403 Invalid origin` | `STUDENT_APP_URL` / `CONSOLE_APP_URL` / `CRM_APP_URL` must be exactly `https://portal.edgeverse.ae` / `https://console.edgeverse.ae` / `https://crm.edgeverse.ae`; then `pm2 restart all` |
+| Sign-in loops back to login, or `403 Invalid origin` | `STUDENT_APP_URL` / `CONSOLE_APP_URL` / `CRM_APP_URL` must be exactly `https://portal.edgeacademy.ae` / `https://console.edgeacademy.ae` / `https://crm.edgeacademy.ae`; then `pm2 restart all` |
 | CRM password-reset email links to the student portal | `CRM_APP_URL` is missing or wrong in `.env` (the API only trusts the hosts it knows); fix it, `pm2 restart all` |
 | Payment stays pending | Check the provider's webhook delivery log and `pm2 logs edge-api`; use Admin → Payments → "Re-check with gateway" |
 | Tamara stays in test mode after go-live | `TAMARA_API_URL` still points at the sandbox |

@@ -15,10 +15,10 @@ Setting up a server and deploying are described in [DEPLOYMENT.md](DEPLOYMENT.md
 
 | Host | Serves |
 |---|---|
-| `portal.edgeverse.ae` | student app |
-| `console.edgeverse.ae` | staff portal and admin panel |
-| `crm.edgeverse.ae` | sales CRM (leads, projects, task board; see [CRM.md](CRM.md)) |
-| `api.edgeverse.ae` | only `/api/health`, `/api/webhooks/*` (payment providers) and `/api/media/*` (signed video URLs) |
+| `portal.edgeacademy.ae` | student app |
+| `console.edgeacademy.ae` | staff portal and admin panel |
+| `crm.edgeacademy.ae` | sales CRM (leads, projects, task board; see [CRM.md](CRM.md)) |
+| `api.edgeacademy.ae` | only `/api/health`, `/api/webhooks/*` (payment providers) and `/api/media/*` (signed video URLs) |
 
 Everything else in the API is reached through the apps. Auth, OTP, Meet join and checkout return go through
 each app's same-origin rewrite. The `/api/v1` data routes are called by the Next servers on 127.0.0.1 with
@@ -89,9 +89,9 @@ Webhook URLs (replace the domain):
 
 | Provider | Webhook URL | Notes |
 |---|---|---|
-| Stripe | `https://api.edgeverse.ae/api/webhooks/stripe` | events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `checkout.session.expired`; signing secret → `STRIPE_WEBHOOK_SECRET` |
-| Nomod | `https://api.edgeverse.ae/api/webhooks/nomod` | `charge.*` events; `whsec_` secret → `NOMOD_WEBHOOK_SECRET` |
-| Tabby | `https://api.edgeverse.ae/api/webhooks/tabby` | register via Tabby's webhook API with header `x-edge-webhook-secret: <TABBY_WEBHOOK_HEADER_VALUE>` |
+| Stripe | `https://api.edgeacademy.ae/api/webhooks/stripe` | events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `checkout.session.expired`; signing secret → `STRIPE_WEBHOOK_SECRET` |
+| Nomod | `https://api.edgeacademy.ae/api/webhooks/nomod` | `charge.*` events; `whsec_` secret → `NOMOD_WEBHOOK_SECRET` |
+| Tabby | `https://api.edgeacademy.ae/api/webhooks/tabby` | register via Tabby's webhook API with header `x-edge-webhook-secret: <TABBY_WEBHOOK_HEADER_VALUE>` |
 | Tamara | set automatically per checkout | notification token → `TAMARA_NOTIFICATION_TOKEN` |
 
 Before go-live, run one low-value payment per method in each provider's sandbox and check that:
@@ -160,7 +160,7 @@ The API also throttles OTP sends per number and per IP. Step-by-step setup: [TWI
   shared with the host account.
 - **Logs:** `pm2 logs edge-api --lines 200` (or `edge-worker`, `edge-student`, `edge-console`, `edge-crm`; files in
   `~/.pm2/logs`, rotated daily). API logs are JSON with a `requestId`, which matches the `x-request-id` response header.
-- **Uptime monitoring:** point a checker at `https://api.edgeverse.ae/api/health`.
+- **Uptime monitoring:** point a checker at `https://api.edgeacademy.ae/api/health`.
 
 ## 5. Go-live checklist
 

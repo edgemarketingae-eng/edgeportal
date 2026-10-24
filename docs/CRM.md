@@ -1,6 +1,6 @@
 # CRM
 
-The CRM is its own app for the sales team: `https://crm.edgeverse.ae` in production, `http://crm.localhost:3002`
+The CRM is its own app for the sales team: `https://crm.edgeacademy.ae` in production, `http://crm.localhost:3002`
 in development (`apps/crm`). It tracks prospects ("leads") from first enquiry to a student account and ties every
 lead to the enrollment and payment records that follow, so conversion and revenue per source are measured, not
 estimated. It shares the API, the database and the staff accounts with the admin console; only the front door differs.
@@ -111,7 +111,7 @@ time (Dubai), an assignee, a description and comments.
 
 ## Website lead form (public intake)
 
-`POST https://api.edgeverse.ae/api/webhooks/leads/website` — server to server (the website backend, a form
+`POST https://api.edgeacademy.ae/api/webhooks/leads/website` — server to server (the website backend, a form
 service or an automation tool). Nothing is exposed until `LEAD_WEBHOOK_SECRET` is set (16+ characters).
 
 Authentication, either header:
@@ -151,7 +151,7 @@ Example with curl:
 ```bash
 BODY='{"id":"t1","name":"Test Lead","phone":"+971501234567","email":"t@example.com"}'
 SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$LEAD_WEBHOOK_SECRET" | awk '{print $NF}')
-curl -X POST https://api.edgeverse.ae/api/webhooks/leads/website -H "content-type: application/json" -H "x-edge-signature: $SIG" --data "$BODY"
+curl -X POST https://api.edgeacademy.ae/api/webhooks/leads/website -H "content-type: application/json" -H "x-edge-signature: $SIG" --data "$BODY"
 ```
 
 New website leads go to the **General** project, unassigned; the project's managers (or, when it has none, everyone
@@ -192,8 +192,8 @@ duplicates are a real state, flagged on entry and resolved with **Merge duplicat
 ## Rolling out the CRM host (production)
 
 1. Add the `A` record `crm` → the server's IP (no `AAAA`).
-2. Set `CRM_APP_URL=https://crm.edgeverse.ae` in `.env` on the server.
-3. `./deploy/setup.sh you@edgeverse.ae` (re-runnable): checks DNS, expands the HTTPS certificate to the new
+2. Set `CRM_APP_URL=https://crm.edgeacademy.ae` in `.env` on the server.
+3. `./deploy/setup.sh you@edgeacademy.ae` (re-runnable): checks DNS, expands the HTTPS certificate to the new
    hostname, reloads nginx with the new server block.
 4. `git pull && ./deploy/deploy.sh`: builds the CRM app, migrates (creates the CRM roles and the General project,
    retires the Sales role) and starts `edge-crm` on 127.0.0.1:3002.

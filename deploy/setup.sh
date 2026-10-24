@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-time server setup for Ubuntu 24.04. Safe to re-run. From the repo root, as the edge user:
-#   ./deploy/setup.sh you@edgeverse.ae        (email for certificate expiry notices)
+#   ./deploy/setup.sh you@edgeacademy.ae        (email for certificate expiry notices)
 # Installs Node 24, pnpm, PM2, Redis, nginx, certbot and ffmpeg; turns on the firewall; gets the
 # HTTPS certificate; enables deploy/nginx.conf. Then: fill in .env and run ./deploy/deploy.sh.
 set -euo pipefail
@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 ROOT="$PWD"
 EMAIL="${1:?usage: ./deploy/setup.sh <email for certificate expiry notices>}"
 # The same hostnames are in deploy/nginx.conf and in .env (*_APP_URL, API_PUBLIC_URL).
-DOMAINS=(portal.edgeverse.ae console.edgeverse.ae crm.edgeverse.ae api.edgeverse.ae)
+DOMAINS=(portal.edgeacademy.ae console.edgeacademy.ae crm.edgeacademy.ae api.edgeacademy.ae)
 step() { echo; echo "▸ $*"; }
 
 step "Packages"
@@ -62,7 +62,7 @@ echo "  ✓ all point at $ip"
 
 step "HTTPS certificate"
 # certonly: certbot gets and renews the certificate but never edits deploy/nginx.conf. When a hostname was
-# added to DOMAINS after the first setup (crm.edgeverse.ae, for example), --expand re-issues the certificate
+# added to DOMAINS after the first setup (crm.edgeacademy.ae, for example), --expand re-issues the certificate
 # under the same name, so nginx.conf keeps working.
 covered=$(sudo certbot certificates --cert-name edge-academy 2>/dev/null | sed -n 's/^ *Domains: //p' || true)
 missing=0

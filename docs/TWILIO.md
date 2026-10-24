@@ -128,7 +128,7 @@ Go-live does not depend on this step.
 With `OTP_MODE=live` on the server:
 
 1. Check that Admin > Settings shows "Mobile OTP (Twilio): live".
-2. Sign up at `https://portal.edgeverse.ae/signup` with a UAE number. The SMS should arrive and the code should be
+2. Sign up at `https://portal.edgeacademy.ae/signup` with a UAE number. The SMS should arrive and the code should be
    accepted.
 3. Do the same with a KSA number. This is an item on the go-live checklist ([RUNBOOK §5](RUNBOOK.md#5-go-live-checklist)).
 4. If WhatsApp is on, sign up once more with WhatsApp selected.
