@@ -62,28 +62,45 @@ export async function closeRuntime() {
   current = {};
 }
 
+/**
+ * Each provider is built the first time it is used, so an integration that is not configured yet
+ * (OTP_MODE=live without Twilio keys, say) fails only where it is needed, not in every request.
+ */
+const factories: { [K in keyof Runtime]: () => Runtime[K] } = {
+  producer: () => createBullProducer(env.REDIS_URL, env.BULLMQ_PREFIX),
+  otp: () => createOtpProvider({ mode: env.OTP_MODE, accountSid: env.TWILIO_ACCOUNT_SID, authToken: env.TWILIO_AUTH_TOKEN, serviceSid: env.TWILIO_VERIFY_SERVICE_SID }),
+  email: () => createEmailSender({ mode: env.EMAIL_MODE, from: env.EMAIL_FROM, mailersendApiKey: env.MAILERSEND_API_KEY }),
+  gateways: () =>
+    createGatewayRegistry(
+      {
+        mode: env.PAYMENTS_MODE,
+        allowMock: env.PAYMENTS_MODE === "mock" && (env.NODE_ENV !== "production" || env.ALLOW_MOCK_IN_PRODUCTION),
+        mockSecret: env.MOCK_GATEWAY_SECRET,
+        studentAppUrl: env.STUDENT_APP_URL,
+        apiPublicUrl: env.API_PUBLIC_URL,
+        stripe: { secretKey: env.STRIPE_SECRET_KEY, webhookSecret: env.STRIPE_WEBHOOK_SECRET },
+        tabby: { apiUrl: env.TABBY_API_URL, secretKey: env.TABBY_SECRET_KEY, merchantCode: env.TABBY_MERCHANT_CODE, webhookHeaderValue: env.TABBY_WEBHOOK_HEADER_VALUE },
+        tamara: { apiUrl: env.TAMARA_API_URL, apiToken: env.TAMARA_API_TOKEN, notificationToken: env.TAMARA_NOTIFICATION_TOKEN },
+        nomod: { apiUrl: env.NOMOD_API_URL, apiKey: env.NOMOD_API_KEY, webhookSecret: env.NOMOD_WEBHOOK_SECRET },
+      },
+      gatewayDeps,
+    ),
+  odoo: () => createOdooClient({ mode: env.ODOO_MODE, url: env.ODOO_URL, db: env.ODOO_DB, apiKey: env.ODOO_API_KEY }),
+  mailerlite: () => createMailerLite({ mode: env.MAILERLITE_MODE, apiKey: env.MAILERLITE_API_KEY }),
+  google: () => createGoogleWorkspace({ mode: env.GOOGLE_MODE, serviceAccountJson: env.GOOGLE_SERVICE_ACCOUNT_JSON, timeZone: env.TZ_DEFAULT, mockDriveFile: mockDriveFile() }),
+};
+
+function provide<K extends keyof Runtime>(key: K): Runtime[K] {
+  return (current[key] ??= factories[key]());
+}
+
+const lazyRuntime = Object.defineProperties(
+  {} as Runtime,
+  Object.fromEntries((Object.keys(factories) as (keyof Runtime)[]).map((key) => [key, { get: () => provide(key), enumerable: true }])),
+);
+
 export function runtime(): Runtime {
-  current.producer ??= createBullProducer(env.REDIS_URL, env.BULLMQ_PREFIX);
-  current.otp ??= createOtpProvider({ mode: env.OTP_MODE, accountSid: env.TWILIO_ACCOUNT_SID, authToken: env.TWILIO_AUTH_TOKEN, serviceSid: env.TWILIO_VERIFY_SERVICE_SID });
-  current.email ??= createEmailSender({ mode: env.EMAIL_MODE, from: env.EMAIL_FROM, mailersendApiKey: env.MAILERSEND_API_KEY });
-  current.gateways ??= createGatewayRegistry(
-    {
-      mode: env.PAYMENTS_MODE,
-      allowMock: env.PAYMENTS_MODE === "mock" && (env.NODE_ENV !== "production" || env.ALLOW_MOCK_IN_PRODUCTION),
-      mockSecret: env.MOCK_GATEWAY_SECRET,
-      studentAppUrl: env.STUDENT_APP_URL,
-      apiPublicUrl: env.API_PUBLIC_URL,
-      stripe: { secretKey: env.STRIPE_SECRET_KEY, webhookSecret: env.STRIPE_WEBHOOK_SECRET },
-      tabby: { apiUrl: env.TABBY_API_URL, secretKey: env.TABBY_SECRET_KEY, merchantCode: env.TABBY_MERCHANT_CODE, webhookHeaderValue: env.TABBY_WEBHOOK_HEADER_VALUE },
-      tamara: { apiUrl: env.TAMARA_API_URL, apiToken: env.TAMARA_API_TOKEN, notificationToken: env.TAMARA_NOTIFICATION_TOKEN },
-      nomod: { apiUrl: env.NOMOD_API_URL, apiKey: env.NOMOD_API_KEY, webhookSecret: env.NOMOD_WEBHOOK_SECRET },
-    },
-    gatewayDeps,
-  );
-  current.odoo ??= createOdooClient({ mode: env.ODOO_MODE, url: env.ODOO_URL, db: env.ODOO_DB, apiKey: env.ODOO_API_KEY });
-  current.mailerlite ??= createMailerLite({ mode: env.MAILERLITE_MODE, apiKey: env.MAILERLITE_API_KEY });
-  current.google ??= createGoogleWorkspace({ mode: env.GOOGLE_MODE, serviceAccountJson: env.GOOGLE_SERVICE_ACCOUNT_JSON, timeZone: env.TZ_DEFAULT, mockDriveFile: mockDriveFile() });
-  return current as Runtime;
+  return lazyRuntime;
 }
 
 /** Call after a transaction commits. Failures are fine: the outbox sweeper retries. */
