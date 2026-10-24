@@ -24,6 +24,7 @@ export default async function TaskDetailPage(props: PageProps<"/tasks/[id]">) {
   return (
     <>
       <PageHeader
+        help="/docs/tasks"
         title={t.title}
         description={
           <>

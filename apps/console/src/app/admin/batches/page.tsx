@@ -21,6 +21,7 @@ export default async function BatchesPage() {
   return (
     <>
       <PageHeader
+        help="/admin/docs/batches"
         title="Courses & batches"
         actions={
           courses.length ? (

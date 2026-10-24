@@ -1,5 +1,6 @@
 import { AuthUser, InAppNotification, Role, StaffProfile, Types } from "@edge/db";
 import type { Permission } from "@edge/domain/auth/permissions";
+import { findPage, type PageInput } from "../paging";
 
 /** In-app notification for every active staff member whose roles grant `permission`. */
 export async function notifyPermissionHolders(permission: Permission, n: { title: string; body: string; href?: string }) {
@@ -16,9 +17,30 @@ export async function notifyUser(userId: string, n: { title: string; body: strin
   await InAppNotification.create([{ userId: new Types.ObjectId(userId), title: n.title, body: n.body, href: n.href ?? null }]);
 }
 
-export async function listNotifications(userId: string, markRead = true) {
+/** One page of a person's notifications, newest first; the ones shown are marked read. */
+export async function listNotifications(userId: string, q: PageInput = {}, markRead = true) {
   const uid = new Types.ObjectId(userId);
-  const items = await InAppNotification.find({ userId: uid }).sort({ createdAt: -1 }).limit(50).lean();
-  if (markRead && items.some((i) => !i.readAt)) await InAppNotification.updateMany({ userId: uid, readAt: null }, { $set: { readAt: new Date() } });
-  return items.map((i) => ({ id: String(i._id), title: i.title ?? "", body: i.body ?? "", href: i.href ?? null, readAt: i.readAt?.toISOString() ?? null, createdAt: (i as { createdAt?: Date }).createdAt?.toISOString() ?? "" }));
+  const page = await findPage<NotificationDoc>(InAppNotification, { userId: uid }, { createdAt: -1 }, q, { def: 25 });
+  const unread = page.rows.filter((i) => !i.readAt).map((i) => i._id);
+  if (markRead && unread.length) await InAppNotification.updateMany({ _id: { $in: unread } }, { $set: { readAt: new Date() } });
+  return {
+    ...page,
+    rows: page.rows.map((i) => ({
+      id: String(i._id),
+      title: i.title ?? "",
+      body: i.body ?? "",
+      href: i.href ?? null,
+      readAt: i.readAt?.toISOString() ?? null,
+      createdAt: i.createdAt?.toISOString() ?? "",
+    })),
+  };
+}
+
+interface NotificationDoc {
+  _id: Types.ObjectId;
+  title?: string | null;
+  body?: string | null;
+  href?: string | null;
+  readAt?: Date | null;
+  createdAt?: Date;
 }

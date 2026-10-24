@@ -18,7 +18,7 @@ export default async function AdminHome() {
 
   return (
     <>
-      <PageHeader title="Overview" />
+      <PageHeader help="/admin/docs/overview" title="Overview" />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Needs approval"

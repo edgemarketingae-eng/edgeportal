@@ -1,5 +1,5 @@
 import { AppShell, ShellSkeleton, type NavItem } from "@edge/ui/shell/app-shell";
-import { BookOpen, CreditCard, LayoutDashboard, PlayCircle, User, Video } from "lucide-react";
+import { BookOpen, CreditCard, LayoutDashboard, LifeBuoy, PlayCircle, User, Video } from "lucide-react";
 import { Suspense } from "react";
 import { getPortal, requireStudent } from "@/lib/load";
 
@@ -22,9 +22,17 @@ async function StudentShell({ children }: { children: React.ReactNode }) {
     { href: "/recordings", label: "Recordings", icon: <PlayCircle />, locked },
     { href: "/payments", label: "Payments", icon: <CreditCard /> },
     { href: "/profile", label: "Profile", icon: <User /> },
+    { href: "/docs", label: "Help", icon: <LifeBuoy /> },
   ];
   return (
-    <AppShell items={items} user={{ name: v.user.name, email: v.user.email }} areaLabel="Student portal" unread={v.unreadNotifications} notificationsHref="/notifications">
+    <AppShell
+      items={items}
+      user={{ name: v.user.name, email: v.user.email }}
+      areaLabel="Student portal"
+      unread={v.unreadNotifications}
+      notificationsHref="/notifications"
+      helpHref="/docs"
+    >
       {children}
     </AppShell>
   );

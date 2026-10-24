@@ -44,7 +44,7 @@ export function ClassRowActions({ c }: { c: ClassRow }) {
           <Field label="Start (Dubai)" name="time" type="time" defaultValue={c.time} required />
           <Field label="Minutes" name="durationMin" type="number" defaultValue={String(c.durationMin)} required />
         </div>
-        <div className="grid gap-1.5">
+        <div className="grid content-start gap-2">
           <Label htmlFor={`d-${c.id}`}>Description</Label>
           <Textarea id={`d-${c.id}`} name="description" rows={2} defaultValue={c.description} />
         </div>

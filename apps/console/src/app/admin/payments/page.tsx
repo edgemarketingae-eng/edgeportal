@@ -7,6 +7,7 @@ import { GATEWAY_LABELS, KIND_LABELS, PaymentStatusBadge } from "@edge/ui/blocks
 import { SyncBadge } from "@edge/ui/blocks/status-badges";
 import { Card } from "@edge/ui/components/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@edge/ui/components/table";
+import { Pagination } from "@edge/ui/blocks/pagination";
 import { PageHeader } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
 import type { Metadata } from "next";
@@ -26,13 +27,16 @@ export default async function AdminPaymentsPage(props: PageProps<"/admin/payment
     status: pick("status", PAYMENT_STATUSES),
     gateway: pick("gateway", GATEWAYS),
     odoo: pick("odoo", SYNC_STATUSES),
+    page: Number(one("page")) || 1,
+    pageSize: Number(one("pageSize")) || 50,
   };
-  const { rows, summary } = await load(() => api(paymentRoutes.adminPayments, { query: f }));
+  const { rows, summary, total, page, pageSize } = await load(() => api(paymentRoutes.adminPayments, { query: f }));
   return (
     <FilterScope>
       <PageHeader
+        help="/admin/docs/payments"
         title="Payments"
-        description={`Succeeded in this view: ${formatMoney(summary.totalMinor)} · VAT on courses ${formatMoney(summary.courseVatMinor)} · processing fees ${formatMoney(summary.feesMinor)}`}
+        description={`Succeeded across all matching payments: ${formatMoney(summary.totalMinor)} · VAT on courses ${formatMoney(summary.courseVatMinor)} · processing fees ${formatMoney(summary.feesMinor)}`}
       />
       <FilterBar q={f.q} placeholder="Name, email, reference…">
         <FilterSelect
@@ -113,6 +117,7 @@ export default async function AdminPaymentsPage(props: PageProps<"/admin/payment
             </TableBody>
           </Table>
         </Card>
+        <Pagination page={page} pageSize={pageSize} total={total} noun="payments" />
       </FilterResults>
     </FilterScope>
   );

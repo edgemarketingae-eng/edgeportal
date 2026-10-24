@@ -1,4 +1,4 @@
-import { AuthUser, nativeDb } from "@edge/db";
+import { AuthUser, StaffProfile, nativeDb } from "@edge/db";
 import { isValidE164 } from "@edge/domain/phone";
 import { env, flushOutbox, queueEmail, runtime } from "@edge/services";
 import type { OtpChannel } from "@edge/integrations/twilio/verify";
@@ -13,7 +13,13 @@ export const POLICY_HEADER = "x-edge-auth-policy";
 export const OTP_CHANNEL_HEADER = "x-otp-channel";
 
 /** Endpoints browsers may not call directly: they must go through our policy endpoints. */
-const POLICY_ONLY = new Set(["/sign-up/email", "/sign-in/email", "/sign-in/phone-number", "/phone-number/send-otp", "/phone-number/verify"]);
+const POLICY_ONLY = new Set([
+  "/sign-up/email",
+  "/sign-in/email",
+  "/sign-in/phone-number",
+  "/phone-number/send-otp",
+  "/phone-number/verify",
+]);
 /** Phone-based password reset bypasses Twilio Verify; email reset is used instead. */
 const BLOCKED = new Set(["/phone-number/request-password-reset", "/phone-number/reset-password"]);
 
@@ -58,6 +64,10 @@ export function createAuth() {
         await queueEmail({ to: user.email, userId: user.id, template: "auth.resetPassword", data: { name: user.name, url } });
         await flushOutbox();
       },
+      // A self-service reset replaces the temporary password, so it must stop being shown.
+      onPasswordReset: async ({ user }) => {
+        await StaffProfile.updateOne({ _id: user.id }, { $set: { tempPasswordEnc: null } });
+      },
     },
     databaseHooks: {
       session: {
@@ -79,7 +89,10 @@ export function createAuth() {
       after: createAuthMiddleware(async (ctx) => {
         if (ctx.path === "/change-password" && !(ctx.context.returned instanceof Error)) {
           const userId = ctx.context.session?.user.id;
-          if (userId) await AuthUser.updateOne({ _id: userId }, { $set: { mustChangePassword: false } });
+          if (userId) {
+            await AuthUser.updateOne({ _id: userId }, { $set: { mustChangePassword: false } });
+            await StaffProfile.updateOne({ _id: userId }, { $set: { tempPasswordEnc: null } });
+          }
         }
       }),
     },

@@ -6,6 +6,7 @@ import { GATEWAY_LABELS } from "@edge/ui/blocks/payment-status-badge";
 import { PaymentStateBadge } from "@edge/ui/blocks/status-badges";
 import { Button } from "@edge/ui/components/button";
 import { Card, CardContent } from "@edge/ui/components/card";
+import { Pagination } from "@edge/ui/blocks/pagination";
 import { PageHeader } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
 import type { Metadata } from "next";
@@ -15,12 +16,18 @@ import { load, requireStaff } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Approvals" };
 
-export default async function ApprovalsPage() {
+export default async function ApprovalsPage(props: PageProps<"/admin/approvals">) {
   await requireStaff("enrollment.approve");
-  const rows = await load(() => api(adminRoutes.approvals));
+  const sp = await props.searchParams;
+  const data = await load(() => api(adminRoutes.approvals, { query: { page: Number(sp.page) || 1, pageSize: Number(sp.pageSize) || 50 } }));
+  const rows = data.rows;
   return (
     <>
-      <PageHeader title="Approvals" description="Students who have paid and are waiting for verification. Oldest first." />
+      <PageHeader
+        help="/admin/docs/approvals"
+        title="Approvals"
+        description="Students who have paid and are waiting for verification. Oldest first."
+      />
       {rows.length === 0 ? (
         <Card>
           <CardContent className="text-muted-foreground py-12 text-center">Nothing to approve. Nice work.</CardContent>
@@ -63,6 +70,7 @@ export default async function ApprovalsPage() {
           ))}
         </div>
       )}
+      <Pagination page={data.page} pageSize={data.pageSize} total={data.total} noun="approvals" />
     </>
   );
 }

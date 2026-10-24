@@ -28,7 +28,13 @@ export const SettingsDto = z.object({
   joinWindowMinutes: z.number(),
   checkoutExpiryMinutes: z.number(),
   academy: z.object({ name: z.string(), supportEmail: z.string(), supportWhatsapp: z.string(), website: z.string() }),
-  odoo: z.object({ courseProductId: z.number().nullable(), feeProductId: z.number().nullable(), taxStandardId: z.number().nullable(), taxZeroRatedId: z.number().nullable(), journalIds: z.record(z.string(), z.number()) }),
+  odoo: z.object({
+    courseProductId: z.number().nullable(),
+    feeProductId: z.number().nullable(),
+    taxStandardId: z.number().nullable(),
+    taxZeroRatedId: z.number().nullable(),
+    journalIds: z.record(z.string(), z.number()),
+  }),
   modes: z.record(z.string(), z.string()),
 });
 export type SettingsDto = z.infer<typeof SettingsDto>;
@@ -41,6 +47,7 @@ export const FeeRateInput = z.object({
   min: z.string().trim().optional(),
   max: z.string().trim().optional(),
   countries: z.string().trim().optional(),
+  excludeCountries: z.string().trim().optional(),
   enabled: z.boolean(),
 });
 

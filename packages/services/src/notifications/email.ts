@@ -48,7 +48,13 @@ export async function deliverEmail(notificationLogId: string) {
   const rendered = renderEmail(log.template as TemplateName, log.payload as never);
   try {
     const res = await runtime().email.send({ to: log.to, ...rendered, tags: [log.template] });
-    await NotificationLog.updateOne({ _id: log._id }, { $set: { status: "SENT", sentAt: now(), providerMessageId: res.providerMessageId ?? null, error: null } });
+    // Secrets only need to live until the email is out.
+    const redact =
+      log.payload && typeof log.payload === "object" && "tempPassword" in log.payload ? { "payload.tempPassword": "[redacted]" } : {};
+    await NotificationLog.updateOne(
+      { _id: log._id },
+      { $set: { status: "SENT", sentAt: now(), providerMessageId: res.providerMessageId ?? null, error: null, ...redact } },
+    );
     return { sent: true };
   } catch (e) {
     await NotificationLog.updateOne({ _id: log._id }, { $set: { status: "FAILED", error: String(e).slice(0, 2000) } });

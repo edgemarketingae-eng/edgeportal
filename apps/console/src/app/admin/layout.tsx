@@ -1,7 +1,21 @@
 import { adminRoutes } from "@edge/contracts";
 import { AppShell, ShellSkeleton, type AreaLink, type NavItem } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
-import { BadgeCheck, BookOpen, CalendarDays, ClipboardList, CreditCard, FileClock, LayoutDashboard, PlayCircle, Settings, ShieldCheck, Users, Wallet } from "lucide-react";
+import {
+  BadgeCheck,
+  BookOpen,
+  LifeBuoy,
+  CalendarDays,
+  ClipboardList,
+  CreditCard,
+  FileClock,
+  LayoutDashboard,
+  PlayCircle,
+  Settings,
+  ShieldCheck,
+  Users,
+  Wallet,
+} from "lucide-react";
 import { Suspense } from "react";
 import { can, load, requireStaff } from "@/lib/load";
 import { MENU_LINKS } from "@/lib/nav";
@@ -30,6 +44,7 @@ async function AdminShell({ children }: { children: React.ReactNode }) {
     { href: "/admin/settings", label: "Settings", icon: <Settings />, show: can(v, "settings.fees") || can(v, "settings.integrations") },
     { href: "/admin/audit", label: "Audit log", icon: <FileClock />, show: can(v, "audit.read") },
     { href: "/admin/notifications", label: "Notifications", icon: <ClipboardList />, show: true },
+    { href: "/admin/docs", label: "Help & docs", icon: <LifeBuoy />, show: true },
   ];
   const areas: AreaLink[] = [{ href: "/admin", label: "Admin panel" }];
   if (can(v, "staff.access")) areas.push({ href: "/staff", label: "Staff portal" });
@@ -43,6 +58,7 @@ async function AdminShell({ children }: { children: React.ReactNode }) {
       menuLinks={MENU_LINKS}
       unread={v.unreadNotifications}
       notificationsHref="/admin/notifications"
+      helpHref="/admin/docs"
     >
       {children}
     </AppShell>

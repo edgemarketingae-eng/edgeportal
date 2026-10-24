@@ -12,4 +12,5 @@ export * from "./models/classes";
 export * from "./models/ops";
 export * from "./models/crm";
 export { Types } from "mongoose";
+export type { Model, PipelineStage } from "mongoose";
 export type { ClientSession } from "mongoose";

@@ -1,5 +1,12 @@
+import { countryName } from "@edge/domain/countries";
 import { crmRoutes } from "@edge/contracts";
-import { EXPERIENCE_LABELS, FOLLOWUP_TYPE_LABELS, LEAD_CHANNEL_LABELS, LEAD_SOURCE_LABELS, TASK_STATUS_LABELS } from "@edge/domain/crm/labels";
+import {
+  EXPERIENCE_LABELS,
+  FOLLOWUP_TYPE_LABELS,
+  LEAD_CHANNEL_LABELS,
+  LEAD_SOURCE_LABELS,
+  TASK_STATUS_LABELS,
+} from "@edge/domain/crm/labels";
 import { formatDate, formatDateTime } from "@edge/domain/dates";
 import { EnrollmentBadge, LeadStageBadge, PaymentStateBadge, TemperatureBadge } from "@edge/ui/blocks/status-badges";
 import { Badge } from "@edge/ui/components/badge";
@@ -7,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@edge/ui/components/ca
 import { PageHeader } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
 import type { Metadata } from "next";
+import { Button } from "@edge/ui/components/button";
 import Link from "next/link";
 import { ActivityComposer } from "@/components/crm/activity-composer";
 import { describeActivity } from "@/components/crm/activity-text";
@@ -30,7 +38,18 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
   const v = await requireCrm("crm.read");
   const [{ id }, sp] = await Promise.all([props.params, props.searchParams]);
-  const { lead: l, activities, tasks, student, matchingStudent, duplicates, can: leadCan, options } = await load(() => api(crmRoutes.lead, { params: { id } }));
+  const activityWindow = Math.min(1000, Math.max(50, Number(sp.activity) || 50));
+  const {
+    lead: l,
+    activities,
+    activityTotal,
+    tasks,
+    student,
+    matchingStudent,
+    duplicates,
+    can: leadCan,
+    options,
+  } = await load(() => api(crmRoutes.lead, { params: { id }, query: { activity: activityWindow } }));
   const canWrite = can(v, "crm.write");
   const isAdmin = can(v, "admin.access");
   const open = tasks.filter((t) => t.status === "TODO" || t.status === "IN_PROGRESS" || t.status === "WAITING");
@@ -40,6 +59,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
   return (
     <>
       <PageHeader
+        help="/docs/working-a-lead"
         title={l.name}
         description={
           <>
@@ -53,15 +73,35 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
         }
         actions={
           <LeadControls
-            lead={{ id: l.id, name: l.name, phone: l.phone, email: l.email, stage: l.stage, ownerId: l.ownerId, studentId: l.studentId, mergedIntoId: l.mergedIntoId, project: l.project }}
+            lead={{
+              id: l.id,
+              name: l.name,
+              phone: l.phone,
+              email: l.email,
+              stage: l.stage,
+              ownerId: l.ownerId,
+              studentId: l.studentId,
+              mergedIntoId: l.mergedIntoId,
+              project: l.project,
+            }}
             options={options}
             matchingStudent={matchingStudent}
             duplicates={duplicates}
-            can={{ write: canWrite, assign: canWrite && leadCan.assign, claim: leadCan.claim, moveProject: canWrite && leadCan.moveProject, convert: can(v, "crm.convert"), manage: can(v, "crm.manage") }}
+            can={{
+              write: canWrite,
+              assign: canWrite && leadCan.assign,
+              claim: leadCan.claim,
+              moveProject: canWrite && leadCan.moveProject,
+              convert: can(v, "crm.convert"),
+              manage: can(v, "crm.manage"),
+              delete: leadCan.delete,
+            }}
           />
         }
       />
-      {sp.created ? <p className="border-edge-emerald/30 bg-edge-mint/40 text-edge-emerald mb-4 rounded-md border px-3 py-2 text-sm">Lead created.</p> : null}
+      {sp.created ? (
+        <p className="border-edge-emerald/30 bg-edge-mint/40 text-edge-emerald mb-4 rounded-md border px-3 py-2 text-sm">Lead created.</p>
+      ) : null}
       {l.mergedIntoId ? (
         <p className="border-destructive/30 bg-destructive/10 text-destructive mb-4 rounded-md border px-3 py-2 text-sm">
           This lead was merged into{" "}
@@ -86,22 +126,42 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
                 </span>
                 {l.lostReason ? <span className="text-muted-foreground block text-xs">Reason: {l.lostReason}</span> : null}
               </Row>
-              <Row label="Next follow-up">{l.nextFollowUpAt ? <FollowUpDue at={l.nextFollowUpAt} /> : <span className="text-muted-foreground font-normal">None scheduled</span>}</Row>
+              <Row label="Next follow-up">
+                {l.nextFollowUpAt ? (
+                  <FollowUpDue at={l.nextFollowUpAt} />
+                ) : (
+                  <span className="text-muted-foreground font-normal">None scheduled</span>
+                )}
+              </Row>
               <Row label="Course / batch of interest">
                 {l.courseTitle ?? <span className="text-muted-foreground font-normal">Not set</span>}
                 {l.batchName ? <span className="text-muted-foreground font-normal"> · {l.batchName}</span> : null}
               </Row>
-              <Row label="Trading experience">{l.experienceLevel ? EXPERIENCE_LABELS[l.experienceLevel] : <span className="text-muted-foreground font-normal">Unknown</span>}</Row>
+              <Row label="Trading experience">
+                {l.experienceLevel ? (
+                  EXPERIENCE_LABELS[l.experienceLevel]
+                ) : (
+                  <span className="text-muted-foreground font-normal">Unknown</span>
+                )}
+              </Row>
               <Row label="Preferred channel / language">
                 {l.preferredChannel ? LEAD_CHANNEL_LABELS[l.preferredChannel] : "–"}
-                {l.language ? ` · ${l.language}` : ""} · {l.country}
+                {l.language ? ` · ${l.language}` : ""}
+                {l.country ? ` · ${countryName(l.country)}` : ""}
               </Row>
               <Row label="Consent">
-                {l.consent.whatsapp ? "WhatsApp OK" : "No WhatsApp consent"} · {l.consent.marketing ? `Marketing (${l.consent.marketingAt ? formatDate(l.consent.marketingAt) : "yes"})` : "No marketing"}
+                {l.consent.whatsapp ? "WhatsApp OK" : "No WhatsApp consent"} ·{" "}
+                {l.consent.marketing ? `Marketing (${l.consent.marketingAt ? formatDate(l.consent.marketingAt) : "yes"})` : "No marketing"}
               </Row>
               <Row label="First contact / last contact">
-                {l.firstContactedAt ? formatDateTime(l.firstContactedAt) : <span className="text-muted-foreground font-normal">Not yet</span>}
-                {l.lastContactedAt ? <span className="text-muted-foreground font-normal"> · last {formatDateTime(l.lastContactedAt)}</span> : null}
+                {l.firstContactedAt ? (
+                  formatDateTime(l.firstContactedAt)
+                ) : (
+                  <span className="text-muted-foreground font-normal">Not yet</span>
+                )}
+                {l.lastContactedAt ? (
+                  <span className="text-muted-foreground font-normal"> · last {formatDateTime(l.lastContactedAt)}</span>
+                ) : null}
               </Row>
               <Row label="Created">
                 {formatDateTime(l.createdAt)}
@@ -136,7 +196,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
                       name: l.name,
                       phone: l.phone ?? "",
                       email: l.email ?? "",
-                      country: l.country,
+                      country: l.country ?? "",
                       source: l.source,
                       sourceDetail: l.sourceDetail ?? "",
                       courseInterestId: l.courseInterestId ?? "",
@@ -195,7 +255,8 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
                 <CardTitle>Already a student?</CardTitle>
               </CardHeader>
               <CardContent className="text-sm">
-                <span className="font-semibold">{matchingStudent.name}</span> has a portal account with this mobile or email. Use “Link to student” above.
+                <span className="font-semibold">{matchingStudent.name}</span> has a portal account with this mobile or email. Use “Link to
+                student” above.
               </CardContent>
             </Card>
           ) : null}
@@ -203,7 +264,9 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
           <Card>
             <CardHeader className="flex-row items-center justify-between">
               <CardTitle>Tasks</CardTitle>
-              {canWrite && !l.mergedIntoId ? <AddTaskDialog leadId={l.id} projectId={l.project.id} options={options} meId={v.user.id} label="Follow-up" /> : null}
+              {canWrite && !l.mergedIntoId ? (
+                <AddTaskDialog leadId={l.id} projectId={l.project.id} options={options} meId={v.user.id} label="Follow-up" />
+              ) : null}
             </CardHeader>
             <CardContent className="grid gap-3 text-sm">
               {open.length === 0 ? <p className="text-muted-foreground">No open tasks.</p> : null}
@@ -277,18 +340,33 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
                 const touch = ["NOTE", "CALL", "WHATSAPP", "EMAIL", "MEETING", "INBOUND", "TASK_DONE"].includes(a.type);
                 return (
                   <li key={a.id} className="relative">
-                    <span className={`absolute top-1.5 -left-[21px] size-2.5 rounded-full ${touch ? "bg-edge-emerald" : "bg-muted-foreground/40"}`} />
+                    <span
+                      className={`absolute top-1.5 -left-[21px] size-2.5 rounded-full ${touch ? "bg-edge-emerald" : "bg-muted-foreground/40"}`}
+                    />
                     <p className="font-medium">{title}</p>
                     {a.body ? <p className="mt-0.5 whitespace-pre-wrap">{a.body}</p> : null}
                     {detail ? <p className="text-muted-foreground text-xs">{detail}</p> : null}
                     <p className="text-muted-foreground text-xs">
-                      <TimeAgo at={a.createdAt} /> · {a.actorType === "USER" ? (a.actorName ?? "Staff") : a.actorType === "WEBHOOK" ? "Website" : "System"}
+                      <TimeAgo at={a.createdAt} /> ·{" "}
+                      {a.actorType === "USER" ? (a.actorName ?? "Staff") : a.actorType === "WEBHOOK" ? "Website" : "System"}
                     </p>
                   </li>
                 );
               })}
             </ol>
           )}
+          {activityTotal > activities.length ? (
+            <div className="flex items-center gap-3 text-sm">
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/leads/${l.id}?activity=${activityWindow + 50}`} scroll={false}>
+                  Show older activity
+                </Link>
+              </Button>
+              <span className="text-muted-foreground">
+                Showing {activities.length} of {activityTotal}
+              </span>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </>

@@ -32,6 +32,7 @@ export interface FeeRateRow {
   min: string;
   max: string;
   countries: string;
+  excludeCountries: string;
 }
 
 export function FeeRateForm({ r }: { r: FeeRateRow }) {
@@ -42,36 +43,44 @@ export function FeeRateForm({ r }: { r: FeeRateRow }) {
     <form
       key={formKey(state)}
       action={action}
-      className="bg-card grid items-end gap-2 rounded-lg border p-3 sm:grid-cols-[1.5fr_0.8fr_0.8fr_0.8fr_0.8fr_0.8fr_auto_auto]"
+      className="bg-card grid items-end gap-2 rounded-lg border p-3 sm:grid-cols-2 lg:grid-cols-[1.4fr_0.7fr_0.7fr_0.7fr_0.7fr_0.9fr_0.9fr_auto_auto]"
     >
       <input type="hidden" name="key" value={r.key} />
       <div className="grid gap-1">
         <Label className="text-xs">
           {r.key} <span className="text-muted-foreground">({r.gateway})</span>
         </Label>
-        <Input name="label" defaultValue={v?.label ?? r.label} className="h-8" />
+        <Input name="label" defaultValue={v?.label ?? r.label} className="h-9 px-2.5" />
       </div>
       <div className="grid gap-1">
         <Label className="text-xs">Fee %</Label>
-        <Input name="pctPercent" defaultValue={v?.pctPercent ?? r.pctPercent} inputMode="decimal" className="h-8" />
+        <Input name="pctPercent" defaultValue={v?.pctPercent ?? r.pctPercent} inputMode="decimal" className="h-9 px-2.5" />
       </div>
       <div className="grid gap-1">
         <Label className="text-xs">Fixed AED</Label>
-        <Input name="fixed" defaultValue={v?.fixed ?? r.fixed} inputMode="decimal" className="h-8" />
+        <Input name="fixed" defaultValue={v?.fixed ?? r.fixed} inputMode="decimal" className="h-9 px-2.5" />
       </div>
       <div className="grid gap-1">
         <Label className="text-xs">Min total</Label>
-        <Input name="min" defaultValue={v?.min ?? r.min} inputMode="decimal" className="h-8" />
+        <Input name="min" defaultValue={v?.min ?? r.min} inputMode="decimal" className="h-9 px-2.5" />
       </div>
       <div className="grid gap-1">
         <Label className="text-xs">Max total</Label>
-        <Input name="max" defaultValue={v?.max ?? r.max} inputMode="decimal" className="h-8" />
+        <Input name="max" defaultValue={v?.max ?? r.max} inputMode="decimal" className="h-9 px-2.5" />
       </div>
       <div className="grid gap-1">
-        <Label className="text-xs">Countries</Label>
-        <Input name="countries" defaultValue={v?.countries ?? r.countries} placeholder="all" className="h-8" />
+        <Label className="text-xs" title="2-letter codes, comma separated. Empty = every country.">
+          Only in
+        </Label>
+        <Input name="countries" defaultValue={v?.countries ?? r.countries} placeholder="every country" className="h-9 px-2.5" />
       </div>
-      <label className="flex h-8 items-center gap-1.5 text-xs">
+      <div className="grid gap-1">
+        <Label className="text-xs" title="2-letter codes, comma separated, never offered there.">
+          Not in
+        </Label>
+        <Input name="excludeCountries" defaultValue={v?.excludeCountries ?? r.excludeCountries} placeholder="none" className="h-9 px-2.5" />
+      </div>
+      <label className="flex h-9 items-center gap-1.5 text-xs">
         <Checkbox name="enabled" defaultChecked={v ? v.enabled === "on" : r.enabled} /> On
       </label>
       <Button size="sm" disabled={pending}>

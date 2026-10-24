@@ -7,6 +7,7 @@ import { EnrollmentBadge, PaymentStateBadge } from "@edge/ui/blocks/status-badge
 import { Button } from "@edge/ui/components/button";
 import { Card } from "@edge/ui/components/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@edge/ui/components/table";
+import { Pagination } from "@edge/ui/blocks/pagination";
 import { PageHeader } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
 import { Download } from "lucide-react";
@@ -41,16 +42,21 @@ export default async function StudentsPage(props: PageProps<"/admin/students">) 
     status: pick("status", [...ENROLLMENT_STATUSES, "NONE"] as const),
     payment: pick("payment", PAYMENT_STATES),
     batch: one("batch"),
+    page: Number(one("page")) || 1,
+    pageSize: Number(one("pageSize")) || 50,
   };
-  const [{ rows, total }, batches] = await Promise.all([
+  const [{ rows, total, page, pageSize }, batches] = await Promise.all([
     load(() => api(adminRoutes.students, { query: f })),
     load(() => api(catalogRoutes.listBatches)),
   ]);
-  const qs = new URLSearchParams(Object.entries(sp).filter(([, v]) => typeof v === "string") as [string, string][]).toString();
+  const qs = new URLSearchParams(
+    Object.entries(sp).filter(([k, v]) => typeof v === "string" && k !== "page" && k !== "pageSize") as [string, string][],
+  ).toString();
 
   return (
     <FilterScope>
       <PageHeader
+        help="/admin/docs/students"
         title="Students"
         description={`${total} student${total === 1 ? "" : "s"}`}
         actions={
@@ -115,6 +121,7 @@ export default async function StudentsPage(props: PageProps<"/admin/students">) 
             </TableBody>
           </Table>
         </Card>
+        <Pagination page={page} pageSize={pageSize} total={total} noun="students" />
       </FilterResults>
     </FilterScope>
   );

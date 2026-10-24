@@ -22,6 +22,7 @@ import {
   listStudents,
   lockEnrollment,
   rejectEnrollment,
+  setStudentCountry,
   resetStaffPassword,
   saveBatch,
   saveCourse,
@@ -46,7 +47,11 @@ export function adminRouter() {
   const r = Router();
 
   register(r, adminRoutes.dashboard, async (req) => (requirePermission(req, "admin.access"), getDashboard()));
-  register(r, adminRoutes.pendingApprovals, async (req) => (requirePermission(req, "admin.access"), { count: await countPendingApprovals() }));
+  register(
+    r,
+    adminRoutes.pendingApprovals,
+    async (req) => (requirePermission(req, "admin.access"), { count: await countPendingApprovals() }),
+  );
   register(r, adminRoutes.students, async (req) => (requirePermission(req, "student.read"), listStudents(req.valid.query)));
   register(r, adminRoutes.studentsCsv, async (req, res) => {
     requirePermission(req, "student.read");
@@ -56,9 +61,14 @@ export function adminRouter() {
     res.send(`\uFEFF${csv}`); // BOM so Excel opens UTF-8 correctly
   });
   register(r, adminRoutes.student, async (req) => (requirePermission(req, "student.read"), getStudentDetail(req.valid.params.id)));
-  register(r, adminRoutes.approvals, async (req) => (requirePermission(req, "enrollment.approve"), listApprovals()));
-  register(r, adminRoutes.balances, async (req) => (requirePermission(req, "enrollment.read"), listBalances()));
-  register(r, adminRoutes.audit, async (req) => (requirePermission(req, "audit.read"), listAudit(req.valid.query.q)));
+  register(r, adminRoutes.setStudentCountry, async (req) => {
+    const v = requirePermission(req, "student.update");
+    await setStudentCountry(req.valid.params.id, req.valid.body.country, actorOf(v));
+    return { ok: true as const, message: "Country updated." };
+  });
+  register(r, adminRoutes.approvals, async (req) => (requirePermission(req, "enrollment.approve"), listApprovals(req.valid.query)));
+  register(r, adminRoutes.balances, async (req) => (requirePermission(req, "enrollment.read"), listBalances(req.valid.query)));
+  register(r, adminRoutes.audit, async (req) => (requirePermission(req, "audit.read"), listAudit(req.valid.query)));
 
   // Enrollment actions
   register(r, enrollmentRoutes.approve, async (req) => {
@@ -125,14 +135,20 @@ export function adminRouter() {
     await setStaffDisabled(req.valid.params.id, req.valid.body.disabled, actorOf(requirePermission(req, "staff.manage")));
     return { ok: true as const, message: req.valid.body.disabled ? "Account disabled and signed out." : "Account enabled." };
   });
-  register(r, staffRoutes.resetPassword, async (req) => ({ ok: true as const, tempPassword: await resetStaffPassword(req.valid.params.id, actorOf(requirePermission(req, "staff.manage"))) }));
+  register(r, staffRoutes.resetPassword, async (req) => ({
+    ok: true as const,
+    tempPassword: await resetStaffPassword(req.valid.params.id, actorOf(requirePermission(req, "staff.manage"))),
+  }));
   register(r, staffRoutes.roles, async (req) => (requirePermission(req, "staff.manage"), listRoles()));
-  register(r, staffRoutes.saveRole, async (req) => ({ id: await saveRole(req.valid.body, actorOf(requirePermission(req, "roles.manage"))) }));
+  register(r, staffRoutes.saveRole, async (req) => ({
+    id: await saveRole(req.valid.body, actorOf(requirePermission(req, "roles.manage"))),
+  }));
 
   // Settings
   register(r, settingsRoutes.get, async (req) => {
     const v = requireViewer(req);
-    if (!can(v.permissions, "settings.fees") && !can(v.permissions, "settings.integrations")) throw new ApiError(403, "FORBIDDEN", "You do not have permission to view settings.");
+    if (!can(v.permissions, "settings.fees") && !can(v.permissions, "settings.integrations"))
+      throw new ApiError(403, "FORBIDDEN", "You do not have permission to view settings.");
     requirePermission(req, "admin.access");
     return getSettingsDto();
   });

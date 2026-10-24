@@ -23,7 +23,7 @@ export default async function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Settings" />
+      <PageHeader help="/admin/docs/settings" title="Settings" />
       <div className="grid gap-6">
         {fees ? (
           <Card>
@@ -48,6 +48,7 @@ export default async function SettingsPage() {
                     min: amt(r.minTotalMinor),
                     max: amt(r.maxTotalMinor),
                     countries: r.countries.join(", "),
+                    excludeCountries: r.excludeCountries.join(", "),
                   }}
                 />
               ))}

@@ -18,6 +18,7 @@ export default async function RolesPage() {
   return (
     <>
       <PageHeader
+        help="/admin/docs/roles"
         title="Roles & permissions"
         description={editable ? "A person can hold several roles. Their permissions add up." : "Only a super admin can edit roles."}
       />

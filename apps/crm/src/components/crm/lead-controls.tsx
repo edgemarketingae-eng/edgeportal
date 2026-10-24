@@ -9,18 +9,28 @@ import { Button } from "@edge/ui/components/button";
 import { Checkbox } from "@edge/ui/components/checkbox";
 import { Label } from "@edge/ui/components/label";
 import { Textarea } from "@edge/ui/components/textarea";
-import { ArrowRight, Hand, Mail, MessageCircle, Phone } from "lucide-react";
+import { Input } from "@edge/ui/components/input";
+import { NativeSelect } from "@edge/ui/components/native-select";
+import { ArrowRight, Hand, Mail, MessageCircle, Phone, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { assignAction, claimAction, convertAction, linkStudentAction, mergeAction, moveProjectAction, resendWelcomeAction, setStageAction } from "@/lib/actions/leads";
-
-const select = "h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm";
+import {
+  assignAction,
+  claimAction,
+  convertAction,
+  deleteLeadAction,
+  linkStudentAction,
+  mergeAction,
+  moveProjectAction,
+  resendWelcomeAction,
+  setStageAction,
+} from "@/lib/actions/leads";
 
 export interface LeadControlsProps {
   lead: Pick<LeadDto, "id" | "name" | "phone" | "email" | "stage" | "ownerId" | "studentId" | "mergedIntoId" | "project">;
   options: CrmOptions;
   matchingStudent: { id: string; name: string; email: string } | null;
   duplicates: { id: string; name: string; phone: string | null; email: string | null }[];
-  can: { write: boolean; assign: boolean; claim: boolean; moveProject: boolean; convert: boolean; manage: boolean };
+  can: { write: boolean; assign: boolean; claim: boolean; moveProject: boolean; convert: boolean; manage: boolean; delete: boolean };
 }
 
 function StageFields({ current, lostReasons }: { current: string; lostReasons: string[] }) {
@@ -28,29 +38,29 @@ function StageFields({ current, lostReasons }: { current: string; lostReasons: s
   const [stage, setStage] = useState<string>(choices[0] ?? "LOST");
   return (
     <>
-      <div className="grid gap-1.5">
+      <div className="grid content-start gap-2">
         <Label htmlFor="stage">New stage</Label>
-        <select id="stage" name="stage" value={stage} onChange={(e) => setStage(e.target.value)} className={select}>
+        <NativeSelect id="stage" name="stage" value={stage} onChange={(e) => setStage(e.target.value)}>
           {choices.map((s) => (
             <option key={s} value={s}>
               {LEAD_STAGE_LABELS[s]}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </div>
       {stage === "LOST" ? (
-        <div className="grid gap-1.5">
+        <div className="grid content-start gap-2">
           <Label htmlFor="lostReason">Reason</Label>
-          <select id="lostReason" name="lostReason" className={select} required>
+          <NativeSelect id="lostReason" name="lostReason" required>
             {lostReasons.map((r) => (
               <option key={r} value={r}>
                 {r}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
       ) : null}
-      <div className="grid gap-1.5">
+      <div className="grid content-start gap-2">
         <Label htmlFor="stage-note">Note (optional)</Label>
         <Textarea id="stage-note" name="note" rows={2} />
       </div>
@@ -61,7 +71,9 @@ function StageFields({ current, lostReasons }: { current: string; lostReasons: s
 export function LeadControls({ lead, options, matchingStudent, duplicates, can }: LeadControlsProps) {
   const hid = { id: lead.id };
   const first = lead.name.split(/\s+/)[0] ?? lead.name;
-  const waText = encodeURIComponent(`Hi ${first}, this is Edge Trading Academy. Thanks for your interest in our trading program. When is a good time to talk?`);
+  const waText = encodeURIComponent(
+    `Hi ${first}, this is Edge Trading Academy. Thanks for your interest in our trading program. When is a good time to talk?`,
+  );
   const open = lead.stage !== "CONVERTED" && !lead.mergedIntoId;
   const next = nextStage(lead.stage);
   const team = options.teams[lead.project.id] ?? [];
@@ -104,22 +116,43 @@ export function LeadControls({ lead, options, matchingStudent, duplicates, can }
         </ActionButton>
       ) : null}
       {can.write && open ? (
-        <ActionDialog action={setStageAction} hidden={hid} title="Change stage" trigger={<Button size="sm" variant="outline">Stage…</Button>} submitLabel="Move">
+        <ActionDialog
+          action={setStageAction}
+          hidden={hid}
+          title="Change stage"
+          trigger={
+            <Button size="sm" variant="outline">
+              Stage…
+            </Button>
+          }
+          submitLabel="Move"
+        >
           <StageFields current={lead.stage} lostReasons={options.lostReasons} />
         </ActionDialog>
       ) : null}
       {can.assign && !lead.mergedIntoId ? (
-        <ActionDialog action={assignAction} hidden={hid} title="Assign lead" description={`Team of ${lead.project.name}.`} trigger={<Button size="sm" variant="outline">Assign</Button>} submitLabel="Assign">
-          <div className="grid gap-1.5">
+        <ActionDialog
+          action={assignAction}
+          hidden={hid}
+          title="Assign lead"
+          description={`Team of ${lead.project.name}.`}
+          trigger={
+            <Button size="sm" variant="outline">
+              Assign
+            </Button>
+          }
+          submitLabel="Assign"
+        >
+          <div className="grid content-start gap-2">
             <Label htmlFor="ownerId">Owner</Label>
-            <select id="ownerId" name="ownerId" className={select} defaultValue={lead.ownerId ?? ""}>
+            <NativeSelect id="ownerId" name="ownerId" defaultValue={lead.ownerId ?? ""}>
               <option value="">Unassigned (pool)</option>
               {team.map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
         </ActionDialog>
       ) : null}
@@ -136,15 +169,15 @@ export function LeadControls({ lead, options, matchingStudent, duplicates, can }
           }
           submitLabel="Move"
         >
-          <div className="grid gap-1.5">
+          <div className="grid content-start gap-2">
             <Label htmlFor="move-project">Project</Label>
-            <select id="move-project" name="projectId" className={select}>
+            <NativeSelect id="move-project" name="projectId">
               {otherProjects.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
         </ActionDialog>
       ) : null}
@@ -157,16 +190,16 @@ export function LeadControls({ lead, options, matchingStudent, duplicates, can }
           trigger={<Button size="sm">Convert to student</Button>}
           submitLabel="Create student account"
         >
-          <div className="grid gap-1.5">
+          <div className="grid content-start gap-2">
             <Label htmlFor="batchId">Enroll in batch</Label>
-            <select id="batchId" name="batchId" className={select} defaultValue="">
+            <NativeSelect id="batchId" name="batchId" defaultValue="">
               <option value="">No batch yet (placed in the current batch after phone verification)</option>
               {options.batches.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.label}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
           <label className="flex items-center gap-2 text-sm">
             <Checkbox name="sendSetPassword" defaultChecked /> Email the set-password link now
@@ -202,18 +235,46 @@ export function LeadControls({ lead, options, matchingStudent, duplicates, can }
           submitLabel="Merge"
           destructive
         >
-          <div className="grid gap-1.5">
+          <div className="grid content-start gap-2">
             <Label htmlFor="fromId">Duplicate</Label>
-            <select id="fromId" name="fromId" className={select}>
+            <NativeSelect id="fromId" name="fromId">
               {duplicates.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name} · {d.phone ?? d.email}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
         </ActionDialog>
       ) : null}
+      {can.delete && !lead.studentId ? (
+        <ActionDialog
+          action={deleteLeadAction}
+          hidden={hid}
+          title={`Delete ${lead.name}?`}
+          description="The lead, its activity history, its tasks and any duplicates merged into it are removed for good. This can't be undone."
+          trigger={
+            <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10 hover:text-destructive">
+              <Trash2 /> Delete
+            </Button>
+          }
+          submitLabel="Delete lead"
+          destructive
+        >
+          <ConfirmDelete />
+        </ActionDialog>
+      ) : null}
+    </div>
+  );
+}
+
+export function ConfirmDelete() {
+  return (
+    <div className="grid content-start gap-2">
+      <Label htmlFor="confirm-delete">
+        Type <span className="font-mono font-semibold">DELETE</span> to confirm
+      </Label>
+      <Input id="confirm-delete" name="confirm" autoComplete="off" required />
     </div>
   );
 }

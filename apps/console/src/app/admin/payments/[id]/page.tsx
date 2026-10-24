@@ -31,6 +31,7 @@ export default async function AdminPaymentPage(props: PageProps<"/admin/payments
   return (
     <>
       <PageHeader
+        help="/admin/docs/payments"
         title={`${formatMoney(p.totalMinor, c)} · ${KIND_LABELS[p.kind]}`}
         description={
           <>

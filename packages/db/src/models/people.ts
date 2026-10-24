@@ -22,6 +22,8 @@ const staffProfileSchema = new Schema(
     bio: { type: String, default: null },
     photoUrl: { type: String, default: null },
     roleIds: { type: [ObjectId], default: [] },
+    /** The current temporary password, encrypted; kept only until the person sets their own. */
+    tempPasswordEnc: { type: String, default: null },
   },
   { ...timestamps, collection: "staffProfiles" },
 );
@@ -29,7 +31,12 @@ staffProfileSchema.index({ workspaceEmail: 1 }, partialUnique("workspaceEmail"))
 staffProfileSchema.index({ roleIds: 1 });
 
 const jetaChangeSchema = new Schema(
-  { oldValue: { type: String, default: null }, newValue: { type: String, default: null }, changedById: { type: ObjectId, default: null }, changedAt: { type: Date, default: () => new Date() } },
+  {
+    oldValue: { type: String, default: null },
+    newValue: { type: String, default: null },
+    changedById: { type: ObjectId, default: null },
+    changedAt: { type: Date, default: () => new Date() },
+  },
   { _id: false },
 );
 

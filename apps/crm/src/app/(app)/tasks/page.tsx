@@ -5,6 +5,7 @@ import { daysUntil, dubaiDateOnly, formatDateTime } from "@edge/domain/dates";
 import { FilterBar, FilterLink, FilterResults, FilterScope, FilterSelect } from "@edge/ui/blocks/filter-bar";
 import { Button } from "@edge/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@edge/ui/components/card";
+import { Pagination } from "@edge/ui/blocks/pagination";
 import { PageHeader } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
 import type { Metadata } from "next";
@@ -33,7 +34,10 @@ export default async function TasksPage(props: PageProps<"/tasks">) {
   const canWrite = can(v, "crm.write");
   const options = await load(() => api(crmRoutes.options));
   const qs = new URLSearchParams(
-    Object.entries(sp).filter(([k, x]) => typeof x === "string" && x && k !== "view" && k !== "status") as [string, string][],
+    Object.entries(sp).filter(([k, x]) => typeof x === "string" && x && !["view", "status", "page", "pageSize"].includes(k)) as [
+      string,
+      string,
+    ][],
   );
   const link = (extra: Record<string, string>) => `/tasks?${new URLSearchParams({ ...Object.fromEntries(qs), ...extra }).toString()}`;
   const assignees = uniq(Object.values(options.teams).flat());
@@ -41,6 +45,7 @@ export default async function TasksPage(props: PageProps<"/tasks">) {
   const header = (
     <>
       <PageHeader
+        help="/docs/tasks"
         title="Tasks"
         description={
           view === "board"
@@ -97,7 +102,12 @@ export default async function TasksPage(props: PageProps<"/tasks">) {
     );
   }
 
-  const tasks = await load(() => api(crmRoutes.tasks, { query: { ...filters, scope: "all", status } }));
+  const paged = await load(() =>
+    api(crmRoutes.tasks, {
+      query: { ...filters, scope: "all", status, page: Number(one("page")) || 1, pageSize: Number(one("pageSize")) || 50 },
+    }),
+  );
+  const tasks = paged.rows;
   const now = new Date();
   const groups: Group[] = ["Overdue", "Today", "This week", "Later", "No date"];
   const grouped = new Map<Group, TaskDto[]>(groups.map((g) => [g, []]));
@@ -198,6 +208,7 @@ export default async function TasksPage(props: PageProps<"/tasks">) {
             })}
           </div>
         )}
+        <Pagination page={paged.page} pageSize={paged.pageSize} total={paged.total} noun="tasks" />
       </FilterResults>
     </FilterScope>
   );

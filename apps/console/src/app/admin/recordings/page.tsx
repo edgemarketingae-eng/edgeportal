@@ -5,12 +5,13 @@ import { requireStaff } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Recordings" };
 
-export default async function AdminRecordingsPage() {
+export default async function AdminRecordingsPage(props: PageProps<"/admin/recordings">) {
   await requireStaff("recording.manage");
+  const sp = await props.searchParams;
   return (
     <>
-      <PageHeader title="Recordings" />
-      <RecordingsManager />
+      <PageHeader help="/admin/docs/recordings" title="Recordings" />
+      <RecordingsManager page={Number(sp.page) || 1} />
     </>
   );
 }

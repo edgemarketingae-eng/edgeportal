@@ -1,7 +1,22 @@
 /** CRM enum values (also used as Mongoose enums and Zod enums). */
 export const LEAD_STAGES = ["NEW", "CONTACTED", "QUALIFIED", "CONSULTATION", "NEGOTIATION", "CONVERTED", "LOST"] as const;
 export const OPEN_LEAD_STAGES = ["NEW", "CONTACTED", "QUALIFIED", "CONSULTATION", "NEGOTIATION"] as const;
-export const LEAD_SOURCES = ["WEBSITE", "INSTAGRAM", "META_ADS", "GOOGLE_ADS", "YOUTUBE", "TIKTOK", "WHATSAPP", "REFERRAL", "WALK_IN", "PHONE_IN", "WEBINAR", "EVENT", "IMPORT", "OTHER"] as const;
+export const LEAD_SOURCES = [
+  "WEBSITE",
+  "INSTAGRAM",
+  "META_ADS",
+  "GOOGLE_ADS",
+  "YOUTUBE",
+  "TIKTOK",
+  "WHATSAPP",
+  "REFERRAL",
+  "WALK_IN",
+  "PHONE_IN",
+  "WEBINAR",
+  "EVENT",
+  "IMPORT",
+  "OTHER",
+] as const;
 export const LEAD_TEMPERATURES = ["HOT", "WARM", "COLD"] as const;
 export const LEAD_CHANNELS = ["WHATSAPP", "CALL", "EMAIL", "SMS"] as const;
 /** Activities staff log by hand. */
@@ -52,3 +67,6 @@ export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 export type ExperienceLevel = (typeof EXPERIENCE_LEVELS)[number];
 export type InboundSource = (typeof INBOUND_SOURCES)[number];
+
+/** Owner value meaning "spread across the project's sales executives" (bulk assign, import). */
+export const ROUND_ROBIN = "ROUND_ROBIN";

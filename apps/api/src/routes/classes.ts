@@ -45,11 +45,14 @@ export function classesRouter() {
   register(r, classRoutes.studentRecordings, async (req) => listStudentRecordings(await studentEntitlements(requireStudent(req).userId)));
   register(r, classRoutes.watch, async (req) => {
     const v = requireStudent(req);
-    return getWatch(req.valid.params.id, v.userId, await studentEntitlements(v.userId), { ip: clientIp(req), userAgent: req.header("x-forwarded-user-agent") ?? req.header("user-agent") ?? null });
+    return getWatch(req.valid.params.id, v.userId, await studentEntitlements(v.userId), {
+      ip: clientIp(req),
+      userAgent: req.header("x-forwarded-user-agent") ?? req.header("user-agent") ?? null,
+    });
   });
 
   register(r, classRoutes.staffOverview, async (req) => getStaffOverview(classStaff(req).userId));
-  register(r, classRoutes.manageClasses, async (req) => getManageClasses(classStaff(req).userId));
+  register(r, classRoutes.manageClasses, async (req) => getManageClasses(classStaff(req).userId, req.valid.query));
   register(r, classRoutes.schedule, async (req) => scheduleClass(req.valid.body, actorOf(classStaff(req))));
   register(r, classRoutes.reschedule, async (req) => {
     await rescheduleClass(req.valid.params.id, req.valid.body, actorOf(classStaff(req)));
@@ -59,7 +62,7 @@ export function classesRouter() {
     await cancelClass(req.valid.params.id, req.valid.body.reason, req.valid.body.notify, actorOf(classStaff(req)));
     return { ok: true as const, message: "Class cancelled." };
   });
-  register(r, classRoutes.manageRecordings, async (req) => getManageRecordings(recordingStaff(req).userId));
+  register(r, classRoutes.manageRecordings, async (req) => getManageRecordings(recordingStaff(req).userId, req.valid.query));
   register(r, classRoutes.addRecording, async (req) => addRecordingFromDrive(req.valid.body, actorOf(recordingStaff(req))));
   register(r, classRoutes.setRecordingStatus, async (req) => {
     await setRecordingStatus(req.valid.params.id, req.valid.body.status, actorOf(recordingStaff(req)));
@@ -96,7 +99,11 @@ export function mediaRouter() {
       try {
         const { size } = await stat(rec.cache.path);
         const parsed = parseRange(range, size);
-        if (parsed === "invalid") return res.status(416).set({ ...MEDIA_HEADERS, "Content-Range": `bytes */${size}` }).end();
+        if (parsed === "invalid")
+          return res
+            .status(416)
+            .set({ ...MEDIA_HEADERS, "Content-Range": `bytes */${size}` })
+            .end();
         const start = parsed?.start ?? 0;
         const end = parsed?.end ?? size - 1;
         res.status(parsed ? 206 : 200).set({
@@ -114,7 +121,11 @@ export function mediaRouter() {
 
     await requestCacheFill(id);
     try {
-      const dl = await runtime().google.downloadDriveFile(rec.driveAccessEmail ?? env.GOOGLE_DEFAULT_ORGANIZER ?? "", rec.driveFileId, range);
+      const dl = await runtime().google.downloadDriveFile(
+        rec.driveAccessEmail ?? env.GOOGLE_DEFAULT_ORGANIZER ?? "",
+        rec.driveFileId,
+        range,
+      );
       res.status(dl.status).set({
         ...MEDIA_HEADERS,
         "Content-Type": dl.headers.contentType ?? rec.mimeType ?? "video/mp4",
@@ -125,7 +136,12 @@ export function mediaRouter() {
       await pipeline(Readable.fromWeb(dl.body as never), res).catch(() => undefined);
     } catch (e) {
       req.log?.error({ err: e, recordingId: id }, "drive proxy failed");
-      if (!res.headersSent) res.status(503).set("Retry-After", "120").type("text/plain").send("This recording is being prepared. Please try again in a few minutes.");
+      if (!res.headersSent)
+        res
+          .status(503)
+          .set("Retry-After", "120")
+          .type("text/plain")
+          .send("This recording is being prepared. Please try again in a few minutes.");
     }
   });
   return r;

@@ -72,7 +72,7 @@ const leadSchema = new Schema(
     name: { type: String, required: true },
     phone: { type: String, default: null }, // E.164
     email: { type: String, default: null }, // lower-case
-    country: { type: String, default: "AE" },
+    country: { type: String, default: null },
     language: { type: String, default: null },
     preferredChannel: { type: String, enum: [...LEAD_CHANNELS, null], default: null },
     source: { type: String, enum: LEAD_SOURCES, required: true },

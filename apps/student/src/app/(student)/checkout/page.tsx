@@ -16,7 +16,7 @@ export default async function CheckoutPage() {
   if (!options.canCheckout) redirect(options.canPayBalance ? "/checkout/balance" : "/dashboard");
   return (
     <>
-      <PageHeader title="Complete your enrollment" description={`${options.courseTitle} · ${options.batchName}`} />
+      <PageHeader help="/docs/paying" title="Complete your enrollment" description={`${options.courseTitle} · ${options.batchName}`} />
       <CheckoutForm mode="first" options={options} />
     </>
   );

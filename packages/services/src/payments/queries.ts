@@ -3,6 +3,7 @@ import { AuthUser, Batch, Enrollment, OdooSyncLog, Payment, PaymentEvent, type P
 import { NotFoundError } from "../errors";
 import { oid } from "../ids";
 import { iso } from "../mappers";
+import { findPage, type PageInput } from "../paging";
 
 async function decorate(payments: PaymentDoc[], withStudentName = false): Promise<PaymentDto[]> {
   const enrollments = await Enrollment.find({ _id: { $in: payments.map((p) => p.enrollmentId) } }, { batchId: 1, status: 1 }).lean();
@@ -40,13 +41,22 @@ async function decorate(payments: PaymentDoc[], withStudentName = false): Promis
       failureReason: p.failureReason ?? null,
       createdAt: iso(p.createdAt)!,
       succeededAt: iso(p.succeededAt),
-      odoo: { status: p.odoo?.status ?? "PENDING", invoiceName: p.odoo?.invoiceName ?? null, invoiceUrl: p.odoo?.invoiceUrl ?? null, lastError: p.odoo?.lastError ?? null },
+      odoo: {
+        status: p.odoo?.status ?? "PENDING",
+        invoiceName: p.odoo?.invoiceName ?? null,
+        invoiceUrl: p.odoo?.invoiceUrl ?? null,
+        lastError: p.odoo?.lastError ?? null,
+      },
     };
   });
 }
 
 export async function listStudentPayments(studentId: string) {
-  return decorate(await Payment.find({ studentId: oid(studentId), status: { $ne: "CREATED" } }).sort({ createdAt: -1 }).lean());
+  return decorate(
+    await Payment.find({ studentId: oid(studentId), status: { $ne: "CREATED" } })
+      .sort({ createdAt: -1 })
+      .lean(),
+  );
 }
 
 export async function getStudentPayment(studentId: string, id: string) {
@@ -57,13 +67,15 @@ export async function getStudentPayment(studentId: string, id: string) {
 
 const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-export async function listAdminPayments(f: { q?: string; status?: string; gateway?: string; odoo?: string }) {
+export async function listAdminPayments(f: { q?: string; status?: string; gateway?: string; odoo?: string } & PageInput) {
   const filter: Record<string, unknown> = { status: f.status ?? { $ne: "CREATED" } };
   if (f.gateway) filter.gateway = f.gateway;
   if (f.odoo) Object.assign(filter, { "odoo.status": f.odoo, status: "SUCCEEDED" });
   if (f.q) {
     const rx = new RegExp(escapeRegex(f.q), "i");
-    const users = await AuthUser.find({ $or: [{ name: rx }, { email: rx }] }, { _id: 1 }).limit(200).lean();
+    const users = await AuthUser.find({ $or: [{ name: rx }, { email: rx }, { phoneNumber: rx }] }, { _id: 1 })
+      .limit(5000)
+      .lean();
     filter.$or = [
       ...(Types.ObjectId.isValid(f.q) ? [{ _id: new Types.ObjectId(f.q) }] : []),
       { externalPaymentId: rx },
@@ -71,30 +83,59 @@ export async function listAdminPayments(f: { q?: string; status?: string; gatewa
       { studentId: { $in: users.map((u) => u._id) } },
     ];
   }
-  const rows = await Payment.find(filter).sort({ createdAt: -1 }).limit(200).lean();
-  const succeeded = rows.filter((r) => r.status === "SUCCEEDED");
+  // The summary covers every matching payment, not just this page.
+  const [page, [sum]] = await Promise.all([
+    findPage<PaymentDoc>(Payment, filter, { createdAt: -1 }, f),
+    Payment.aggregate<{ totalMinor: number; courseVatMinor: number; feesMinor: number }>([
+      { $match: { $and: [filter, { status: "SUCCEEDED" }] } },
+      {
+        $group: {
+          _id: null,
+          totalMinor: { $sum: "$totalMinor" },
+          courseVatMinor: { $sum: "$courseVatMinor" },
+          feesMinor: { $sum: { $add: ["$processingFeeMinor", "$processingFeeVatMinor"] } },
+        },
+      },
+    ]),
+  ]);
   return {
-    rows: await decorate(rows, true),
-    summary: {
-      totalMinor: succeeded.reduce((s, r) => s + r.totalMinor, 0),
-      courseVatMinor: succeeded.reduce((s, r) => s + r.courseVatMinor, 0),
-      feesMinor: succeeded.reduce((s, r) => s + r.processingFeeMinor + r.processingFeeVatMinor, 0),
-    },
+    ...page,
+    rows: await decorate(page.rows, true),
+    summary: { totalMinor: sum?.totalMinor ?? 0, courseVatMinor: sum?.courseVatMinor ?? 0, feesMinor: sum?.feesMinor ?? 0 },
   };
 }
 
 export async function listAdminStudentPayments(studentId: string) {
-  return decorate(await Payment.find({ studentId: oid(studentId, "Student") }).sort({ createdAt: -1 }).lean());
+  return decorate(
+    await Payment.find({ studentId: oid(studentId, "Student") })
+      .sort({ createdAt: -1 })
+      .lean(),
+  );
 }
 
 export async function getAdminPayment(id: string): Promise<AdminPaymentDetail> {
   const p = await Payment.findById(oid(id, "Payment")).lean();
   if (!p) throw new NotFoundError("Payment");
   const [dto] = await decorate([p], true);
-  const [events, logs] = await Promise.all([PaymentEvent.find({ paymentId: p._id }).sort({ receivedAt: -1 }).lean(), OdooSyncLog.find({ paymentId: p._id }).sort({ createdAt: -1 }).limit(20).lean()]);
+  const [events, logs] = await Promise.all([
+    PaymentEvent.find({ paymentId: p._id }).sort({ receivedAt: -1 }).lean(),
+    OdooSyncLog.find({ paymentId: p._id }).sort({ createdAt: -1 }).limit(20).lean(),
+  ]);
   return {
     ...dto!,
-    events: events.map((e) => ({ id: String(e._id), type: e.type, receivedAt: iso(e.receivedAt)!, processedAt: iso(e.processedAt), error: e.error ?? null })),
-    odooLogs: logs.map((l) => ({ id: String(l._id), step: l.step, ok: l.ok, error: l.error ?? null, createdAt: iso((l as { createdAt?: Date }).createdAt)! })),
+    events: events.map((e) => ({
+      id: String(e._id),
+      type: e.type,
+      receivedAt: iso(e.receivedAt)!,
+      processedAt: iso(e.processedAt),
+      error: e.error ?? null,
+    })),
+    odooLogs: logs.map((l) => ({
+      id: String(l._id),
+      step: l.step,
+      ok: l.ok,
+      error: l.error ?? null,
+      createdAt: iso((l as { createdAt?: Date }).createdAt)!,
+    })),
   };
 }

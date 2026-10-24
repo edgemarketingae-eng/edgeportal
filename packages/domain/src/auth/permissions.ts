@@ -29,6 +29,7 @@ export const PERMISSIONS = {
   "crm.all": "See every project and lead",
   "crm.projects.manage": "Create and edit projects and their teams",
   "crm.manage": "CRM settings, imports and merges",
+  "crm.leads.delete": "Delete leads permanently",
   "crm.staff.manage": "Create and manage CRM staff",
   "crm.roles.manage": "Create and edit CRM roles",
 } as const;
@@ -89,7 +90,12 @@ export const SYSTEM_ROLES: { key: string; name: string; description: string; per
     permissions: ["staff.access", "class.schedule.own"],
   },
   // CRM roles hold only crm.* keys (see isCrmRole), so CRM admins may manage them inside the CRM.
-  { key: "crm_admin", name: "CRM admin", description: "Everything in the CRM, including its staff and roles", permissions: CRM_PERMISSIONS },
+  {
+    key: "crm_admin",
+    name: "CRM admin",
+    description: "Everything in the CRM, including its staff and roles",
+    permissions: CRM_PERMISSIONS,
+  },
   {
     key: "crm_manager",
     name: "CRM manager",

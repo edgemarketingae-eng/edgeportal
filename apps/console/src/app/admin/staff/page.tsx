@@ -1,4 +1,5 @@
 import { staffRoutes } from "@edge/contracts";
+import { StaffStatus } from "@edge/ui/blocks/secret-reveal";
 import { Badge } from "@edge/ui/components/badge";
 import { Button } from "@edge/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@edge/ui/components/card";
@@ -18,6 +19,7 @@ export default async function StaffPage() {
   return (
     <>
       <PageHeader
+        help="/admin/docs/staff"
         title="Staff & roles"
         actions={
           <Button asChild variant="outline" size="sm">
@@ -55,17 +57,7 @@ export default async function StaffPage() {
                   </div>
                 </TableCell>
                 <TableCell>
-                  {s.disabled ? (
-                    <Badge variant="outline" className="text-destructive">
-                      Disabled
-                    </Badge>
-                  ) : s.invited ? (
-                    <Badge variant="outline">Invited</Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-edge-emerald">
-                      Active
-                    </Badge>
-                  )}
+                  <StaffStatus disabled={s.disabled} invited={s.invited} tempPassword={s.tempPassword} />
                 </TableCell>
               </TableRow>
             ))}

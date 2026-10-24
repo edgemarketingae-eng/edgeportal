@@ -9,14 +9,15 @@ import { Input } from "@edge/ui/components/input";
 import { Label } from "@edge/ui/components/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@edge/ui/components/table";
 import { Textarea } from "@edge/ui/components/textarea";
+import { NativeSelect } from "@edge/ui/components/native-select";
+import { CountrySelect } from "@edge/ui/forms/phone-input";
+import { HOME_COUNTRY } from "@edge/domain/countries";
 import { FormError, FormMessage } from "@edge/ui/forms/field";
 import Link from "next/link";
 import { useActionState } from "react";
 import { importLeadsAction, previewImportAction } from "@/lib/actions/import";
 import type { ImportState } from "./import-types";
 import { ProjectOwnerFields } from "./quick-add-dialog";
-
-const select = "h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm";
 
 export function ImportForm({ options, meId }: { options: CrmOptions; meId: string }) {
   const [preview, previewAction, previewing] = useActionState(previewImportAction, {} as ImportState);
@@ -32,7 +33,8 @@ export function ImportForm({ options, meId }: { options: CrmOptions; meId: strin
         <CardContent className="grid gap-3 text-sm">
           <FormMessage state={result} />
           <p>
-            <b>{result.result.created}</b> created · <b>{result.result.skipped}</b> skipped (duplicates) · <b>{result.result.invalid}</b> invalid
+            <b>{result.result.created}</b> created · <b>{result.result.skipped}</b> skipped (duplicates) · <b>{result.result.invalid}</b>{" "}
+            invalid
           </p>
           <Button asChild className="w-fit" size="sm">
             <Link href="/leads?created=today&view=all">Open the new leads</Link>
@@ -48,30 +50,47 @@ export function ImportForm({ options, meId }: { options: CrmOptions; meId: strin
         <CardHeader>
           <CardTitle>1. Paste or upload a CSV</CardTitle>
           <CardDescription>
-            First row = column names. Needs <b>name</b> plus <b>phone</b> and/or <b>email</b>; optional <b>country</b>, <b>notes</b>, <b>tags</b>, <b>source detail</b>, <b>language</b>. Up to 2,000
-            rows per import. Existing leads and students are skipped, never overwritten.
+            First row = column names. Needs <b>name</b> plus <b>phone</b> and/or <b>email</b>; optional <b>country</b>, <b>notes</b>,{" "}
+            <b>tags</b>, <b>source detail</b>, <b>language</b>. Up to 2,000 rows per import. Existing leads and students are skipped, never
+            overwritten.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form key={JSON.stringify(v ?? {})} action={previewAction} className="grid gap-3">
             <FormError state={preview} />
-            <Textarea name="csv" rows={6} placeholder={"name,phone,email,notes\nAmy Khan,+971501234567,amy@example.com,Asked about November batch"} defaultValue={v?.csv} />
+            <Textarea
+              name="csv"
+              rows={6}
+              placeholder={
+                "name,phone,email,country,notes\nAmy Khan,+971501234567,amy@example.com,AE,Asked about November batch\nRavi Kumar,+919876543210,,IN,"
+              }
+              defaultValue={v?.csv}
+            />
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="grid gap-1.5">
+              <div className="grid content-start gap-2">
                 <Label htmlFor="file">…or a file</Label>
-                <Input id="file" name="file" type="file" accept=".csv,text/csv" className="h-9" />
+                <Input id="file" name="file" type="file" accept=".csv,text/csv" className="h-auto py-1.5" />
               </div>
-              <div className="grid gap-1.5">
+              <div className="grid content-start gap-2">
                 <Label htmlFor="source">Source for these leads</Label>
-                <select id="source" name="source" className={select} defaultValue={v?.source || "IMPORT"}>
+                <NativeSelect id="source" name="source" defaultValue={v?.source || "IMPORT"}>
                   {LEAD_SOURCES.map((s) => (
                     <option key={s} value={s}>
                       {LEAD_SOURCE_LABELS[s]}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
-              <ProjectOwnerFields options={options} meId={meId} defaultProjectId={v?.projectId} />
+              <div className="grid content-start gap-2">
+                <Label htmlFor="defaultCountry">Country for numbers without a +code</Label>
+                <CountrySelect
+                  id="defaultCountry"
+                  name="defaultCountry"
+                  defaultValue={v?.defaultCountry ?? HOME_COUNTRY}
+                  emptyLabel="None: every number has its +code"
+                />
+              </div>
+              <ProjectOwnerFields options={options} meId={meId} defaultProjectId={v?.projectId} defaultOwnerId={v?.ownerId} roundRobin />
             </div>
             <Button type="submit" size="sm" className="w-fit" disabled={previewing}>
               {previewing ? "Checking…" : "Check the file"}
@@ -85,7 +104,8 @@ export function ImportForm({ options, meId }: { options: CrmOptions; meId: strin
           <CardHeader>
             <CardTitle>2. Review and import</CardTitle>
             <CardDescription>
-              {preview.preview.total} rows: <b>{preview.preview.valid}</b> will be created, <b>{preview.preview.duplicates}</b> skipped as duplicates, <b>{preview.preview.invalid}</b> invalid.
+              {preview.preview.total} rows: <b>{preview.preview.valid}</b> will be created, <b>{preview.preview.duplicates}</b> skipped as
+              duplicates, <b>{preview.preview.invalid}</b> invalid.
               {preview.preview.rows.length < preview.preview.total ? ` Showing the first ${preview.preview.rows.length}.` : ""}
             </CardDescription>
           </CardHeader>
@@ -96,6 +116,7 @@ export function ImportForm({ options, meId }: { options: CrmOptions; meId: strin
               <input type="hidden" name="projectId" value={v.projectId} />
               <input type="hidden" name="source" value={v.source} />
               <input type="hidden" name="ownerId" value={v.ownerId ?? ""} />
+              <input type="hidden" name="defaultCountry" value={v.defaultCountry ?? ""} />
               <Button type="submit" size="sm" disabled={importing || preview.preview.valid === 0}>
                 {importing ? "Importing…" : `Import ${preview.preview.valid} lead${preview.preview.valid === 1 ? "" : "s"}`}
               </Button>
@@ -118,7 +139,11 @@ export function ImportForm({ options, meId }: { options: CrmOptions; meId: strin
                       <TableCell>{r.name || <span className="text-muted-foreground">–</span>}</TableCell>
                       <TableCell className="tabular-nums">{r.phone ?? "–"}</TableCell>
                       <TableCell>{r.email ?? "–"}</TableCell>
-                      <TableCell className={r.status === "ok" ? "text-edge-emerald" : r.status === "duplicate" ? "text-amber-700" : "text-destructive"}>
+                      <TableCell
+                        className={
+                          r.status === "ok" ? "text-edge-emerald" : r.status === "duplicate" ? "text-amber-700" : "text-destructive"
+                        }
+                      >
                         {r.status === "ok" ? "Will create" : r.reason}
                       </TableCell>
                     </TableRow>

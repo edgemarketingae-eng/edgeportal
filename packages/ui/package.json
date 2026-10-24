@@ -13,7 +13,9 @@
     "./brand/*": "./src/brand/*.tsx",
     "./shell/*": "./src/shell/*.tsx",
     "./forms/*": "./src/forms/*.tsx",
-    "./blocks/*": "./src/blocks/*.tsx"
+    "./blocks/*": "./src/blocks/*.tsx",
+    "./docs/*": "./src/docs/*.tsx",
+    "./docs/content/*": "./src/docs/content/*.tsx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

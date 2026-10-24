@@ -1,8 +1,9 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { Course, Lead, LeadInboundEvent, Types, withTx, type LeadInboundEventDoc, type ProjectDoc } from "@edge/db";
+import { Course, Lead, LeadInboundEvent, Types, withTx, type LeadInboundEventDoc } from "@edge/db";
 import { now } from "@edge/domain/clock";
-import { INBOUND_SOURCES, OPEN_LEAD_STAGES } from "@edge/domain/crm/enums";
+import { INBOUND_SOURCES } from "@edge/domain/crm/enums";
 import { parseTags } from "@edge/domain/crm/machine";
+import { isCountryCode } from "@edge/domain/countries";
 import { parsePhone } from "@edge/domain/phone";
 import { ApiError } from "@edge/contracts";
 import { z } from "zod";
@@ -11,7 +12,8 @@ import { notifyUser } from "../notifications/in-app";
 import { getSetting } from "../settings";
 import { escapeRegex, findDuplicateLeads, leadHref, normalizeEmail, recordActivity } from "./common";
 import { createLead } from "./leads";
-import { getDefaultProject, notifyProjectManagers, projectTeam } from "./scope";
+import { roundRobinPicker } from "./round-robin";
+import { getDefaultProject, notifyProjectManagers } from "./scope";
 
 const minutesAgo = (m: number) => new Date(now().getTime() - m * 60_000);
 const str = (max: number) => z.string().trim().max(max).optional();
@@ -61,7 +63,8 @@ export async function handleLeadWebhook(source: string, rawBody: string, headers
   if (!secret || !(INBOUND_SOURCES as readonly string[]).includes(source)) return { status: 404, body: { error: "unknown source" } };
   const sig = headers.get("x-edge-signature") ?? "";
   const tok = headers.get("x-edge-lead-token") ?? "";
-  if (!safeEqual(sig, signLeadPayload(secret, rawBody)) && !safeEqual(tok, secret)) return { status: 401, body: { error: "invalid signature" } };
+  if (!safeEqual(sig, signLeadPayload(secret, rawBody)) && !safeEqual(tok, secret))
+    return { status: 401, body: { error: "invalid signature" } };
   let json: unknown;
   try {
     json = JSON.parse(rawBody);
@@ -69,7 +72,8 @@ export async function handleLeadWebhook(source: string, rawBody: string, headers
     return { status: 400, body: { error: "malformed json" } };
   }
   const parsed = InboundLeadPayload.safeParse(json);
-  if (!parsed.success) return { status: 400, body: { error: "invalid payload", issues: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`) } };
+  if (!parsed.success)
+    return { status: 400, body: { error: "invalid payload", issues: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`) } };
   const externalEventId = parsed.data.id ?? createHash("sha256").update(rawBody).digest("hex");
 
   let ev: LeadInboundEventDoc | null;
@@ -97,43 +101,50 @@ async function processInboundEvent(eventId: Types.ObjectId): Promise<LeadWebhook
   if (!claimed) return { status: 200, body: { received: true, inProgress: true } };
   try {
     const r = await ingestInboundLead(claimed.source, claimed.payload as InboundLeadPayload, claimed._id);
-    await LeadInboundEvent.updateOne({ _id: eventId }, { $set: { processedAt: now(), processingAt: null, error: null, leadId: new Types.ObjectId(r.leadId) } });
+    await LeadInboundEvent.updateOne(
+      { _id: eventId },
+      { $set: { processedAt: now(), processingAt: null, error: null, leadId: new Types.ObjectId(r.leadId) } },
+    );
     return { status: 200, body: { received: true, leadId: r.leadId, existing: r.existing } };
   } catch (e) {
     const permanent = e instanceof ApiError && e.status < 500;
-    await LeadInboundEvent.updateOne({ _id: eventId }, { $set: { processingAt: null, error: String(e).slice(0, 2000), ...(permanent ? { processedAt: now() } : {}) } });
+    await LeadInboundEvent.updateOne(
+      { _id: eventId },
+      { $set: { processingAt: null, error: String(e).slice(0, 2000), ...(permanent ? { processedAt: now() } : {}) } },
+    );
     if (permanent) return { status: e.status, body: { error: e.message, fieldErrors: e.fieldErrors ?? null } };
     console.error("[lead-webhook] processing failed", e);
     return { status: 500, body: { error: "processing failed" } };
   }
 }
 
-/** The team member of the target project with the fewest open leads. */
-async function roundRobinOwner(project: ProjectDoc): Promise<string | null> {
-  const owners = await projectTeam(project);
-  if (!owners.length) return null;
-  const counts = await Lead.aggregate<{ _id: Types.ObjectId; n: number }>([
-    { $match: { mergedIntoId: null, stage: { $in: [...OPEN_LEAD_STAGES] }, ownerId: { $in: owners.map((o) => new Types.ObjectId(o.id)) } } },
-    { $group: { _id: "$ownerId", n: { $sum: 1 } } },
-  ]);
-  const load = new Map(counts.map((c) => [String(c._id), c.n]));
-  return owners.reduce((best, o) => ((load.get(o.id) ?? 0) < (load.get(best.id) ?? 0) ? o : best), owners[0]!).id;
-}
-
 async function matchCourse(text?: string) {
   if (!text?.trim()) return null;
   const rx = new RegExp(escapeRegex(text.trim()), "i");
-  const c = await Course.findOne({ isActive: true, $or: [{ code: text.trim().toUpperCase() }, { title: rx }, { slug: text.trim().toLowerCase() }] }, { _id: 1 }).lean();
+  const c = await Course.findOne(
+    { isActive: true, $or: [{ code: text.trim().toUpperCase() }, { title: rx }, { slug: text.trim().toLowerCase() }] },
+    { _id: 1 },
+  ).lean();
   return c ? String(c._id) : null;
 }
 
 /** Create the lead, or append an INBOUND entry to an existing live lead with the same phone/email. */
-export async function ingestInboundLead(source: string, p: InboundLeadPayload, eventId: Types.ObjectId | null): Promise<{ leadId: string; existing: boolean }> {
+export async function ingestInboundLead(
+  source: string,
+  p: InboundLeadPayload,
+  eventId: Types.ObjectId | null,
+): Promise<{ leadId: string; existing: boolean }> {
   const email = normalizeEmail(p.email);
-  const parsedPhone = p.phone?.trim() ? parsePhone(p.phone, (p.country || "AE") as never) : null;
+  const parsedPhone = p.phone?.trim() ? parsePhone(p.phone, p.country?.toUpperCase()) : null;
   const phone = parsedPhone?.e164 ?? null;
   if (!phone && !email) throw new ApiError(422, "VALIDATION", "A valid phone or email is required", { phone: "Invalid or missing" });
-  const utm = { source: p.utm?.source ?? p.utm_source ?? null, medium: p.utm?.medium ?? p.utm_medium ?? null, campaign: p.utm?.campaign ?? p.utm_campaign ?? null, content: p.utm?.content ?? p.utm_content ?? null, term: p.utm?.term ?? p.utm_term ?? null };
+  const utm = {
+    source: p.utm?.source ?? p.utm_source ?? null,
+    medium: p.utm?.medium ?? p.utm_medium ?? null,
+    campaign: p.utm?.campaign ?? p.utm_campaign ?? null,
+    content: p.utm?.content ?? p.utm_content ?? null,
+    term: p.utm?.term ?? p.utm_term ?? null,
+  };
   const notes = [p.message?.trim(), p.phone && !phone ? `Phone as typed: ${p.phone}` : null].filter(Boolean).join("\n");
   const actor = { type: "WEBHOOK" as const, id: `leads:${source}` };
 
@@ -143,31 +154,47 @@ export async function ingestInboundLead(source: string, p: InboundLeadPayload, e
     await withTx(async () => {
       const set: Record<string, unknown> = { lastActivityAt: at };
       if (existing.stage === "LOST") Object.assign(set, { stage: "NEW", stageChangedAt: at, lostReason: null, lostNote: null });
-      for (const k of ["source", "medium", "campaign", "content", "term"] as const) if (!existing.utm?.[k] && utm[k]) set[`utm.${k}`] = utm[k];
+      for (const k of ["source", "medium", "campaign", "content", "term"] as const)
+        if (!existing.utm?.[k] && utm[k]) set[`utm.${k}`] = utm[k];
       if (!existing.email && email) set.email = email;
       if (!existing.phone && phone) set.phone = phone;
       if (p.consent) Object.assign(set, { "consent.marketing": true, "consent.marketingAt": existing.consent?.marketingAt ?? at });
       if (p.whatsappConsent) set["consent.whatsapp"] = true;
       const tags = parseTags((p.tags ?? []).join(","));
       await Lead.updateOne({ _id: existing._id }, { $set: set, ...(tags.length ? { $addToSet: { tags: { $each: tags } } } : {}) });
-      await recordActivity(existing._id, "INBOUND", actor, { body: p.message?.trim() || null, direction: "IN", data: { source, page: p.page ?? null, course: p.course ?? null, utm, eventId: eventId ? String(eventId) : null } });
-      if (existing.stage === "LOST") await recordActivity(existing._id, "STAGE_CHANGED", actor, { data: { from: "LOST", to: "NEW", auto: true } });
-      if (existing.ownerId) await notifyUser(String(existing.ownerId), { title: `${existing.name} enquired again`, body: p.message?.trim().slice(0, 140) || `New enquiry from the ${source}`, href: leadHref(existing._id) });
-      else await notifyProjectManagers(existing.projectId, { title: `${existing.name} enquired again`, body: "Unassigned lead, enquiry from the website.", href: leadHref(existing._id) });
+      await recordActivity(existing._id, "INBOUND", actor, {
+        body: p.message?.trim() || null,
+        direction: "IN",
+        data: { source, page: p.page ?? null, course: p.course ?? null, utm, eventId: eventId ? String(eventId) : null },
+      });
+      if (existing.stage === "LOST")
+        await recordActivity(existing._id, "STAGE_CHANGED", actor, { data: { from: "LOST", to: "NEW", auto: true } });
+      if (existing.ownerId)
+        await notifyUser(String(existing.ownerId), {
+          title: `${existing.name} enquired again`,
+          body: p.message?.trim().slice(0, 140) || `New enquiry from the ${source}`,
+          href: leadHref(existing._id),
+        });
+      else
+        await notifyProjectManagers(existing.projectId, {
+          title: `${existing.name} enquired again`,
+          body: "Unassigned lead, enquiry from the website.",
+          href: leadHref(existing._id),
+        });
     });
     return { leadId: String(existing._id), existing: true };
   }
 
   const cfg = await getSetting("crm.config");
   const project = await getDefaultProject();
-  const ownerId = cfg.roundRobin ? ((await roundRobinOwner(project)) ?? "") : "";
+  const ownerId = cfg.roundRobin ? ((await roundRobinPicker(project)).next() ?? "") : "";
   const leadId = await createLead(
     {
       projectId: String(project._id),
       name: p.name,
       phone: phone ?? undefined,
       email: email ?? undefined,
-      country: parsedPhone?.country ?? p.country?.toUpperCase(),
+      country: parsedPhone?.country ?? (isCountryCode(p.country) ? p.country.toUpperCase() : undefined),
       source: "WEBSITE",
       sourceDetail: p.page?.trim() || p.course?.trim() || undefined,
       courseInterestId: (await matchCourse(p.course)) ?? undefined,
@@ -184,13 +211,25 @@ export async function ingestInboundLead(source: string, p: InboundLeadPayload, e
     undefined,
     { inboundEventId: eventId, utm },
   );
-  if (!ownerId) await notifyProjectManagers(project._id, { title: "New website lead", body: `${p.name}${p.course ? ` · ${p.course}` : ""}`, href: leadHref(leadId) });
+  if (!ownerId)
+    await notifyProjectManagers(project._id, {
+      title: "New website lead",
+      body: `${p.name}${p.course ? ` · ${p.course}` : ""}`,
+      href: leadHref(leadId),
+    });
   return { leadId, existing: false };
 }
 
 /** Job: reprocess inbox events whose processing failed or never finished. */
 export async function sweepLeadInbox() {
-  const stuck = await LeadInboundEvent.find({ processedAt: null, receivedAt: { $gt: minutesAgo(7 * 24 * 60) }, $or: [{ processingAt: null }, { processingAt: { $lt: minutesAgo(2) } }] }, { _id: 1 })
+  const stuck = await LeadInboundEvent.find(
+    {
+      processedAt: null,
+      receivedAt: { $gt: minutesAgo(7 * 24 * 60) },
+      $or: [{ processingAt: null }, { processingAt: { $lt: minutesAgo(2) } }],
+    },
+    { _id: 1 },
+  )
     .limit(100)
     .lean();
   let ok = 0;

@@ -24,7 +24,7 @@ export default async function RecordingsPage() {
   if (!portal.entitlements.active) {
     return (
       <>
-        <PageHeader title="Recordings" />
+        <PageHeader help="/docs/recordings" title="Recordings" />
         <StatusBanner portal={portal} />
       </>
     );
@@ -32,7 +32,7 @@ export default async function RecordingsPage() {
   const recordings = await load(() => api(classRoutes.studentRecordings));
   return (
     <>
-      <PageHeader title="Recordings" description="Recorded classes of your batch." />
+      <PageHeader help="/docs/recordings" title="Recordings" description="Recorded classes of your batch." />
       {recordings.length === 0 ? (
         <Card>
           <CardContent className="text-muted-foreground py-10 text-center">Recordings appear here after each live class.</CardContent>
@@ -46,7 +46,9 @@ export default async function RecordingsPage() {
                   <PlayCircle className="text-edge-emerald size-9 shrink-0" />
                   <div>
                     <p className="font-semibold">{r.title}</p>
-                    <p className="text-muted-foreground text-sm">{[r.recordedAt ? formatDate(r.recordedAt) : null, duration(r.durationSec)].filter(Boolean).join(" · ")}</p>
+                    <p className="text-muted-foreground text-sm">
+                      {[r.recordedAt ? formatDate(r.recordedAt) : null, duration(r.durationSec)].filter(Boolean).join(" · ")}
+                    </p>
                   </div>
                 </CardContent>
               </Card>

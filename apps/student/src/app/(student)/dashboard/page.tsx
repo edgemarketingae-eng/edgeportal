@@ -24,14 +24,19 @@ export default async function DashboardPage() {
 
   return (
     <>
-      <PageHeader title={`Welcome, ${firstName}`} description={e ? `${e.batch.courseTitle} · ${e.batch.name}` : undefined} />
+      <PageHeader
+        help="/docs/dashboard"
+        title={`Welcome, ${firstName}`}
+        description={e ? `${e.batch.courseTitle} · ${e.batch.name}` : undefined}
+      />
       <StatusBanner portal={portal} />
 
       {e && ent.active && e.paymentState === "PARTIALLY_PAID" && e.balanceDueOn ? (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-50 p-4 text-sm">
           <p>
             Balance of <b>{formatMoney(e.remainingMinor, e.currency)}</b> is due by <b>{formatDate(e.balanceDueOn)}</b>
-            {` (${Math.max(0, daysUntil(new Date(e.balanceDueOn), new Date(portal.now)))} days left).`} Access pauses automatically if it is not paid.
+            {` (${Math.max(0, daysUntil(new Date(e.balanceDueOn), new Date(portal.now)))} days left).`} Access pauses automatically if it is
+            not paid.
           </p>
           <Button asChild size="sm">
             <Link href="/checkout/balance">Pay balance</Link>

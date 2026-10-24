@@ -7,7 +7,18 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { run } from "./common";
 
-const PROJECT_FIELDS = ["name", "code", "description", "status", "courseId", "batchId", "startDate", "endDate", "targetLeads", "targetConversions"];
+const PROJECT_FIELDS = [
+  "name",
+  "code",
+  "description",
+  "status",
+  "courseId",
+  "batchId",
+  "startDate",
+  "endDate",
+  "targetLeads",
+  "targetConversions",
+];
 type ProjectBody = RouteBody<typeof crmRoutes.createProject>;
 
 function projectBody(form: FormData): ProjectBody {
@@ -34,7 +45,11 @@ export async function saveProjectAction(_prev: ActionState, form: FormData): Pro
     if (id) await api(crmRoutes.updateProject, { params: { id }, body: projectBody(form) });
     else created = await api(crmRoutes.createProject, { body: projectBody(form) });
   } catch (e) {
-    const s = toActionState(e, { ...values(form, PROJECT_FIELDS), managerIds: form.getAll("managerIds").map(String).join(","), memberIds: form.getAll("memberIds").map(String).join(",") });
+    const s = toActionState(e, {
+      ...values(form, PROJECT_FIELDS),
+      managerIds: form.getAll("managerIds").map(String).join(","),
+      memberIds: form.getAll("memberIds").map(String).join(","),
+    });
     return s.error || !s.fieldErrors ? s : { ...s, error: "Please fix the highlighted fields." };
   }
   if (created) redirect(`/projects/${created.id}?created=1`);
@@ -43,7 +58,13 @@ export async function saveProjectAction(_prev: ActionState, form: FormData): Pro
 }
 
 export async function projectMemberAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  return run(() => api(crmRoutes.projectMember, { params: { id: text(form, "id") }, body: { userId: text(form, "userId"), role: text(form, "role") as "manager" | "member" } }));
+  const userIds = form.getAll("userIds").map(String).filter(Boolean);
+  if (!userIds.length) return { error: "Tick at least one person." };
+  const role = text(form, "role") as "manager" | "member";
+  return run(async () => {
+    for (const userId of userIds) await api(crmRoutes.projectMember, { params: { id: text(form, "id") }, body: { userId, role } });
+    return { ok: true as const, message: `${userIds.length} ${userIds.length === 1 ? "person" : "people"} added.` };
+  });
 }
 
 export async function removeProjectMemberAction(_prev: ActionState, form: FormData): Promise<ActionState> {

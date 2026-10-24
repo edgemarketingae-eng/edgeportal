@@ -1,6 +1,31 @@
 import type { LeadActivityDto, LeadDto, LeadListItem, TaskDto } from "@edge/contracts";
-import { AuthUser, CrmTask, DbNotFoundError, Enrollment, Lead, LeadActivity, lockForUpdate, Project, StaffProfile, StudentProfile, TaskComment, Types, type CrmTaskDoc, type LeadActivityDoc, type LeadDoc } from "@edge/db";
-import { LEAD_CONTACT_TYPES, OPEN_TASK_STATUSES, type CallOutcome, type FollowUpType, type LeadActivityType, type LeadChannel, type LeadTouchType, type TaskPriority } from "@edge/domain/crm/enums";
+import {
+  AuthUser,
+  CrmTask,
+  DbNotFoundError,
+  Enrollment,
+  Lead,
+  LeadActivity,
+  lockForUpdate,
+  Project,
+  StaffProfile,
+  StudentProfile,
+  TaskComment,
+  Types,
+  type CrmTaskDoc,
+  type LeadActivityDoc,
+  type LeadDoc,
+} from "@edge/db";
+import {
+  LEAD_CONTACT_TYPES,
+  OPEN_TASK_STATUSES,
+  type CallOutcome,
+  type FollowUpType,
+  type LeadActivityType,
+  type LeadChannel,
+  type LeadTouchType,
+  type TaskPriority,
+} from "@edge/domain/crm/enums";
 import { fromDubaiLocal } from "@edge/domain/dates";
 import type { Actor } from "@edge/domain/enums";
 import { parsePhone } from "@edge/domain/phone";
@@ -18,8 +43,8 @@ export const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&
 export function normalizePhone(input: string | null | undefined, country?: string | null, field = "phone"): string | null {
   const v = (input ?? "").trim();
   if (!v) return null;
-  const p = parsePhone(v, (country || "AE") as never);
-  if (!p) throw new ValidationError({ [field]: "Enter a valid mobile number, e.g. +971 50 123 4567" });
+  const p = parsePhone(v, country);
+  if (!p) throw new ValidationError({ [field]: "Enter a valid mobile number with its country code, e.g. +44 7400 123456" });
   return p.e164;
 }
 
@@ -39,13 +64,16 @@ export function localDate(input: string | null | undefined, field: string): Date
 export const optId = (v: string | null | undefined) => (v && Types.ObjectId.isValid(v) && v.length === 24 ? new Types.ObjectId(v) : null);
 export const actorId = (actor: Actor) => (actor.type === "USER" ? new Types.ObjectId(actor.id) : null);
 
-export const channelToTaskType = (c: LeadChannel | string | null | undefined): FollowUpType => (c === "WHATSAPP" || c === "EMAIL" ? c : "CALL");
+export const channelToTaskType = (c: LeadChannel | string | null | undefined): FollowUpType =>
+  c === "WHATSAPP" || c === "EMAIL" ? c : "CALL";
 export const touchToTaskType = (t: LeadTouchType): FollowUpType => (t === "NOTE" ? "CALL" : t);
 export const taskToTouchType = (t: FollowUpType): LeadTouchType => (t === "OTHER" ? "NOTE" : t);
 export const isOpenTask = (status: string) => (OPEN_TASK_STATUSES as readonly string[]).includes(status);
 
 export async function userNames(ids: (string | Types.ObjectId | null | undefined)[]) {
-  const valid = [...new Set(ids.filter((x): x is string | Types.ObjectId => !!x && Types.ObjectId.isValid(String(x))).map(String))].map((x) => new Types.ObjectId(x));
+  const valid = [...new Set(ids.filter((x): x is string | Types.ObjectId => !!x && Types.ObjectId.isValid(String(x))).map(String))].map(
+    (x) => new Types.ObjectId(x),
+  );
   if (!valid.length) return new Map<string, string>();
   const users = await AuthUser.find({ _id: { $in: valid } }, { name: 1 }).lean();
   return new Map(users.map((u) => [String(u._id), u.name]));
@@ -104,7 +132,8 @@ export async function findAccountByContact(contact: { phone: string | null; emai
     const e = await Enrollment.findOne({ studentId: user._id, isCurrent: true }, { _id: 1 }).lean();
     return { kind: "student", id: user._id, name: user.name, email: user.email, enrollmentId: e?._id ?? null };
   }
-  if (await StaffProfile.exists({ _id: user._id })) return { kind: "staff", id: user._id, name: user.name, email: user.email, enrollmentId: null };
+  if (await StaffProfile.exists({ _id: user._id }))
+    return { kind: "staff", id: user._id, name: user.name, email: user.email, enrollmentId: null };
   return null;
 }
 
@@ -148,7 +177,9 @@ export function touchPatch(lead: Pick<LeadDoc, "stage" | "firstContactedAt">, ty
 
 /** Keep lead.nextFollowUpAt = earliest open task with a due date (joins the surrounding transaction). */
 export async function recomputeNextFollowUp(leadId: Types.ObjectId) {
-  const next = await CrmTask.findOne({ leadId, status: { $in: [...OPEN_TASK_STATUSES] }, dueAt: { $ne: null } }, { dueAt: 1 }).sort({ dueAt: 1 }).lean();
+  const next = await CrmTask.findOne({ leadId, status: { $in: [...OPEN_TASK_STATUSES] }, dueAt: { $ne: null } }, { dueAt: 1 })
+    .sort({ dueAt: 1 })
+    .lean();
   await Lead.updateOne({ _id: leadId }, { $set: { nextFollowUpAt: next?.dueAt ?? null } });
 }
 
@@ -162,7 +193,15 @@ export interface TaskTarget {
 /** Create a task at the end of the project's To-do column; records TASK_CREATED on the lead when there is one. */
 export async function createTaskInTx(
   target: TaskTarget,
-  t: { title: string; type: FollowUpType; priority?: TaskPriority; description?: string | null; dueAt: Date | null; assigneeId?: Types.ObjectId | null; autoKey?: string | null },
+  t: {
+    title: string;
+    type: FollowUpType;
+    priority?: TaskPriority;
+    description?: string | null;
+    dueAt: Date | null;
+    assigneeId?: Types.ObjectId | null;
+    autoKey?: string | null;
+  },
   actor: Actor,
 ) {
   const assigneeId = t.assigneeId !== undefined ? t.assigneeId : (target.defaultAssigneeId ?? actorId(actor));
@@ -184,7 +223,9 @@ export async function createTaskInTx(
     },
   ]);
   if (target.leadId) {
-    await recordActivity(target.leadId, "TASK_CREATED", actor, { data: { taskId: String(task!._id), title: t.title, type: t.type, dueAt: t.dueAt?.toISOString() ?? null, auto: !!t.autoKey } });
+    await recordActivity(target.leadId, "TASK_CREATED", actor, {
+      data: { taskId: String(task!._id), title: t.title, type: t.type, dueAt: t.dueAt?.toISOString() ?? null, auto: !!t.autoKey },
+    });
     await recomputeNextFollowUp(target.leadId);
   }
   return task!;
@@ -208,7 +249,7 @@ export function toLeadListItem(l: LeadDoc, refs: LeadRefs): LeadListItem {
     name: l.name,
     phone: l.phone ?? null,
     email: l.email ?? null,
-    country: l.country ?? "AE",
+    country: l.country ?? null,
     source: l.source,
     sourceDetail: l.sourceDetail ?? null,
     stage: l.stage,
@@ -236,7 +277,13 @@ export function toLeadDto(l: LeadDoc, refs: LeadRefs): LeadDto {
     courseInterestId: l.courseInterestId ? String(l.courseInterestId) : null,
     batchInterestId: l.batchInterestId ? String(l.batchInterestId) : null,
     ownerId: l.ownerId ? String(l.ownerId) : null,
-    utm: { source: l.utm?.source ?? null, medium: l.utm?.medium ?? null, campaign: l.utm?.campaign ?? null, content: l.utm?.content ?? null, term: l.utm?.term ?? null },
+    utm: {
+      source: l.utm?.source ?? null,
+      medium: l.utm?.medium ?? null,
+      campaign: l.utm?.campaign ?? null,
+      content: l.utm?.content ?? null,
+      term: l.utm?.term ?? null,
+    },
     notes: l.notes ?? null,
     score: l.score ?? 0,
     consent: { marketing: !!l.consent?.marketing, marketingAt: iso(l.consent?.marketingAt), whatsapp: !!l.consent?.whatsapp },
@@ -280,7 +327,10 @@ export async function tasksToDtos(tasks: CrmTaskDoc[]): Promise<TaskDto[]> {
     projectRefs(tasks.map((t) => t.projectId)),
     leadIds.length ? Lead.find({ _id: { $in: leadIds } }, { name: 1, phone: 1 }).lean() : [],
     userNames([...tasks.map((t) => t.assigneeId), ...tasks.map((t) => t.createdById)]),
-    TaskComment.aggregate<{ _id: Types.ObjectId; n: number }>([{ $match: { taskId: { $in: tasks.map((t) => t._id) } } }, { $group: { _id: "$taskId", n: { $sum: 1 } } }]),
+    TaskComment.aggregate<{ _id: Types.ObjectId; n: number }>([
+      { $match: { taskId: { $in: tasks.map((t) => t._id) } } },
+      { $group: { _id: "$taskId", n: { $sum: 1 } } },
+    ]),
   ]);
   const leadMap = new Map(leads.map((l) => [String(l._id), { name: l.name, phone: l.phone ?? null }]));
   const countMap = new Map(counts.map((c) => [String(c._id), c.n]));

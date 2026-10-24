@@ -38,7 +38,7 @@ export function CourseForm({
         />
         <Field label="Title" name="title" id={`title-${id}`} defaultValue={v?.title ?? course?.title} error={fe.title} required />
       </div>
-      <div className="grid gap-1.5">
+      <div className="grid content-start gap-2">
         <Label htmlFor={`desc-${id}`}>Description</Label>
         <Textarea id={`desc-${id}`} name="description" rows={3} defaultValue={v?.description ?? course?.description ?? ""} />
       </div>

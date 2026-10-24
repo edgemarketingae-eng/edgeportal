@@ -17,7 +17,7 @@ export default async function BatchPage() {
   if (!e) {
     return (
       <>
-        <PageHeader title="My batch" />
+        <PageHeader help="/docs/batch" title="My batch" />
         <StatusBanner portal={portal} />
       </>
     );
@@ -27,7 +27,7 @@ export default async function BatchPage() {
 
   return (
     <>
-      <PageHeader title={e.batch.name} description={e.batch.courseTitle} />
+      <PageHeader help="/docs/batch" title={e.batch.name} description={e.batch.courseTitle} />
       <StatusBanner portal={portal} />
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
@@ -35,7 +35,9 @@ export default async function BatchPage() {
             <CardTitle>About this program</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 text-sm">
-            <p className="leading-relaxed whitespace-pre-line">{e.batch.description ?? e.batch.courseDescription ?? "Details will be shared soon."}</p>
+            <p className="leading-relaxed whitespace-pre-line">
+              {e.batch.description ?? e.batch.courseDescription ?? "Details will be shared soon."}
+            </p>
             <dl className="grid gap-3 sm:grid-cols-2">
               <div>
                 <dt className="text-muted-foreground">Starts</dt>
@@ -76,11 +78,14 @@ export default async function BatchPage() {
           <CardContent className="grid gap-3 text-sm">
             <p>
               Course fee: <b>{formatMoney(e.feeMinor, e.currency)}</b>
-              <span className="text-muted-foreground block text-xs">5% VAT applies for UAE students. A payment processing fee is added at checkout depending on the method.</span>
+              <span className="text-muted-foreground block text-xs">
+                5% VAT applies for UAE students. A payment processing fee is added at checkout depending on the method.
+              </span>
             </p>
             {e.batch.advanceEnabled && presets.length ? (
               <p>
-                Reserve your seat with an advance from <b>{formatMoney(presets[0]!, e.currency)}</b>, and pay the rest before the balance due date.
+                Reserve your seat with an advance from <b>{formatMoney(presets[0]!, e.currency)}</b>, and pay the rest before the balance
+                due date.
               </p>
             ) : null}
             {portal.entitlements.canCheckout ? (

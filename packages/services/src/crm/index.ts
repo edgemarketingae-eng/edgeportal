@@ -9,5 +9,6 @@ export * from "./convert";
 export * from "./autolink";
 export * from "./ingest";
 export * from "./import";
+export * from "./round-robin";
 export * from "./jobs";
 export * from "./settings";

@@ -12,7 +12,11 @@ export default async function ImportLeadsPage() {
   const options = await load(() => api(crmRoutes.options));
   return (
     <>
-      <PageHeader title="Import leads" description="Bring in a spreadsheet of enquiries, webinar sign-ups or an old lead list into a project." />
+      <PageHeader
+        help="/docs/import"
+        title="Import leads"
+        description="Bring in a spreadsheet of enquiries, webinar sign-ups or an old lead list into a project."
+      />
       <ImportForm options={options} meId={v.user.id} />
     </>
   );

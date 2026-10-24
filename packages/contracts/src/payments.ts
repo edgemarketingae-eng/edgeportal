@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { GATEWAYS, PAYMENT_KINDS, PAYMENT_STATUSES, SYNC_STATUSES, VAT_TREATMENTS } from "@edge/domain/enums";
-import { zOk } from "./common";
+import { paged, zOk, zPage } from "./common";
 import { route } from "./route";
 
 export const PublicFeeRate = z.object({
@@ -67,17 +67,36 @@ export const PaymentDto = z.object({
   failureReason: z.string().nullable(),
   createdAt: z.string(),
   succeededAt: z.string().nullable(),
-  odoo: z.object({ status: z.enum(SYNC_STATUSES), invoiceName: z.string().nullable(), invoiceUrl: z.string().nullable(), lastError: z.string().nullable() }),
+  odoo: z.object({
+    status: z.enum(SYNC_STATUSES),
+    invoiceName: z.string().nullable(),
+    invoiceUrl: z.string().nullable(),
+    lastError: z.string().nullable(),
+  }),
 });
 export type PaymentDto = z.infer<typeof PaymentDto>;
 
 export const AdminPaymentDetail = PaymentDto.extend({
-  events: z.array(z.object({ id: z.string(), type: z.string(), receivedAt: z.string(), processedAt: z.string().nullable(), error: z.string().nullable() })),
+  events: z.array(
+    z.object({
+      id: z.string(),
+      type: z.string(),
+      receivedAt: z.string(),
+      processedAt: z.string().nullable(),
+      error: z.string().nullable(),
+    }),
+  ),
   odooLogs: z.array(z.object({ id: z.string(), step: z.string(), ok: z.boolean(), error: z.string().nullable(), createdAt: z.string() })),
 });
 export type AdminPaymentDetail = z.infer<typeof AdminPaymentDetail>;
 
-export const PaymentFilters = z.object({ q: z.string().optional(), status: z.enum(PAYMENT_STATUSES).optional(), gateway: z.enum(GATEWAYS).optional(), odoo: z.enum(SYNC_STATUSES).optional() });
+export const PaymentFilters = z.object({
+  q: z.string().optional(),
+  status: z.enum(PAYMENT_STATUSES).optional(),
+  gateway: z.enum(GATEWAYS).optional(),
+  odoo: z.enum(SYNC_STATUSES).optional(),
+  ...zPage.shape,
+});
 
 export const ManualPaymentInput = z.object({
   studentId: z.string().min(1),
@@ -92,18 +111,40 @@ const idParam = z.object({ id: z.string() });
 
 export const paymentRoutes = {
   checkoutOptions: route({ method: "GET", path: "/api/v1/student/checkout/options", response: CheckoutOptionsDto }),
-  checkout: route({ method: "POST", path: "/api/v1/student/checkout", body: CheckoutInput, response: z.object({ paymentId: z.string(), redirectUrl: z.string() }) }),
+  checkout: route({
+    method: "POST",
+    path: "/api/v1/student/checkout",
+    body: CheckoutInput,
+    response: z.object({ paymentId: z.string(), redirectUrl: z.string() }),
+  }),
   studentPayments: route({ method: "GET", path: "/api/v1/student/payments", response: z.array(PaymentDto) }),
   studentPayment: route({ method: "GET", path: "/api/v1/student/payments/:id", params: idParam, response: PaymentDto }),
   adminPayments: route({
     method: "GET",
     path: "/api/v1/admin/payments",
     query: PaymentFilters,
-    response: z.object({ rows: z.array(PaymentDto), summary: z.object({ totalMinor: z.number(), courseVatMinor: z.number(), feesMinor: z.number() }) }),
+    response: paged(PaymentDto).extend({
+      summary: z.object({ totalMinor: z.number(), courseVatMinor: z.number(), feesMinor: z.number() }),
+    }),
   }),
   adminPayment: route({ method: "GET", path: "/api/v1/admin/payments/:id", params: idParam, response: AdminPaymentDetail }),
-  adminStudentPayments: route({ method: "GET", path: "/api/v1/admin/students/:id/payments", params: idParam, response: z.array(PaymentDto) }),
-  manual: route({ method: "POST", path: "/api/v1/admin/payments/manual", body: ManualPaymentInput, response: z.object({ ok: z.literal(true), paymentId: z.string() }) }),
-  recheck: route({ method: "POST", path: "/api/v1/admin/payments/:id/sync", params: idParam, response: z.object({ ok: z.literal(true), message: z.string() }) }),
+  adminStudentPayments: route({
+    method: "GET",
+    path: "/api/v1/admin/students/:id/payments",
+    params: idParam,
+    response: z.array(PaymentDto),
+  }),
+  manual: route({
+    method: "POST",
+    path: "/api/v1/admin/payments/manual",
+    body: ManualPaymentInput,
+    response: z.object({ ok: z.literal(true), paymentId: z.string() }),
+  }),
+  recheck: route({
+    method: "POST",
+    path: "/api/v1/admin/payments/:id/sync",
+    params: idParam,
+    response: z.object({ ok: z.literal(true), message: z.string() }),
+  }),
   odooRetry: route({ method: "POST", path: "/api/v1/admin/payments/:id/odoo-retry", params: idParam, response: zOk }),
 };

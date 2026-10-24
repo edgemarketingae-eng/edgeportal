@@ -4,12 +4,11 @@ import { Button } from "@edge/ui/components/button";
 import { Checkbox } from "@edge/ui/components/checkbox";
 import { Label } from "@edge/ui/components/label";
 import { Textarea } from "@edge/ui/components/textarea";
+import { NativeSelect } from "@edge/ui/components/native-select";
 import { Field, FormError, type ActionState } from "@edge/ui/forms/field";
 import { useActionState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { addRecordingAction, scheduleClassAction } from "@/app/staff/class-actions";
-
-const select = "h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm";
 
 function useResetOnOk(state: ActionState) {
   const ref = useRef<HTMLFormElement>(null);
@@ -41,25 +40,25 @@ export function ScheduleClassForm({
     <form key={formKey(state)} ref={ref} action={action} className="grid gap-4">
       <FormError state={state} />
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="grid gap-1.5">
+        <div className="grid content-start gap-2">
           <Label htmlFor="batchId">Batch</Label>
-          <select id="batchId" name="batchId" className={select} defaultValue={v?.batchId} required>
+          <NativeSelect id="batchId" name="batchId" defaultValue={v?.batchId} required>
             {batches.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
-        <div className="grid gap-1.5">
+        <div className="grid content-start gap-2">
           <Label htmlFor="hostId">Host (Meet organizer)</Label>
-          <select id="hostId" name="hostId" className={select} defaultValue={v?.hostId ?? defaultHostId}>
+          <NativeSelect id="hostId" name="hostId" defaultValue={v?.hostId ?? defaultHostId}>
             {hosts.map((h) => (
               <option key={h.id} value={h.id}>
                 {h.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
       </div>
       <Field label="Title" name="title" placeholder="Session 4: Supply and demand zones" defaultValue={v?.title} required />
@@ -76,7 +75,7 @@ export function ScheduleClassForm({
           required
         />
       </div>
-      <div className="grid gap-1.5">
+      <div className="grid content-start gap-2">
         <Label htmlFor="description">Description (optional)</Label>
         <Textarea id="description" name="description" rows={2} defaultValue={v?.description} />
       </div>
@@ -117,26 +116,26 @@ export function AddRecordingForm({
     <form key={formKey(state)} ref={ref} action={action} className="grid gap-4">
       <FormError state={state} />
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="grid gap-1.5">
+        <div className="grid content-start gap-2">
           <Label htmlFor="rec-batch">Batch</Label>
-          <select id="rec-batch" name="batchId" className={select} defaultValue={v?.batchId} required>
+          <NativeSelect id="rec-batch" name="batchId" defaultValue={v?.batchId} required>
             {batches.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
-        <div className="grid gap-1.5">
+        <div className="grid content-start gap-2">
           <Label htmlFor="classSessionId">Class (optional)</Label>
-          <select id="classSessionId" name="classSessionId" className={select} defaultValue={v?.classSessionId ?? ""}>
+          <NativeSelect id="classSessionId" name="classSessionId" defaultValue={v?.classSessionId ?? ""}>
             <option value="">Not linked to a class</option>
             {sessions.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
       </div>
       <Field
@@ -148,7 +147,7 @@ export function AddRecordingForm({
         hint="The file must be shared with the class host or the academy host account."
       />
       <Field label="Title" name="title" defaultValue={v?.title} required />
-      <div className="grid gap-1.5">
+      <div className="grid content-start gap-2">
         <Label htmlFor="rec-desc">Description (optional)</Label>
         <Textarea id="rec-desc" name="description" rows={2} defaultValue={v?.description} />
       </div>

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ENROLLMENT_STATUSES, LOCK_REASONS, PAYMENT_STATES } from "@edge/domain/enums";
 import { EnrollmentDto, EnrollmentEventDto } from "./enrollment";
+import { paged, zCountry, zOk, zPage } from "./common";
 import { route } from "./route";
 
 export const StudentFilters = z.object({
@@ -8,8 +9,7 @@ export const StudentFilters = z.object({
   status: z.enum([...ENROLLMENT_STATUSES, "NONE"]).optional(),
   payment: z.enum(PAYMENT_STATES).optional(),
   batch: z.string().optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(10000).default(100),
+  ...zPage.shape,
 });
 export type StudentFilters = z.input<typeof StudentFilters>;
 
@@ -58,7 +58,17 @@ export const StudentDetail = z.object({
   batches: z.array(z.object({ id: z.string(), label: z.string() })),
   /** CRM origin when this student came through a lead. */
   lead: z
-    .object({ id: z.string(), href: z.string(), source: z.string(), sourceDetail: z.string().nullable(), campaign: z.string().nullable(), ownerName: z.string().nullable(), projectName: z.string().nullable(), createdAt: z.string(), convertedAt: z.string().nullable() })
+    .object({
+      id: z.string(),
+      href: z.string(),
+      source: z.string(),
+      sourceDetail: z.string().nullable(),
+      campaign: z.string().nullable(),
+      ownerName: z.string().nullable(),
+      projectName: z.string().nullable(),
+      createdAt: z.string(),
+      convertedAt: z.string().nullable(),
+    })
     .nullable(),
 });
 export type StudentDetail = z.infer<typeof StudentDetail>;
@@ -96,18 +106,49 @@ export const ApprovalRow = z.object({
   jetaFxClientId: z.string().nullable(),
   batchName: z.string(),
   paymentState: z.enum(PAYMENT_STATES),
-  payments: z.array(z.object({ id: z.string(), gateway: z.string(), totalMinor: z.number(), courseMinor: z.number(), currency: z.string(), succeededAt: z.string().nullable(), reference: z.string() })),
+  payments: z.array(
+    z.object({
+      id: z.string(),
+      gateway: z.string(),
+      totalMinor: z.number(),
+      courseMinor: z.number(),
+      currency: z.string(),
+      succeededAt: z.string().nullable(),
+      reference: z.string(),
+    }),
+  ),
 });
 
-export const AuditRow = z.object({ id: z.string(), createdAt: z.string(), actor: z.string(), action: z.string(), entityType: z.string(), entityId: z.string(), after: z.unknown() });
+export const AuditRow = z.object({
+  id: z.string(),
+  createdAt: z.string(),
+  actor: z.string(),
+  action: z.string(),
+  entityType: z.string(),
+  entityId: z.string(),
+  after: z.unknown(),
+});
 
 export const adminRoutes = {
   dashboard: route({ method: "GET", path: "/api/v1/admin/dashboard", response: DashboardDto }),
-  students: route({ method: "GET", path: "/api/v1/admin/students", query: StudentFilters, response: z.object({ rows: z.array(StudentListItem), total: z.number() }) }),
+  students: route({ method: "GET", path: "/api/v1/admin/students", query: StudentFilters, response: paged(StudentListItem) }),
   studentsCsv: route({ method: "GET", path: "/api/v1/admin/students.csv", query: StudentFilters, response: z.string() }),
   student: route({ method: "GET", path: "/api/v1/admin/students/:id", params: z.object({ id: z.string() }), response: StudentDetail }),
-  approvals: route({ method: "GET", path: "/api/v1/admin/approvals", response: z.array(ApprovalRow) }),
-  balances: route({ method: "GET", path: "/api/v1/admin/balances", response: z.array(BalanceRow) }),
-  audit: route({ method: "GET", path: "/api/v1/admin/audit", query: z.object({ q: z.string().optional() }), response: z.array(AuditRow) }),
+  /** Country of residence: decides VAT and payment methods for checkouts from now on. */
+  setStudentCountry: route({
+    method: "POST",
+    path: "/api/v1/admin/students/:id/country",
+    params: z.object({ id: z.string() }),
+    body: z.object({ country: zCountry }),
+    response: zOk,
+  }),
+  approvals: route({ method: "GET", path: "/api/v1/admin/approvals", query: zPage, response: paged(ApprovalRow) }),
+  balances: route({ method: "GET", path: "/api/v1/admin/balances", query: zPage, response: paged(BalanceRow) }),
+  audit: route({
+    method: "GET",
+    path: "/api/v1/admin/audit",
+    query: z.object({ q: z.string().optional(), ...zPage.shape }),
+    response: paged(AuditRow),
+  }),
   pendingApprovals: route({ method: "GET", path: "/api/v1/admin/approvals/count", response: z.object({ count: z.number() }) }),
 };

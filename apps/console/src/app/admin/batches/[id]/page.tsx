@@ -21,7 +21,7 @@ export default async function EditBatchPage(props: PageProps<"/admin/batches/[id
   ]);
   return (
     <>
-      <PageHeader title={b.name} description={sp.created ? "Batch created." : `Code ${b.code}`} />
+      <PageHeader help="/admin/docs/batches" title={b.name} description={sp.created ? "Batch created." : `Code ${b.code}`} />
       <BatchForm
         courses={[...courses].sort((x, y) => x.title.localeCompare(y.title))}
         mentors={mentors.map((m) => ({ id: m.userId, name: m.name }))}

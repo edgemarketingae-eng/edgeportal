@@ -48,7 +48,10 @@ test("1. student signs up, verifies phone and pays an advance", async ({ page })
 test("2. admissions approves the student", async ({ page }) => {
   await staffSignIn(page, "admissions@edgeacademy.local");
   await expect(page).toHaveURL(/\/admin$/);
-  await page.getByRole("link", { name: /Approvals/ }).first().click();
+  await page
+    .getByRole("link", { name: /Approvals/ })
+    .first()
+    .click();
   const card = page.locator("div[data-slot=card]", { hasText: student.email });
   await expect(card).toBeVisible();
   await card.getByRole("button", { name: "Approve" }).click();
@@ -76,6 +79,24 @@ test("3. mentor schedules a Meet class and adds a recording", async ({ page }) =
   await expect(page.getByText(/Recording added/)).toBeVisible();
 });
 
+test("3b. help & docs: the mentor sees the staff portal guides and admissions the admin guides", async ({ page }) => {
+  await staffSignIn(page, "mentor@edgeacademy.local");
+  await expect(page).toHaveURL(/\/staff$/);
+  await page.getByRole("link", { name: "Help & docs" }).first().click();
+  await expect(page).toHaveURL(/\/staff\/docs$/);
+  await expect(page.getByRole("main").getByRole("link", { name: /Live classes/ })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("link", { name: /Approvals/ })).toHaveCount(0);
+
+  await page.context().clearCookies();
+  await staffSignIn(page, "admissions@edgeacademy.local");
+  await expect(page).toHaveURL(/\/admin$/);
+  await page.goto(`${E2E.console}/admin/docs`);
+  await expect(page.getByRole("main").getByRole("link", { name: /Approvals/ })).toBeVisible();
+  await page.goto(`${E2E.console}/admin/approvals`);
+  await page.getByRole("link", { name: "How this works" }).click();
+  await expect(page).toHaveURL(/\/admin\/docs\/approvals$/);
+});
+
 test("4. student joins the class and watches the recording", async ({ page }) => {
   await studentSignIn(page, student.email, student.password);
   await expect(page).toHaveURL(/dashboard/);
@@ -88,7 +109,9 @@ test("4. student joins the class and watches the recording", async ({ page }) =>
   const href = await join.getAttribute("href");
   expect(href).not.toContain("meet.google.com"); // the real link never reaches the page
   // The gated join redirects to the Meet URL; stub Meet itself so the test stays offline.
-  await page.route("https://meet.google.com/**", (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<title>Meet</title>" }));
+  await page.route("https://meet.google.com/**", (route) =>
+    route.fulfill({ status: 200, contentType: "text/html", body: "<title>Meet</title>" }),
+  );
   await page.goto(new URL(href!, E2E.student).toString());
   await expect(page).toHaveURL(/^https:\/\/meet\.google\.com\//);
 
@@ -116,7 +139,10 @@ test("5. overdue balance locks access; paying it restores access", async ({ page
 
   await studentSignIn(page, student.email, student.password);
   await expect(page.getByText("Your access is paused")).toBeVisible();
-  await page.getByRole("link", { name: /^Pay AED/ }).first().click();
+  await page
+    .getByRole("link", { name: /^Pay AED/ })
+    .first()
+    .click();
   await expect(page).toHaveURL(/checkout\/balance/);
   await page.getByRole("button", { name: /^Pay AED/ }).click();
   await page.getByRole("button", { name: "Pay successfully" }).click();

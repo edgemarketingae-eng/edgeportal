@@ -4,6 +4,7 @@ import { ActionButton, ActionDialog } from "@edge/ui/blocks/action-dialog";
 import { Button } from "@edge/ui/components/button";
 import { Label } from "@edge/ui/components/label";
 import { Textarea } from "@edge/ui/components/textarea";
+import { NativeSelect } from "@edge/ui/components/native-select";
 import { Field } from "@edge/ui/forms/field";
 import {
   approveAction,
@@ -22,8 +23,6 @@ export interface ControlsProps {
   batches: { id: string; label: string }[];
   can: { approve: boolean; lock: boolean; editTerms: boolean; assignBatch: boolean; recordManual: boolean };
 }
-
-const select = "h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm";
 
 export function EnrollmentControls({ studentId, enrollment: e, batches, can }: ControlsProps) {
   if (!e) {
@@ -143,9 +142,9 @@ export function EnrollmentControls({ studentId, enrollment: e, batches, can }: C
           }
           submitLabel="Record payment"
         >
-          <div className="grid gap-1.5">
+          <div className="grid content-start gap-2">
             <Label htmlFor="kind">Type</Label>
-            <select id="kind" name="kind" className={select} defaultValue={e.paymentState === "UNPAID" ? "FULL" : "BALANCE"}>
+            <NativeSelect id="kind" name="kind" defaultValue={e.paymentState === "UNPAID" ? "FULL" : "BALANCE"}>
               {e.paymentState === "UNPAID" ? (
                 <>
                   <option value="FULL">Full payment</option>
@@ -154,18 +153,18 @@ export function EnrollmentControls({ studentId, enrollment: e, batches, can }: C
               ) : (
                 <option value="BALANCE">Remaining balance</option>
               )}
-            </select>
+            </NativeSelect>
           </div>
           {e.paymentState === "UNPAID" ? (
             <Field label="Advance amount (AED, ex VAT, only for advance)" name="amount" inputMode="decimal" />
           ) : null}
-          <div className="grid gap-1.5">
+          <div className="grid content-start gap-2">
             <Label htmlFor="method">Method</Label>
-            <select id="method" name="method" className={select}>
+            <NativeSelect id="method" name="method">
               <option value="BANK_TRANSFER">Bank transfer</option>
               <option value="CASH">Cash</option>
               <option value="OTHER">Other</option>
-            </select>
+            </NativeSelect>
           </div>
           <Field label="Reference" name="reference" required />
           <Field label="Notes" name="notes" />
@@ -177,15 +176,15 @@ export function EnrollmentControls({ studentId, enrollment: e, batches, can }: C
 
 function BatchSelect({ batches }: { batches: { id: string; label: string }[] }) {
   return (
-    <div className="grid gap-1.5">
+    <div className="grid content-start gap-2">
       <Label htmlFor="batchId">Batch</Label>
-      <select id="batchId" name="batchId" className={select} required>
+      <NativeSelect id="batchId" name="batchId" required>
         {batches.map((b) => (
           <option key={b.id} value={b.id}>
             {b.label}
           </option>
         ))}
-      </select>
+      </NativeSelect>
     </div>
   );
 }

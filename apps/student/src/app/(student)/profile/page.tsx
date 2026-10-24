@@ -11,7 +11,7 @@ export default async function ProfilePage() {
   const v = await requireStudent();
   return (
     <>
-      <PageHeader title="Profile" />
+      <PageHeader help="/docs/profile" title="Profile" />
       <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <Card>
           <CardHeader>

@@ -11,7 +11,7 @@ test.describe.configure({ mode: "serial" });
 
 const uniq = Date.now().toString().slice(-7);
 const project = { name: `E2E Drive ${uniq}`, code: `E2E${uniq}` };
-const account = { name: `E2E Exec ${uniq}`, email: `exec.${uniq}@edgeacademy.local` };
+const account = { name: `E2E Exec ${uniq}`, email: `exec.${uniq}@edgeacademy.local`, tempPassword: "" };
 const lead = { name: `E2E Lead ${uniq}`, email: `lead.${uniq}@example.com`, phone: `+97155${uniq}`, password: "LeadPass!2026" };
 const task = `Call back about November ${uniq}`;
 
@@ -39,6 +39,33 @@ test("1. the CRM admin creates a project with the sales desk on it and a CRM-onl
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByText(/Account created/)).toBeVisible();
   await expect(page.getByRole("link", { name: account.name })).toBeVisible();
+
+  // Until they sign in, the team list shows the temporary password, masked until revealed.
+  const row = page.getByRole("row").filter({ has: page.getByRole("link", { name: account.name }) });
+  await expect(row.getByText("Invited")).toBeVisible();
+  const secret = row.getByLabel("Temporary password", { exact: true });
+  await expect(secret).toHaveText(/^•+$/);
+  await row.getByRole("button", { name: "Show temporary password" }).click();
+  await expect(secret).toHaveText(/^Edge-/);
+  account.tempPassword = (await secret.textContent())!;
+});
+
+test("1b. the new account signs in with that temporary password and sets their own", async ({ page }) => {
+  await crmSignIn(page, account.email, account.tempPassword);
+  await expect(page).toHaveURL(/\/change-password/);
+  await page.getByLabel("Temporary password", { exact: true }).fill(account.tempPassword);
+  await page.getByLabel("New password", { exact: true }).fill("ExecOwnPass!2026");
+  await page.getByLabel("Confirm new password").fill("ExecOwnPass!2026");
+  await page.getByRole("button", { name: "Save password" }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+
+  await page.context().clearCookies();
+  await crmSignIn(page, "crm-admin@edgeacademy.local");
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.goto(`${E2E.crm}/team`);
+  const row = page.getByRole("row").filter({ has: page.getByRole("link", { name: account.name }) });
+  await expect(row.getByText("Active")).toBeVisible();
+  await expect(row.getByLabel("Temporary password", { exact: true })).toHaveCount(0);
 });
 
 test("2. the sales executive sees only their projects, creates a lead, logs a call and moves its task on the board", async ({ page }) => {
@@ -59,6 +86,7 @@ test("2. the sales executive sees only their projects, creates a lead, logs a ca
   await expect(page).toHaveURL(/\/leads\/[a-f0-9]{24}/);
   await expect(page.getByText("Lead created.")).toBeVisible();
   await expect(page.getByRole("link", { name: project.name })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Delete" })).toHaveCount(0); // only admins and CRM admins delete
 
   await page.getByRole("radiogroup", { name: "Activity type" }).getByText("Call").click();
   await page.getByLabel("Details").fill("Answered, wants the November batch");
@@ -160,4 +188,72 @@ test("5. the new student sets a password, verifies the mobile and sees the dashb
   await page.locator('input[name="code"]').fill("000000");
   await page.getByRole("button", { name: "Verify mobile number" }).click();
   await expect(page).toHaveURL(/dashboard/);
+});
+
+test("6. the CRM admin deletes junk leads from the lead page and from the list", async ({ page }) => {
+  await crmSignIn(page, "crm-admin@edgeacademy.local");
+  await expect(page).toHaveURL(/\/dashboard$/);
+  const junk = [`E2E Junk A ${uniq}`, `E2E Junk B ${uniq}`, `E2E Junk C ${uniq}`];
+  for (const [i, name] of junk.entries()) {
+    await page.goto(`${E2E.crm}/leads/new`);
+    await page.getByLabel("Name", { exact: true }).fill(name);
+    await page.getByLabel("Mobile (WhatsApp)").fill(`+97156${uniq.slice(1)}${i}`);
+    await page.getByRole("button", { name: "Create lead" }).click();
+    await expect(page.getByText("Lead created.")).toBeVisible();
+  }
+
+  // From the lead page: needs DELETE typed, then lands on the list.
+  await page.getByRole("button", { name: "Delete" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByText(/removed for good/)).toBeVisible();
+  await dialog.getByLabel(/to confirm/).fill("delete");
+  await dialog.getByRole("button", { name: "Delete lead" }).click();
+  await expect(page).toHaveURL(/\/leads\?deleted=1$/);
+  await expect(page.getByText("Lead deleted.")).toBeVisible();
+
+  // From the list: tick the other two and delete them together.
+  await page.goto(`${E2E.crm}/leads?q=${encodeURIComponent(`E2E Junk`)}&view=all`);
+  await expect(page.getByRole("link", { name: junk[2] })).toHaveCount(0);
+  for (const name of junk.slice(0, 2)) await page.getByRole("checkbox", { name: `Select ${name}` }).check();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(page.getByRole("dialog").getByText("Delete 2 leads?")).toBeVisible();
+  await page
+    .getByRole("dialog")
+    .getByLabel(/to confirm/)
+    .fill("DELETE");
+  await page.getByRole("dialog").getByRole("button", { name: "Delete leads" }).click();
+  await expect(page.getByText("2 leads deleted.")).toBeVisible();
+  await expect(page.getByRole("link", { name: junk[0] })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: junk[1] })).toHaveCount(0);
+  // The real lead (now a student) is untouched.
+  await page.goto(`${E2E.crm}/leads?q=${encodeURIComponent(lead.name)}&view=all`);
+  await expect(page.getByRole("link", { name: lead.name })).toBeVisible();
+});
+
+test("7. help & docs show each role the guides for what they can do", async ({ page }) => {
+  await crmSignIn(page, "sales@edgeacademy.local");
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.getByRole("link", { name: "Help & docs" }).first().click();
+  await expect(page).toHaveURL(/\/docs$/);
+  const main = page.getByRole("main");
+  await expect(main.getByRole("link", { name: /Working a lead/ })).toBeVisible();
+  await expect(main.getByRole("link", { name: /Managing the CRM team/ })).toHaveCount(0);
+  await expect(main.getByRole("link", { name: /Deleting leads/ })).toHaveCount(0);
+  await page.getByRole("searchbox", { name: "Search the guides" }).fill("follow-up");
+  await page.getByRole("main").getByRole("link", { name: /Tasks/ }).first().click();
+  await expect(page).toHaveURL(/\/docs\/tasks$/);
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "On this page" })).toBeVisible();
+  await page.goto(`${E2E.crm}/docs/team`);
+  await expect(page.getByText(/could not be found|not found/i).first()).toBeVisible();
+
+  await page.context().clearCookies();
+  await crmSignIn(page, "crm-admin@edgeacademy.local");
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.goto(`${E2E.crm}/leads`);
+  await page.getByRole("link", { name: "How this works" }).click();
+  await expect(page).toHaveURL(/\/docs\/leads$/);
+  await page.goto(`${E2E.crm}/docs`);
+  await expect(page.getByRole("main").getByRole("link", { name: /Deleting leads/ })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("link", { name: /Managing the CRM team/ })).toBeVisible();
 });

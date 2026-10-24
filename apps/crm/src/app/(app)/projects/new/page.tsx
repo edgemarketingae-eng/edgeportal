@@ -12,7 +12,11 @@ export default async function NewProjectPage() {
   const options = await load(() => api(crmRoutes.options));
   return (
     <>
-      <PageHeader title="New project" description="A campaign or pipeline with its own team. Leads and tasks live inside it." />
+      <PageHeader
+        help="/docs/projects"
+        title="New project"
+        description="A campaign or pipeline with its own team. Leads and tasks live inside it."
+      />
       <ProjectForm values={EMPTY_PROJECT} staff={options.staff} courses={options.courses} batches={options.batches} canSetManagers />
     </>
   );

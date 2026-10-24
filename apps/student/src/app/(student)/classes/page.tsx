@@ -26,7 +26,7 @@ export default async function ClassesPage(props: PageProps<"/classes">) {
   if (!portal.entitlements.active) {
     return (
       <>
-        <PageHeader title="Live classes" />
+        <PageHeader help="/docs/classes" title="Live classes" />
         <StatusBanner portal={portal} />
       </>
     );
@@ -36,12 +36,14 @@ export default async function ClassesPage(props: PageProps<"/classes">) {
 
   return (
     <>
-      <PageHeader title="Live classes" description="All times are Dubai time (GMT+4). Classes run on Google Meet." />
+      <PageHeader help="/docs/classes" title="Live classes" description="All times are Dubai time (GMT+4). Classes run on Google Meet." />
       {error ? <p className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">{error}</p> : null}
       <section className="grid gap-3">
         {upcoming.length === 0 ? (
           <Card>
-            <CardContent className="text-muted-foreground py-10 text-center">No upcoming classes yet. Your mentors will publish them here.</CardContent>
+            <CardContent className="text-muted-foreground py-10 text-center">
+              No upcoming classes yet. Your mentors will publish them here.
+            </CardContent>
           </Card>
         ) : (
           upcoming.map((s) => (

@@ -1,4 +1,5 @@
 import { crmRoutes } from "@edge/contracts";
+import { StaffStatus } from "@edge/ui/blocks/secret-reveal";
 import { Badge } from "@edge/ui/components/badge";
 import { Button } from "@edge/ui/components/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@edge/ui/components/card";
@@ -14,10 +15,15 @@ export const metadata: Metadata = { title: "Team" };
 
 export default async function TeamPage() {
   await requireCrm("crm.staff.manage");
-  const [staff, roles, options] = await Promise.all([load(() => api(crmRoutes.team)), load(() => api(crmRoutes.roles)), load(() => api(crmRoutes.options))]);
+  const [staff, roles, options] = await Promise.all([
+    load(() => api(crmRoutes.team)),
+    load(() => api(crmRoutes.roles)),
+    load(() => api(crmRoutes.options)),
+  ]);
   return (
     <>
       <PageHeader
+        help="/docs/team"
         title="Team"
         description="CRM staff. Accounts that also hold academy roles are managed from the admin console."
         actions={
@@ -76,17 +82,7 @@ export default async function TeamPage() {
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{s.openLeads}</TableCell>
                   <TableCell>
-                    {s.disabled ? (
-                      <Badge variant="outline" className="text-destructive">
-                        Disabled
-                      </Badge>
-                    ) : s.invited ? (
-                      <Badge variant="outline">Invited</Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-edge-emerald">
-                        Active
-                      </Badge>
-                    )}
+                    <StaffStatus disabled={s.disabled} invited={s.invited} tempPassword={s.tempPassword} />
                   </TableCell>
                 </TableRow>
               ))

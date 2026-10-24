@@ -18,8 +18,13 @@ export default async function RolesPage() {
   return (
     <>
       <PageHeader
+        help="/docs/team"
         title="CRM roles & permissions"
-        description={editable ? "A person can hold several roles; permissions add up. Only CRM permissions can be granted here." : "Only a CRM admin can edit roles."}
+        description={
+          editable
+            ? "A person can hold several roles; permissions add up. Only CRM permissions can be granted here."
+            : "Only a CRM admin can edit roles."
+        }
       />
       <div className="grid gap-4">
         {roles.map((r) => (
@@ -28,7 +33,11 @@ export default async function RolesPage() {
               <CardTitle>
                 {r.name} <span className="text-muted-foreground text-sm font-normal">· {r.members} people</span>
               </CardTitle>
-              {r.isSystem ? <CardDescription>Built-in role: its permissions are restored on every deploy. To customise, create a new role below instead.</CardDescription> : null}
+              {r.isSystem ? (
+                <CardDescription>
+                  Built-in role: its permissions are restored on every deploy. To customise, create a new role below instead.
+                </CardDescription>
+              ) : null}
             </CardHeader>
             <CardContent>
               <RoleForm role={r} permissions={perms} disabled={!editable || r.isSystem} />

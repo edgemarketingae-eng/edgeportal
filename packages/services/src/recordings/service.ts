@@ -12,6 +12,7 @@ import { env } from "../env";
 import { BusinessError, ForbiddenError, NotFoundError } from "../errors";
 import { oid } from "../ids";
 import { iso } from "../mappers";
+import { findPage, type PageInput } from "../paging";
 import { runtime } from "../runtime";
 import { requestCacheFill } from "./cache";
 import { signMediaToken } from "./token";
@@ -30,7 +31,15 @@ async function assertCanManage(actorId: string, batchId: Types.ObjectId | string
 
 /** Staff pastes a Drive link (the file must be readable by the impersonated Workspace account). */
 export async function addRecordingFromDrive(
-  input: { batchId: string; classSessionId?: string | null; driveUrl: string; title: string; description?: string; publish: boolean; accessEmail?: string | null },
+  input: {
+    batchId: string;
+    classSessionId?: string | null;
+    driveUrl: string;
+    title: string;
+    description?: string;
+    publish: boolean;
+    accessEmail?: string | null;
+  },
   actor: Actor & { type: "USER" },
 ) {
   await assertCanManage(actor.id, input.batchId);
@@ -38,17 +47,22 @@ export async function addRecordingFromDrive(
   if (!fileId) throw new RecordingError("Paste a Google Drive file link (…/file/d/<id>/view)");
   if (await Recording.exists({ driveFileId: fileId })) throw new RecordingError("This Drive file is already added");
 
-  const session = input.classSessionId ? await ClassSession.findOne({ _id: oid(input.classSessionId, "Class"), batchId: oid(input.batchId) }).lean() : null;
+  const session = input.classSessionId
+    ? await ClassSession.findOne({ _id: oid(input.classSessionId, "Class"), batchId: oid(input.batchId) }).lean()
+    : null;
   if (input.classSessionId && !session) throw new RecordingError("That class is not part of the chosen batch");
   let accessEmail = input.accessEmail ?? null;
-  if (!accessEmail && session?.meetEventId) accessEmail = (await MeetEvent.findById(session.meetEventId, { organizerEmail: 1 }).lean())?.organizerEmail ?? null;
+  if (!accessEmail && session?.meetEventId)
+    accessEmail = (await MeetEvent.findById(session.meetEventId, { organizerEmail: 1 }).lean())?.organizerEmail ?? null;
   accessEmail ??= env.GOOGLE_DEFAULT_ORGANIZER ?? null;
 
   let meta;
   try {
     meta = await runtime().google.getDriveFile(accessEmail ?? "", fileId);
   } catch (e) {
-    throw new RecordingError(`Could not read that file from Drive. Share it with ${accessEmail ?? "the academy host account"} and try again. (${String(e).slice(0, 160)})`);
+    throw new RecordingError(
+      `Could not read that file from Drive. Share it with ${accessEmail ?? "the academy host account"} and try again. (${String(e).slice(0, 160)})`,
+    );
   }
   if (!meta.mimeType.startsWith("video/")) throw new RecordingError(`That file is ${meta.mimeType}, not a video`);
 
@@ -73,7 +87,13 @@ export async function addRecordingFromDrive(
     if (isDuplicateKey(e)) throw new RecordingError("This Drive file is already added");
     throw e;
   }
-  await audit({ actor, action: "recording.add", entityType: "Recording", entityId: String(rec._id), after: { fileId, batchId: input.batchId } });
+  await audit({
+    actor,
+    action: "recording.add",
+    entityType: "Recording",
+    entityId: String(rec._id),
+    after: { fileId, batchId: input.batchId },
+  });
   await requestCacheFill(String(rec._id));
   return { id: String(rec._id) };
 }
@@ -82,7 +102,10 @@ export async function setRecordingStatus(id: string, status: "PUBLISHED" | "HIDD
   const r = await Recording.findById(oid(id, "Recording")).lean();
   if (!r) throw new NotFoundError("Recording");
   await assertCanManage(actor.id, r.batchId);
-  await Recording.updateOne({ _id: r._id }, { $set: { status, publishedAt: status === "PUBLISHED" ? (r.publishedAt ?? now()) : (r.publishedAt ?? null) } });
+  await Recording.updateOne(
+    { _id: r._id },
+    { $set: { status, publishedAt: status === "PUBLISHED" ? (r.publishedAt ?? now()) : (r.publishedAt ?? null) } },
+  );
   await audit({ actor, action: `recording.${status.toLowerCase()}`, entityType: "Recording", entityId: id });
   if (status === "PUBLISHED") await requestCacheFill(id);
 }
@@ -90,7 +113,11 @@ export async function setRecordingStatus(id: string, status: "PUBLISHED" | "HIDD
 /** Job: find Meet recordings for classes that ended in the last 48 hours. */
 export async function discoverMeetRecordings() {
   const t = now();
-  const sessions = await ClassSession.find({ status: { $ne: "CANCELLED" }, endsAt: { $lt: t, $gt: new Date(t.getTime() - 48 * 3600_000) }, meetEventId: { $ne: null } }).lean();
+  const sessions = await ClassSession.find({
+    status: { $ne: "CANCELLED" },
+    endsAt: { $lt: t, $gt: new Date(t.getTime() - 48 * 3600_000) },
+    meetEventId: { $ne: null },
+  }).lean();
   const [meets, batches] = await Promise.all([
     MeetEvent.find({ _id: { $in: sessions.map((s) => s.meetEventId) }, meetSpaceName: { $ne: null } }).lean(),
     Batch.find({ _id: { $in: sessions.map((s) => s.batchId) } }, { autoPublishRecordings: 1 }).lean(),
@@ -143,7 +170,10 @@ export async function toRecordingDtos(recs: RecordingDoc[], withViews = false): 
   const [batches, views] = await Promise.all([
     Batch.find({ _id: { $in: recs.map((r) => r.batchId) } }, { name: 1 }).lean(),
     withViews
-      ? RecordingView.aggregate<{ _id: Types.ObjectId; n: number }>([{ $match: { recordingId: { $in: recs.map((r) => r._id) } } }, { $group: { _id: "$recordingId", n: { $sum: 1 } } }])
+      ? RecordingView.aggregate<{ _id: Types.ObjectId; n: number }>([
+          { $match: { recordingId: { $in: recs.map((r) => r._id) } } },
+          { $group: { _id: "$recordingId", n: { $sum: 1 } } },
+        ])
       : Promise.resolve([]),
   ]);
   const bn = new Map(batches.map((b) => [String(b._id), b.name]));
@@ -167,12 +197,19 @@ export async function toRecordingDtos(recs: RecordingDoc[], withViews = false): 
 
 export async function listStudentRecordings(ent: Entitlements) {
   if (!ent.recordingsBatchId) return [];
-  const recs = await Recording.find({ batchId: oid(ent.recordingsBatchId), status: "PUBLISHED" }).sort({ sortOrder: 1, recordedAt: -1 }).lean();
+  const recs = await Recording.find({ batchId: oid(ent.recordingsBatchId), status: "PUBLISHED" })
+    .sort({ sortOrder: 1, recordedAt: -1 })
+    .lean();
   return toRecordingDtos(recs);
 }
 
 /** Student watch page data: entitlement-checked, view logged, short-lived signed media URL. */
-export async function getWatch(recordingId: string, userId: string, ent: Entitlements, meta: { ip: string | null; userAgent: string | null }) {
+export async function getWatch(
+  recordingId: string,
+  userId: string,
+  ent: Entitlements,
+  meta: { ip: string | null; userAgent: string | null },
+) {
   const r = await Recording.findById(oid(recordingId, "Recording")).lean();
   if (!r || !canWatchRecording(ent, { batchId: String(r.batchId), status: r.status })) throw new NotFoundError("Recording");
   const user = await AuthUser.findById(oid(userId), { name: 1, email: 1, phoneNumber: 1 }).lean();
@@ -185,19 +222,28 @@ export async function getWatch(recordingId: string, userId: string, ent: Entitle
   };
 }
 
-export async function getManageRecordings(userId: string) {
+export async function getManageRecordings(userId: string, q: PageInput = {}) {
   const scope = await batchScopeFor(userId, "recordings");
   const inScope = (field: string) => (scope === "all" ? {} : { [field]: { $in: scope } });
-  const [batches, sessions, recs] = await Promise.all([
-    Batch.find({ ...inScope("_id"), status: { $ne: "ARCHIVED" } }, { name: 1 }).sort({ startDate: -1 }).lean(),
-    ClassSession.find({ ...inScope("batchId"), startsAt: { $lt: now() }, status: { $ne: "CANCELLED" } }).sort({ startsAt: -1 }).limit(40).lean(),
-    Recording.find(inScope("batchId")).sort({ createdAt: -1 }).limit(100).lean(),
+  const [batches, sessions, page] = await Promise.all([
+    Batch.find({ ...inScope("_id"), status: { $ne: "ARCHIVED" } }, { name: 1 })
+      .sort({ startDate: -1 })
+      .lean(),
+    ClassSession.find({ ...inScope("batchId"), startsAt: { $lt: now() }, status: { $ne: "CANCELLED" } })
+      .sort({ startsAt: -1 })
+      .limit(100)
+      .lean(),
+    findPage<RecordingDoc>(Recording, inScope("batchId"), { createdAt: -1 }, q, { def: 25 }),
   ]);
   const bn = new Map(batches.map((b) => [String(b._id), b.name]));
   return {
     batches: batches.map((b) => ({ id: String(b._id), name: b.name })),
-    sessions: sessions.map((s) => ({ id: String(s._id), batchId: String(s.batchId), label: `${formatDate(s.startsAt)} · ${s.title} (${bn.get(String(s.batchId)) ?? ""})` })),
-    recordings: await toRecordingDtos(recs, true),
+    sessions: sessions.map((s) => ({
+      id: String(s._id),
+      batchId: String(s.batchId),
+      label: `${formatDate(s.startsAt)} · ${s.title} (${bn.get(String(s.batchId)) ?? ""})`,
+    })),
+    recordings: { ...page, rows: await toRecordingDtos(page.rows, true) },
   };
 }
 

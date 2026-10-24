@@ -1,7 +1,22 @@
-import type { CrmOptions, LeadDetail, LeadFilters, LeadInput, LeadListItem, LeadUpdateInput } from "@edge/contracts";
-import { AuthUser, Batch, Course, CrmTask, isDuplicateKey, Lead, LeadActivity, Project, Types, withTx, type LeadDoc, type ProjectDoc } from "@edge/db";
+import type { CrmOptions, LeadDetail, LeadFilters, LeadInput, LeadListItem, LeadUpdateInput, Paged } from "@edge/contracts";
+import {
+  AuthUser,
+  Batch,
+  Course,
+  CrmTask,
+  isDuplicateKey,
+  Lead,
+  LeadActivity,
+  LeadInboundEvent,
+  Project,
+  TaskComment,
+  Types,
+  withTx,
+  type LeadDoc,
+  type ProjectDoc,
+} from "@edge/db";
 import { now } from "@edge/domain/clock";
-import { OPEN_LEAD_STAGES, OPEN_TASK_STATUSES, type LeadStage } from "@edge/domain/crm/enums";
+import { OPEN_LEAD_STAGES, OPEN_TASK_STATUSES, ROUND_ROBIN, type LeadStage } from "@edge/domain/crm/enums";
 import { LEAD_SOURCE_LABELS, LEAD_STAGE_LABELS, LEAD_TEMPERATURE_LABELS } from "@edge/domain/crm/labels";
 import { canTransition, parseTags, stageIndex } from "@edge/domain/crm/machine";
 import { toCsv } from "@edge/domain/csv";
@@ -9,8 +24,10 @@ import { dubaiDateString, formatDate, formatDateTime, startOfDubaiDay } from "@e
 import type { Actor } from "@edge/domain/enums";
 import { parsePhone } from "@edge/domain/phone";
 import { audit } from "../audit";
+import { EXPORT_CAP, facetPage } from "../paging";
+import { roundRobinPicker } from "./round-robin";
 import { getCurrentEnrollment } from "../enrollment/service";
-import { BusinessError, NotFoundError, TransitionError, ValidationError } from "../errors";
+import { BusinessError, ForbiddenError, NotFoundError, TransitionError, ValidationError } from "../errors";
 import { oid } from "../ids";
 import { notifyUser } from "../notifications/in-app";
 import { flushOutbox } from "../runtime";
@@ -39,7 +56,21 @@ import {
   userNames,
   type LeadRefs,
 } from "./common";
-import { assertAssignable, assertLeadVisible, canAssignIn, canClaim, getDefaultProject, has, inProject, listCrmUsers, managesProject, projectTeam, projectsFor, leadScopeFilter, type CrmScope } from "./scope";
+import {
+  assertAssignable,
+  assertLeadVisible,
+  canAssignIn,
+  canClaim,
+  getDefaultProject,
+  has,
+  inProject,
+  listCrmUsers,
+  managesProject,
+  projectTeam,
+  projectsFor,
+  leadScopeFilter,
+  type CrmScope,
+} from "./scope";
 
 export interface CreateLeadOptions {
   inboundEventId?: Types.ObjectId | null;
@@ -83,28 +114,35 @@ async function resolveProject(projectId: string | undefined, scope?: CrmScope): 
 export async function createLead(input: LeadInput, actor: Actor, scope?: CrmScope, opts: CreateLeadOptions = {}): Promise<string> {
   const name = input.name.trim();
   const email = normalizeEmail(input.email);
-  const phone = normalizePhone(input.phone, input.country);
+  const chosen = input.country?.trim().toUpperCase() || null;
+  const phone = normalizePhone(input.phone, chosen);
   if (!phone && !email) throw new ValidationError({ phone: "Enter a mobile number or an email" });
-  const country = (input.country?.trim().toUpperCase() || (phone ? parsePhone(phone)?.country : null) || "AE").slice(0, 2);
+  // The country picked for the lead, else the mobile number's; never assumed.
+  const country = chosen || (phone ? parsePhone(phone)?.country : null) || null;
   const project = await resolveProject(input.projectId, scope);
   if (!input.allowDuplicate) {
     const [dup] = await findDuplicateLeads({ phone, email });
     if (dup) {
       const byPhone = !!phone && dup.phone === phone;
-      throw new BusinessError(`A lead with this ${byPhone ? "mobile number" : "email"} already exists (${dup.name}). Open it, or tick “Create anyway”.`, {
-        [byPhone ? "phone" : "email"]: `Already exists: ${dup.name}`,
-      });
+      throw new BusinessError(
+        `A lead with this ${byPhone ? "mobile number" : "email"} already exists (${dup.name}). Open it, or tick “Create even if a lead with this contact already exists”.`,
+        {
+          [byPhone ? "phone" : "email"]: `Already exists: ${dup.name}`,
+        },
+      );
     }
   }
   const account = await findAccountByContact({ phone, email });
-  if (account?.kind === "staff") throw new BusinessError("This mobile number or email belongs to a staff account", { [phone ? "phone" : "email"]: "Staff account" });
+  if (account?.kind === "staff")
+    throw new BusinessError("This mobile number or email belongs to a staff account", { [phone ? "phone" : "email"]: "Staff account" });
   let ownerId: Types.ObjectId | null;
   if (input.ownerId === undefined) ownerId = actorId(actor);
   else if (!input.ownerId) ownerId = null;
   else if (scope) ownerId = await assertAssignable(scope, project._id, input.ownerId);
   else {
     const team = await projectTeam(project);
-    if (!team.some((t) => t.id === input.ownerId)) throw new BusinessError("That person is not on this project's team", { ownerId: "Not on the project team" });
+    if (!team.some((t) => t.id === input.ownerId))
+      throw new BusinessError("That person is not on this project's team", { ownerId: "Not on the project team" });
     ownerId = new Types.ObjectId(input.ownerId);
   }
   const courseInterestId = await validCourse(input.courseInterestId);
@@ -125,28 +163,63 @@ export async function createLead(input: LeadInput, actor: Actor, scope?: CrmScop
           preferredChannel: input.preferredChannel || null,
           source: input.source,
           sourceDetail: input.sourceDetail?.trim() || null,
-          utm: { source: opts.utm?.source ?? null, medium: opts.utm?.medium ?? null, campaign: opts.utm?.campaign ?? null, content: opts.utm?.content ?? null, term: opts.utm?.term ?? null },
+          utm: {
+            source: opts.utm?.source ?? null,
+            medium: opts.utm?.medium ?? null,
+            campaign: opts.utm?.campaign ?? null,
+            content: opts.utm?.content ?? null,
+            term: opts.utm?.term ?? null,
+          },
           courseInterestId: courseInterestId ?? project.courseId ?? null,
           batchInterestId: batchInterestId ?? project.batchId ?? null,
           experienceLevel: input.experienceLevel || null,
           temperature: input.temperature || "WARM",
           tags: parseTags(input.tags),
           notes: input.notes?.trim() || null,
-          consent: { marketing: !!input.marketingConsent, marketingAt: input.marketingConsent ? at : null, whatsapp: !!input.whatsappConsent },
+          consent: {
+            marketing: !!input.marketingConsent,
+            marketingAt: input.marketingConsent ? at : null,
+            whatsapp: !!input.whatsappConsent,
+          },
           ownerId,
           assignedAt: ownerId ? at : null,
           lastActivityAt: at,
           inboundEventId: opts.inboundEventId ?? null,
           createdById: actorId(actor),
-          ...(account ? { stage: "CONVERTED", stageChangedAt: at, studentId: account.id, enrollmentId: account.enrollmentId, convertedAt: at } : {}),
+          ...(account
+            ? { stage: "CONVERTED", stageChangedAt: at, studentId: account.id, enrollmentId: account.enrollmentId, convertedAt: at }
+            : {}),
         },
       ]);
-      await recordActivity(lead!._id, opts.createdAs ?? "CREATED", actor, { data: { source: input.source, sourceDetail: input.sourceDetail?.trim() || null, projectId: String(project._id), projectName: project.name } });
-      if (account) await recordActivity(lead!._id, "LINKED", actor, { data: { studentId: String(account.id), name: account.name, via: "create" } });
-      else if (dueAt) await createTaskInTx({ projectId: project._id, leadId: lead!._id, defaultAssigneeId: ownerId }, { title: "First follow-up", type: channelToTaskType(input.preferredChannel), dueAt }, actor);
-      await audit({ actor, action: "lead.create", entityType: "Lead", entityId: String(lead!._id), after: { name, phone, email, source: input.source, projectId: String(project._id), ownerId: ownerId ? String(ownerId) : null } });
+      await recordActivity(lead!._id, opts.createdAs ?? "CREATED", actor, {
+        data: {
+          source: input.source,
+          sourceDetail: input.sourceDetail?.trim() || null,
+          projectId: String(project._id),
+          projectName: project.name,
+        },
+      });
+      if (account)
+        await recordActivity(lead!._id, "LINKED", actor, { data: { studentId: String(account.id), name: account.name, via: "create" } });
+      else if (dueAt)
+        await createTaskInTx(
+          { projectId: project._id, leadId: lead!._id, defaultAssigneeId: ownerId },
+          { title: "First follow-up", type: channelToTaskType(input.preferredChannel), dueAt },
+          actor,
+        );
+      await audit({
+        actor,
+        action: "lead.create",
+        entityType: "Lead",
+        entityId: String(lead!._id),
+        after: { name, phone, email, source: input.source, projectId: String(project._id), ownerId: ownerId ? String(ownerId) : null },
+      });
       if (ownerId && !(actor.type === "USER" && actor.id === String(ownerId))) {
-        await notifyUser(String(ownerId), { title: "New lead assigned to you", body: `${name} · ${LEAD_SOURCE_LABELS[input.source]} · ${project.name}`, href: leadHref(lead!._id) });
+        await notifyUser(String(ownerId), {
+          title: "New lead assigned to you",
+          body: `${name} · ${LEAD_SOURCE_LABELS[input.source]} · ${project.name}`,
+          href: leadHref(lead!._id),
+        });
       }
       return lead!._id;
     });
@@ -159,15 +232,29 @@ export async function createLead(input: LeadInput, actor: Actor, scope?: CrmScop
 }
 
 /** Reassign inside a transaction: moves the old owner's open tasks along and tells the new owner. */
-export async function applyAssign(lead: Pick<LeadDoc, "_id" | "ownerId" | "name">, to: Types.ObjectId | null, actor: Actor, type: "ASSIGNED" | "CLAIMED" = "ASSIGNED") {
+export async function applyAssign(
+  lead: Pick<LeadDoc, "_id" | "ownerId" | "name">,
+  to: Types.ObjectId | null,
+  actor: Actor,
+  type: "ASSIGNED" | "CLAIMED" = "ASSIGNED",
+) {
   const at = now();
   const names = await userNames([lead.ownerId, to]);
   await Lead.updateOne({ _id: lead._id }, { $set: { ownerId: to, assignedAt: to ? at : null, lastActivityAt: at } });
-  await CrmTask.updateMany({ leadId: lead._id, status: { $in: [...OPEN_TASK_STATUSES] }, assigneeId: lead.ownerId ?? null }, { $set: { assigneeId: to } });
+  await CrmTask.updateMany(
+    { leadId: lead._id, status: { $in: [...OPEN_TASK_STATUSES] }, assigneeId: lead.ownerId ?? null },
+    { $set: { assigneeId: to } },
+  );
   await recordActivity(lead._id, type, actor, {
-    data: { from: lead.ownerId ? String(lead.ownerId) : null, fromName: lead.ownerId ? (names.get(String(lead.ownerId)) ?? null) : null, to: to ? String(to) : null, toName: to ? (names.get(String(to)) ?? null) : null },
+    data: {
+      from: lead.ownerId ? String(lead.ownerId) : null,
+      fromName: lead.ownerId ? (names.get(String(lead.ownerId)) ?? null) : null,
+      to: to ? String(to) : null,
+      toName: to ? (names.get(String(to)) ?? null) : null,
+    },
   });
-  if (to && !(actor.type === "USER" && actor.id === String(to))) await notifyUser(String(to), { title: "Lead assigned to you", body: lead.name, href: leadHref(lead._id) });
+  if (to && !(actor.type === "USER" && actor.id === String(to)))
+    await notifyUser(String(to), { title: "Lead assigned to you", body: lead.name, href: leadHref(lead._id) });
 }
 
 export async function updateLead(id: string, input: LeadUpdateInput, actor: Actor & { type: "USER" }, scope: CrmScope) {
@@ -188,7 +275,8 @@ export async function updateLead(id: string, input: LeadUpdateInput, actor: Acto
   const phone = set.phone !== undefined ? set.phone : lead.phone;
   const email = set.email !== undefined ? set.email : lead.email;
   if (!phone && !email) throw new ValidationError({ phone: "Keep a mobile number or an email" });
-  if (input.country?.trim()) change("country", input.country.trim().toUpperCase().slice(0, 2), lead.country);
+  if (input.country?.trim()) change("country", input.country.trim().toUpperCase(), lead.country);
+  else if (set.phone && !lead.country) change("country", parsePhone(set.phone as string)?.country ?? null, lead.country);
   if (input.source !== undefined) change("source", input.source, lead.source);
   if (input.sourceDetail !== undefined) change("sourceDetail", input.sourceDetail.trim() || null, lead.sourceDetail);
   if (input.courseInterestId !== undefined) change("courseInterestId", await validCourse(input.courseInterestId), lead.courseInterestId);
@@ -218,7 +306,12 @@ export async function updateLead(id: string, input: LeadUpdateInput, actor: Acto
   });
 }
 
-export async function setStage(id: string, input: { stage: LeadStage; lostReason?: string; note?: string }, actor: Actor & { type: "USER" }, scope: CrmScope) {
+export async function setStage(
+  id: string,
+  input: { stage: LeadStage; lostReason?: string; note?: string },
+  actor: Actor & { type: "USER" },
+  scope: CrmScope,
+) {
   const _id = oid(id, "Lead");
   await withTx(async () => {
     const lead = await lockLead(_id);
@@ -226,16 +319,31 @@ export async function setStage(id: string, input: { stage: LeadStage; lostReason
     const from = lead.stage as LeadStage;
     if (!canTransition(from, input.stage)) {
       throw new TransitionError(
-        input.stage === "CONVERTED" || from === "CONVERTED" ? "Converted leads are managed through “Convert to student” and “Link to student”" : `Cannot move a ${LEAD_STAGE_LABELS[from]} lead to ${LEAD_STAGE_LABELS[input.stage]}`,
+        input.stage === "CONVERTED" || from === "CONVERTED"
+          ? "Converted leads are managed through “Convert to student” and “Link to student”"
+          : `Cannot move a ${LEAD_STAGE_LABELS[from]} lead to ${LEAD_STAGE_LABELS[input.stage]}`,
       );
     }
     const at = now();
     const lostReason = input.stage === "LOST" ? (input.lostReason?.trim() ?? null) : null;
-    const set: Record<string, unknown> = { stage: input.stage, stageChangedAt: at, lastActivityAt: at, lostReason, lostNote: input.stage === "LOST" ? input.note?.trim() || null : null };
+    const set: Record<string, unknown> = {
+      stage: input.stage,
+      stageChangedAt: at,
+      lastActivityAt: at,
+      lostReason,
+      lostNote: input.stage === "LOST" ? input.note?.trim() || null : null,
+    };
     if (from === "NEW" && input.stage !== "LOST" && !lead.firstContactedAt) set.firstContactedAt = at;
     await Lead.updateOne({ _id }, { $set: set });
     await recordActivity(_id, "STAGE_CHANGED", actor, { body: input.note?.trim() || null, data: { from, to: input.stage, lostReason } });
-    await audit({ actor, action: "lead.stage", entityType: "Lead", entityId: id, before: { stage: from }, after: { stage: input.stage, lostReason } });
+    await audit({
+      actor,
+      action: "lead.stage",
+      entityType: "Lead",
+      entityId: id,
+      before: { stage: from },
+      after: { stage: input.stage, lostReason },
+    });
   });
 }
 
@@ -249,22 +357,70 @@ export async function assignLead(id: string, ownerId: string | null, actor: Acto
     const lead = await lockLead(_id);
     if (String(lead.ownerId ?? "") === String(to ?? "")) return;
     await applyAssign(lead, to, actor);
-    await audit({ actor, action: "lead.assign", entityType: "Lead", entityId: id, before: { ownerId: lead.ownerId ? String(lead.ownerId) : null }, after: { ownerId: to ? String(to) : null } });
+    await audit({
+      actor,
+      action: "lead.assign",
+      entityType: "Lead",
+      entityId: id,
+      before: { ownerId: lead.ownerId ? String(lead.ownerId) : null },
+      after: { ownerId: to ? String(to) : null },
+    });
   });
 }
 
-export async function bulkAssignLeads(ids: string[], ownerId: string | null, actor: Actor & { type: "USER" }, scope: CrmScope) {
-  let n = 0;
-  for (const id of [...new Set(ids)].slice(0, 500)) {
+/** The leads a bulk action targets: ticked ids, or everything matching a filter. */
+export interface BulkTarget {
+  ids?: string[];
+  filters?: LeadFilters;
+}
+
+async function targetIds(t: BulkTarget, scope: CrmScope) {
+  if (t.ids?.length) return [...new Set(t.ids)];
+  if (t.filters) return leadIdsMatching(t.filters, scope);
+  return [];
+}
+
+/**
+ * Assign many leads to one person, unassign them (`null`), or spread them across each lead's project sales
+ * executives (`ROUND_ROBIN`). Leads the viewer cannot see or assign, or projects without sales executives, are
+ * skipped and counted.
+ */
+export async function bulkAssignLeads(target: BulkTarget, ownerId: string | null, actor: Actor & { type: "USER" }, scope: CrmScope) {
+  const ids = await targetIds(target, scope);
+  let updated = 0;
+  let skipped = 0;
+  const roundRobin = ownerId === ROUND_ROBIN;
+  const leads = roundRobin
+    ? await Lead.find(
+        { _id: { $in: ids.filter((x) => Types.ObjectId.isValid(x)).map((x) => new Types.ObjectId(x)) } },
+        { projectId: 1 },
+      ).lean()
+    : [];
+  const projectOf = new Map(leads.map((l) => [String(l._id), l.projectId]));
+  const pickers = new Map<string, Awaited<ReturnType<typeof roundRobinPicker>>>();
+  for (const id of ids) {
     try {
-      await assignLead(id, ownerId, actor, scope);
-      n++;
+      let to = ownerId;
+      if (roundRobin) {
+        const projectId = projectOf.get(id);
+        if (!projectId || !canAssignIn(scope, projectId)) throw new NotFoundError("Lead");
+        let picker = pickers.get(String(projectId));
+        if (!picker) {
+          const project = await Project.findById(projectId).lean();
+          picker = project ? await roundRobinPicker(project) : { size: 0, next: () => null };
+          pickers.set(String(projectId), picker);
+        }
+        to = picker.next();
+        if (!to) throw new BusinessError("No sales executives on this project");
+      }
+      await assignLead(id, to, actor, scope);
+      updated++;
     } catch (e) {
-      if (e instanceof NotFoundError) continue;
-      throw e;
+      if (!(e instanceof NotFoundError) && !(e instanceof BusinessError) && !(e instanceof ForbiddenError)) throw e;
+      skipped++;
     }
   }
-  return n;
+  return { updated, skipped };
 }
 
 /** An executive takes an unassigned lead from a project they belong to. */
@@ -279,7 +435,19 @@ export async function claimLead(id: string, actor: Actor & { type: "USER" }, sco
   });
 }
 
-const FILL_FIELDS = ["phone", "email", "language", "preferredChannel", "sourceDetail", "courseInterestId", "batchInterestId", "experienceLevel", "ownerId", "lostReason", "inboundEventId"] as const;
+const FILL_FIELDS = [
+  "phone",
+  "email",
+  "language",
+  "preferredChannel",
+  "sourceDetail",
+  "courseInterestId",
+  "batchInterestId",
+  "experienceLevel",
+  "ownerId",
+  "lostReason",
+  "inboundEventId",
+] as const;
 
 /** Merge `fromId` into `intoId`: the survivor keeps its values (and project) and gains anything it was missing, plus all activities and tasks. */
 export async function mergeLeads(intoId: string, fromId: string, actor: Actor & { type: "USER" }, scope: CrmScope) {
@@ -292,18 +460,21 @@ export async function mergeLeads(intoId: string, fromId: string, actor: Actor & 
     assertLeadVisible(into, scope);
     assertLeadVisible(from, scope);
     if (!managesProject(scope, into.projectId)) throw new NotFoundError("Lead");
-    if (into.studentId && from.studentId && String(into.studentId) !== String(from.studentId)) throw new BusinessError("Both leads are linked to different students; they cannot be merged");
+    if (into.studentId && from.studentId && String(into.studentId) !== String(from.studentId))
+      throw new BusinessError("Both leads are linked to different students; they cannot be merged");
     const at = now();
     const set: Record<string, unknown> = {};
     for (const f of FILL_FIELDS) if (into[f] == null && from[f] != null) set[f] = from[f];
-    if (from.notes && from.notes !== into.notes) set.notes = into.notes ? `${into.notes}\n\n— merged from ${from.name}:\n${from.notes}` : from.notes;
+    if (from.notes && from.notes !== into.notes)
+      set.notes = into.notes ? `${into.notes}\n\n— merged from ${from.name}:\n${from.notes}` : from.notes;
     set.tags = [...new Set([...(into.tags ?? []), ...(from.tags ?? [])])];
     set.consent = {
       marketing: !!into.consent?.marketing || !!from.consent?.marketing,
       marketingAt: into.consent?.marketingAt ?? from.consent?.marketingAt ?? null,
       whatsapp: !!into.consent?.whatsapp || !!from.consent?.whatsapp,
     };
-    for (const k of ["source", "medium", "campaign", "content", "term"] as const) if (!into.utm?.[k] && from.utm?.[k]) set[`utm.${k}`] = from.utm[k];
+    for (const k of ["source", "medium", "campaign", "content", "term"] as const)
+      if (!into.utm?.[k] && from.utm?.[k]) set[`utm.${k}`] = from.utm[k];
     const minDate = (a?: Date | null, b?: Date | null) => (a && b ? (a < b ? a : b) : (a ?? b ?? null));
     const maxDate = (a?: Date | null, b?: Date | null) => (a && b ? (a > b ? a : b) : (a ?? b ?? null));
     set.firstContactedAt = minDate(into.firstContactedAt, from.firstContactedAt);
@@ -315,16 +486,81 @@ export async function mergeLeads(intoId: string, fromId: string, actor: Actor & 
     }
     if (from.studentId && !into.studentId) {
       await Lead.updateOne({ _id: fromOid }, { $set: { studentId: null } }); // release the partial-unique index first
-      Object.assign(set, { studentId: from.studentId, enrollmentId: from.enrollmentId ?? null, convertedAt: from.convertedAt ?? at, stage: "CONVERTED", stageChangedAt: at });
+      Object.assign(set, {
+        studentId: from.studentId,
+        enrollmentId: from.enrollmentId ?? null,
+        convertedAt: from.convertedAt ?? at,
+        stage: "CONVERTED",
+        stageChangedAt: at,
+      });
     }
     await LeadActivity.updateMany({ leadId: fromOid }, { $set: { leadId: intoOid } });
     await CrmTask.updateMany({ leadId: fromOid }, { $set: { leadId: intoOid, projectId: into.projectId } });
     await Lead.updateOne({ _id: fromOid }, { $set: { mergedIntoId: intoOid, studentId: null, nextFollowUpAt: null, lastActivityAt: at } });
     await Lead.updateOne({ _id: intoOid }, { $set: set });
     await recomputeNextFollowUp(intoOid);
-    await recordActivity(intoOid, "MERGED", actor, { data: { fromId, fromName: from.name, fromPhone: from.phone ?? null, fromEmail: from.email ?? null } });
+    await recordActivity(intoOid, "MERGED", actor, {
+      data: { fromId, fromName: from.name, fromPhone: from.phone ?? null, fromEmail: from.email ?? null },
+    });
     await audit({ actor, action: "lead.merge", entityType: "Lead", entityId: intoId, after: { fromId, fromName: from.name } });
   });
+}
+
+/**
+ * Permanently delete a lead with its activities, tasks (and their comments) and any leads that were merged into it.
+ * Leads linked to a student account are refused: the student record still points at them.
+ * Website events are kept (they stop a retried webhook from re-creating the lead) but lose the link.
+ */
+export async function deleteLead(id: string, actor: Actor & { type: "USER" }, scope: CrmScope) {
+  const _id = oid(id, "Lead");
+  await loadLead(_id, scope);
+  await withTx(async () => {
+    const lead = await lockLead(_id);
+    assertLeadVisible(lead, scope);
+    if (lead.studentId) throw new BusinessError("This lead is linked to a student account, so it can't be deleted.");
+    const merged = await Lead.find({ mergedIntoId: _id }, { _id: 1 }).lean();
+    const leadIds = [_id, ...merged.map((m) => m._id)];
+    const tasks = await CrmTask.find({ leadId: { $in: leadIds } }, { _id: 1 }).lean();
+    const taskIds = tasks.map((t) => t._id);
+    const [activities] = await Promise.all([
+      LeadActivity.deleteMany({ leadId: { $in: leadIds } }),
+      TaskComment.deleteMany({ taskId: { $in: taskIds } }),
+    ]);
+    await CrmTask.deleteMany({ _id: { $in: taskIds } });
+    await LeadInboundEvent.updateMany({ leadId: { $in: leadIds } }, { $set: { leadId: null } });
+    await Lead.deleteMany({ _id: { $in: leadIds } });
+    await audit({
+      actor,
+      action: "lead.delete",
+      entityType: "Lead",
+      entityId: id,
+      before: {
+        name: lead.name,
+        phone: lead.phone ?? null,
+        email: lead.email ?? null,
+        projectId: String(lead.projectId),
+        stage: lead.stage,
+        ownerId: lead.ownerId ? String(lead.ownerId) : null,
+      },
+      after: { activities: activities.deletedCount, tasks: taskIds.length, mergedLeads: merged.length },
+    });
+  });
+}
+
+/** Deletes what it can; leads linked to a student or out of scope are skipped and counted. */
+export async function bulkDeleteLeads(target: BulkTarget, actor: Actor & { type: "USER" }, scope: CrmScope) {
+  let deleted = 0;
+  let skipped = 0;
+  for (const id of await targetIds(target, scope)) {
+    try {
+      await deleteLead(id, actor, scope);
+      deleted++;
+    } catch (e) {
+      if (!(e instanceof NotFoundError) && !(e instanceof BusinessError)) throw e;
+      skipped++;
+    }
+  }
+  return { deleted, skipped };
 }
 
 /** Dropdown data for the viewer: projects they can work in, the assignable team per project, catalogue, lost reasons. */
@@ -332,15 +568,24 @@ export async function getCrmOptions(scope: CrmScope): Promise<CrmOptions> {
   const [projects, courses, batches, cfg] = await Promise.all([
     projectsFor(scope),
     Course.find({ isActive: true }).sort({ title: 1 }).lean(),
-    Batch.find({ status: { $ne: "ARCHIVED" } }).sort({ startDate: -1 }).lean(),
+    Batch.find({ status: { $ne: "ARCHIVED" } })
+      .sort({ startDate: -1 })
+      .lean(),
     getSetting("crm.config"),
   ]);
   const active = projects.filter((p) => p.status !== "ARCHIVED");
   const everyone = scope.all ? await listCrmUsers() : null;
   const teams: Record<string, { id: string; name: string }[]> = {};
-  for (const p of active) teams[String(p._id)] = canAssignIn(scope, p._id) ? (everyone ?? (await projectTeam(p))) : [{ id: scope.userId, name: "Me" }];
+  for (const p of active)
+    teams[String(p._id)] = canAssignIn(scope, p._id) ? (everyone ?? (await projectTeam(p))) : [{ id: scope.userId, name: "Me" }];
   return {
-    projects: active.map((p) => ({ id: String(p._id), name: p.name, code: p.code, canAssign: canAssignIn(scope, p._id), isDefault: !!p.isDefault })),
+    projects: active.map((p) => ({
+      id: String(p._id),
+      name: p.name,
+      code: p.code,
+      canAssign: canAssignIn(scope, p._id),
+      isDefault: !!p.isDefault,
+    })),
     teams,
     staff: has(scope, "crm.projects.manage") ? (everyone ?? (await listCrmUsers())) : [],
     courses: courses.map((c) => ({ id: String(c._id), title: c.title })),
@@ -356,7 +601,8 @@ interface ListRow extends LeadDoc {
   p?: { name: string; code: string }[];
 }
 
-export async function listLeads(filters: LeadFilters, scope: CrmScope): Promise<{ rows: LeadListItem[]; total: number }> {
+/** The Mongo conditions for a leads filter within the viewer's scope (shared by the list, CSV and bulk actions). */
+export function leadMatch(filters: LeadFilters, scope: CrmScope): Record<string, unknown>[] {
   const at = now();
   const and: Record<string, unknown>[] = [{ mergedIntoId: null }];
   const sc = leadScopeFilter(scope);
@@ -394,30 +640,36 @@ export async function listLeads(filters: LeadFilters, scope: CrmScope): Promise<
   if (filters.created === "today") and.push({ createdAt: { $gte: todayStart } });
   else if (filters.created === "week") and.push({ createdAt: { $gte: new Date(at.getTime() - 7 * 86_400_000) } });
   else if (filters.created === "month") and.push({ createdAt: { $gte: startOfDubaiMonth(at) } });
+  return and;
+}
 
+/** One page of leads; `max` lets the CSV export read more than a screen. */
+export async function listLeads(filters: LeadFilters, scope: CrmScope, opts?: { max?: number }): Promise<Paged<LeadListItem>> {
   const sort: Record<string, 1 | -1> =
-    filters.sort === "created" ? { createdAt: -1 } : filters.sort === "name" ? { name: 1 } : filters.sort === "followUp" ? { followUpSort: 1, createdAt: -1 } : { lastActivityAt: -1, createdAt: -1 };
-  const page = Math.max(1, Number(filters.page ?? 1) || 1);
-  const pageSize = Math.min(10_000, Math.max(1, Number(filters.pageSize ?? 100) || 100));
-  const [out] = await Lead.aggregate<{ rows: ListRow[]; total: { n: number }[] }>([
-    { $match: { $and: and } },
-    ...(filters.sort === "followUp" ? [{ $addFields: { followUpSort: { $ifNull: ["$nextFollowUpAt", new Date(8.64e15)] } } }] : []),
-    { $sort: sort },
-    {
-      $facet: {
-        rows: [
-          { $skip: (page - 1) * pageSize },
-          { $limit: pageSize },
-          { $lookup: { from: "user", localField: "ownerId", foreignField: "_id", as: "o" } },
-          { $lookup: { from: "courses", localField: "courseInterestId", foreignField: "_id", as: "c" } },
-          { $lookup: { from: "batches", localField: "batchInterestId", foreignField: "_id", as: "b" } },
-          { $lookup: { from: "crmProjects", localField: "projectId", foreignField: "_id", as: "p" } },
-        ],
-        total: [{ $count: "n" }],
-      },
-    },
-  ]);
-  const rows = (out?.rows ?? []).map((r) => {
+    filters.sort === "created"
+      ? { createdAt: -1 }
+      : filters.sort === "name"
+        ? { name: 1 }
+        : filters.sort === "followUp"
+          ? { followUpSort: 1, createdAt: -1 }
+          : { lastActivityAt: -1, createdAt: -1 };
+  const out = await facetPage<ListRow>(
+    Lead,
+    [
+      { $match: { $and: leadMatch(filters, scope) } },
+      ...(filters.sort === "followUp" ? [{ $addFields: { followUpSort: { $ifNull: ["$nextFollowUpAt", new Date(8.64e15)] } } }] : []),
+    ],
+    sort,
+    filters,
+    [
+      { $lookup: { from: "user", localField: "ownerId", foreignField: "_id", as: "o" } },
+      { $lookup: { from: "courses", localField: "courseInterestId", foreignField: "_id", as: "c" } },
+      { $lookup: { from: "batches", localField: "batchInterestId", foreignField: "_id", as: "b" } },
+      { $lookup: { from: "crmProjects", localField: "projectId", foreignField: "_id", as: "p" } },
+    ],
+    opts,
+  );
+  const rows = out.rows.map((r) => {
     const refs: LeadRefs = {
       owners: new Map(r.ownerId && r.o?.[0] ? [[String(r.ownerId), r.o[0].name]] : []),
       courses: new Map(r.courseInterestId && r.c?.[0] ? [[String(r.courseInterestId), r.c[0].title]] : []),
@@ -426,13 +678,46 @@ export async function listLeads(filters: LeadFilters, scope: CrmScope): Promise<
     };
     return toLeadListItem(r, refs);
   });
-  return { rows, total: out?.total[0]?.n ?? 0 };
+  return { ...out, rows };
+}
+
+/** Bulk actions by filter touch at most this many leads at once. */
+export const BULK_CAP = 2_000;
+
+/** Ids of every lead matching a filter (for "select all matching"); refuses rather than truncating past `BULK_CAP`. */
+export async function leadIdsMatching(filters: LeadFilters, scope: CrmScope): Promise<string[]> {
+  const docs = await Lead.find({ $and: leadMatch(filters, scope) }, { _id: 1 })
+    .sort({ _id: 1 })
+    .limit(BULK_CAP + 1)
+    .lean();
+  if (docs.length > BULK_CAP)
+    throw new BusinessError(`That is more than ${BULK_CAP.toLocaleString("en")} leads. Narrow the filters and try again.`);
+  return docs.map((d) => String(d._id));
 }
 
 export async function leadsCsv(filters: LeadFilters, scope: CrmScope) {
-  const { rows } = await listLeads({ ...filters, page: 1, pageSize: 10_000 }, scope);
+  const { rows } = await listLeads({ ...filters, page: 1, pageSize: EXPORT_CAP }, scope, { max: EXPORT_CAP });
   return toCsv(
-    ["Name", "Mobile", "Email", "Country", "Project", "Source", "Source detail", "Stage", "Temperature", "Owner", "Course", "Batch", "Tags", "Next follow-up", "Last activity", "Created", "Lost reason", "Student ID"],
+    [
+      "Name",
+      "Mobile",
+      "Email",
+      "Country",
+      "Project",
+      "Source",
+      "Source detail",
+      "Stage",
+      "Temperature",
+      "Owner",
+      "Course",
+      "Batch",
+      "Tags",
+      "Next follow-up",
+      "Last activity",
+      "Created",
+      "Lost reason",
+      "Student ID",
+    ],
     rows.map((l) => [
       l.name,
       l.phone,
@@ -456,12 +741,20 @@ export async function leadsCsv(filters: LeadFilters, scope: CrmScope) {
   );
 }
 
-export async function getLeadDetail(id: string, scope: CrmScope): Promise<LeadDetail> {
+/** `activityLimit`: how much of the timeline to load, newest first ("Show older activity" asks for more). */
+export async function getLeadDetail(id: string, scope: CrmScope, activityLimit = 50): Promise<LeadDetail> {
   const lead = await loadLead(id, scope);
-  const [activities, openTasks, doneTasks, dups, options, account, course, batch, projects] = await Promise.all([
-    LeadActivity.find({ leadId: lead._id }).sort({ createdAt: -1 }).limit(100).lean(),
-    CrmTask.find({ leadId: lead._id, status: { $in: [...OPEN_TASK_STATUSES] } }).sort({ dueAt: 1, order: 1 }).lean(),
-    CrmTask.find({ leadId: lead._id, status: { $nin: [...OPEN_TASK_STATUSES] } }).sort({ updatedAt: -1 }).limit(10).lean(),
+  const limit = Math.min(1000, Math.max(1, activityLimit));
+  const [activities, activityTotal, openTasks, doneTasks, dups, options, account, course, batch, projects] = await Promise.all([
+    LeadActivity.find({ leadId: lead._id }).sort({ createdAt: -1, _id: -1 }).limit(limit).lean(),
+    LeadActivity.countDocuments({ leadId: lead._id }),
+    CrmTask.find({ leadId: lead._id, status: { $in: [...OPEN_TASK_STATUSES] } })
+      .sort({ dueAt: 1, order: 1 })
+      .lean(),
+    CrmTask.find({ leadId: lead._id, status: { $nin: [...OPEN_TASK_STATUSES] } })
+      .sort({ updatedAt: -1 })
+      .limit(10)
+      .lean(),
     findDuplicateLeads({ phone: lead.phone ?? null, email: lead.email ?? null }, lead._id),
     getCrmOptions(scope),
     lead.studentId ? null : findAccountByContact({ phone: lead.phone ?? null, email: lead.email ?? null }),
@@ -478,19 +771,40 @@ export async function getLeadDetail(id: string, scope: CrmScope): Promise<LeadDe
   };
   let student: LeadDetail["student"] = null;
   if (lead.studentId) {
-    const [u, e] = await Promise.all([AuthUser.findById(lead.studentId, { name: 1, email: 1 }).lean(), getCurrentEnrollment(lead.studentId).catch(() => null)]);
-    if (u) student = { id: String(u._id), name: u.name, email: u.email, enrollment: e ? { status: e.e.status, paymentState: e.e.paymentState, batchName: e.batch.name } : null };
+    const [u, e] = await Promise.all([
+      AuthUser.findById(lead.studentId, { name: 1, email: 1 }).lean(),
+      getCurrentEnrollment(lead.studentId).catch(() => null),
+    ]);
+    if (u)
+      student = {
+        id: String(u._id),
+        name: u.name,
+        email: u.email,
+        enrollment: e ? { status: e.e.status, paymentState: e.e.paymentState, batchName: e.batch.name } : null,
+      };
   }
   // Duplicates outside the viewer's scope stay hidden (they can still be merged by a manager who sees both).
   const visibleDups = dups.filter((d) => canSeeLeadDoc(d, scope));
   return {
     lead: toLeadDto(lead, refs),
     activities: activities.map((a) => toActivityDto(a, names)),
+    activityTotal,
     tasks: await tasksToDtos([...openTasks, ...doneTasks]),
     student,
     matchingStudent: account?.kind === "student" ? { id: String(account.id), name: account.name, email: account.email } : null,
-    duplicates: visibleDups.map((d) => ({ id: String(d._id), name: d.name, phone: d.phone ?? null, email: d.email ?? null, stage: d.stage as LeadStage })),
-    can: { assign: canAssignIn(scope, lead.projectId), claim: canClaim(lead, scope), moveProject: has(scope, "crm.projects.manage") || (managesProject(scope, lead.projectId) && scope.managed.length > 0) },
+    duplicates: visibleDups.map((d) => ({
+      id: String(d._id),
+      name: d.name,
+      phone: d.phone ?? null,
+      email: d.email ?? null,
+      stage: d.stage as LeadStage,
+    })),
+    can: {
+      delete: has(scope, "crm.leads.delete"),
+      assign: canAssignIn(scope, lead.projectId),
+      claim: canClaim(lead, scope),
+      moveProject: has(scope, "crm.projects.manage") || (managesProject(scope, lead.projectId) && scope.managed.length > 0),
+    },
     options,
   };
 }

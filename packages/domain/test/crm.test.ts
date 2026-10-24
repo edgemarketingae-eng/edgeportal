@@ -29,7 +29,9 @@ describe("lead stage machine", () => {
     const created = new Date("2026-10-06T10:00:00Z");
     expect(isUncontacted({ stage: "NEW", firstContactedAt: null, createdAt: created }, new Date("2026-10-06T20:00:00Z"), 24)).toBe(false);
     expect(isUncontacted({ stage: "NEW", firstContactedAt: null, createdAt: created }, new Date("2026-10-08T10:00:01Z"), 24)).toBe(true);
-    expect(isUncontacted({ stage: "CONTACTED", firstContactedAt: created, createdAt: created }, new Date("2026-10-08T10:00:01Z"), 24)).toBe(false);
+    expect(isUncontacted({ stage: "CONTACTED", firstContactedAt: created, createdAt: created }, new Date("2026-10-08T10:00:01Z"), 24)).toBe(
+      false,
+    );
     expect(isStale({ stage: "QUALIFIED", lastActivityAt: created, createdAt: created }, new Date("2026-10-14T10:00:01Z"), 7)).toBe(true);
     expect(isStale({ stage: "LOST", lastActivityAt: created, createdAt: created }, new Date("2026-12-01T00:00:00Z"), 7)).toBe(false);
   });
@@ -45,8 +47,21 @@ describe("permissions and CRM roles", () => {
   const role = (key: string) => SYSTEM_ROLES.find((r) => r.key === key)!;
 
   it("defines the crm keys and only known permissions on system roles", () => {
-    for (const p of ["crm.access", "crm.read", "crm.write", "crm.assign", "crm.convert", "crm.all", "crm.projects.manage", "crm.manage", "crm.staff.manage", "crm.roles.manage"]) expect(isPermission(p)).toBe(true);
-    expect(CRM_PERMISSIONS.length).toBe(10);
+    for (const p of [
+      "crm.access",
+      "crm.read",
+      "crm.write",
+      "crm.assign",
+      "crm.convert",
+      "crm.all",
+      "crm.projects.manage",
+      "crm.manage",
+      "crm.staff.manage",
+      "crm.roles.manage",
+      "crm.leads.delete",
+    ])
+      expect(isPermission(p)).toBe(true);
+    expect(CRM_PERMISSIONS.length).toBe(11);
     expect(CRM_PERMISSIONS.every((p) => p.startsWith("crm."))).toBe(true);
     for (const r of SYSTEM_ROLES) for (const p of r.permissions) expect(ALL_PERMISSIONS).toContain(p);
   });
@@ -56,6 +71,10 @@ describe("permissions and CRM roles", () => {
     expect([...role("crm_admin").permissions].sort()).toEqual([...CRM_PERMISSIONS].sort());
     expect(role("crm_manager").permissions).toEqual(expect.arrayContaining(["crm.all", "crm.projects.manage", "crm.manage"]));
     expect(role("crm_manager").permissions).not.toContain("crm.staff.manage");
+    // Deleting leads is for admins and CRM admins only.
+    for (const key of ["super_admin", "admin", "crm_admin"]) expect(role(key).permissions, key).toContain("crm.leads.delete");
+    for (const key of ["crm_manager", "project_manager", "sales_executive"])
+      expect(role(key).permissions, key).not.toContain("crm.leads.delete");
     expect(role("project_manager").permissions).toContain("crm.assign");
     expect(role("project_manager").permissions).not.toContain("crm.all");
     expect(role("sales_executive").permissions).toEqual(expect.arrayContaining(["crm.access", "crm.read", "crm.write", "crm.convert"]));

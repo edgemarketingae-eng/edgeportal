@@ -33,6 +33,7 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
   return (
     <FilterScope>
       <PageHeader
+        help="/docs/dashboard"
         title="Dashboard"
         description={d.scopeAll ? "Every lead in the academy" : "Your projects, leads and tasks"}
         actions={

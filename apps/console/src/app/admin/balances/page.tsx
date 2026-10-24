@@ -5,6 +5,7 @@ import { EnrollmentBadge } from "@edge/ui/blocks/status-badges";
 import { Button } from "@edge/ui/components/button";
 import { Card } from "@edge/ui/components/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@edge/ui/components/table";
+import { Pagination } from "@edge/ui/blocks/pagination";
 import { PageHeader } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
 import { Download } from "lucide-react";
@@ -15,12 +16,15 @@ import { load, requireStaff } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Advance & balances" };
 
-export default async function BalancesPage() {
+export default async function BalancesPage(props: PageProps<"/admin/balances">) {
   await requireStaff("enrollment.read");
-  const rows = await load(() => api(adminRoutes.balances));
+  const sp = await props.searchParams;
+  const data = await load(() => api(adminRoutes.balances, { query: { page: Number(sp.page) || 1, pageSize: Number(sp.pageSize) || 50 } }));
+  const rows = data.rows;
   return (
     <>
       <PageHeader
+        help="/admin/docs/balances"
         title="Advance & balances"
         description="Students who paid an advance, soonest due first. Access locks automatically when the due day ends."
         actions={
@@ -75,6 +79,7 @@ export default async function BalancesPage() {
           </TableBody>
         </Table>
       </Card>
+      <Pagination page={data.page} pageSize={data.pageSize} total={data.total} noun="students" />
     </>
   );
 }

@@ -1,7 +1,7 @@
 import { crmRoutes } from "@edge/contracts";
 import { AppShell, ShellSkeleton, type AreaLink, type NavItem } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
-import { Bell, CheckSquare, FolderKanban, LayoutDashboard, Settings, Upload, Users, UsersRound } from "lucide-react";
+import { Bell, CheckSquare, FolderKanban, LayoutDashboard, LifeBuoy, Settings, Upload, Users, UsersRound } from "lucide-react";
 import { Suspense } from "react";
 import { can, CONSOLE_URL, load, requireCrm } from "@/lib/load";
 import { MENU_LINKS } from "@/lib/nav";
@@ -26,12 +26,22 @@ async function CrmShell({ children }: { children: React.ReactNode }) {
     { href: "/import", label: "Import", icon: <Upload />, show: can(v, "crm.manage") },
     { href: "/settings", label: "Settings", icon: <Settings />, show: can(v, "crm.manage") },
     { href: "/notifications", label: "Notifications", icon: <Bell />, show: true },
+    { href: "/docs", label: "Help & docs", icon: <LifeBuoy />, show: true },
   ];
   const areas: AreaLink[] = [{ href: "/dashboard", label: "CRM" }];
   if (can(v, "admin.access")) areas.push({ href: `${CONSOLE_URL()}/admin`, label: "Admin panel" });
   else if (can(v, "staff.access")) areas.push({ href: `${CONSOLE_URL()}/staff`, label: "Staff portal" });
   return (
-    <AppShell items={items.filter((i) => i.show)} user={{ name: v.user.name, email: v.user.email }} areaLabel="CRM" areas={areas} menuLinks={MENU_LINKS} unread={v.unreadNotifications} notificationsHref="/notifications">
+    <AppShell
+      items={items.filter((i) => i.show)}
+      user={{ name: v.user.name, email: v.user.email }}
+      areaLabel="CRM"
+      areas={areas}
+      menuLinks={MENU_LINKS}
+      unread={v.unreadNotifications}
+      notificationsHref="/notifications"
+      helpHref="/docs"
+    >
       {children}
     </AppShell>
   );

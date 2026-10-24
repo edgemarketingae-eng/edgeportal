@@ -8,6 +8,7 @@ import { api } from "@edge/web/server";
 import { Download } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Pagination } from "@edge/ui/blocks/pagination";
 import { LeadsTable } from "@/components/crm/leads-table";
 import { QuickAddLead } from "@/components/crm/quick-add-dialog";
 import { can, load, requireCrm } from "@/lib/load";
@@ -49,8 +50,10 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
     created: pick("created", ["today", "week", "month"] as const),
     view: pick("view", ["open", "all"] as const),
     sort: pick("sort", ["recent", "created", "followUp", "name"] as const),
+    page: Number(one("page")) || 1,
+    pageSize: Number(one("pageSize")) || 50,
   };
-  const [{ rows, total }, options] = await Promise.all([
+  const [{ rows, total, page, pageSize }, options] = await Promise.all([
     load(() => api(crmRoutes.leads, { query: f })),
     load(() => api(crmRoutes.options)),
   ]);
@@ -64,7 +67,10 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
       ? uniq(options.projects.filter((p) => p.canAssign).flatMap((p) => options.teams[p.id] ?? []))
       : [];
   const owners = uniq(Object.values(options.teams).flat());
-  const qs = new URLSearchParams(Object.entries(sp).filter(([, x]) => typeof x === "string" && x) as [string, string][]);
+  // The filters alone, without paging or flash params (view chips, export, "select all matching").
+  const qs = new URLSearchParams(
+    Object.entries(sp).filter(([k, x]) => !["deleted", "page", "pageSize"].includes(k) && typeof x === "string" && x) as [string, string][],
+  );
   const current = [...qs.entries()]
     .sort()
     .map(([k, x]) => `${k}=${x}`)
@@ -84,6 +90,7 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
   return (
     <FilterScope>
       <PageHeader
+        help="/docs/leads"
         title="Leads"
         description={`${total} lead${total === 1 ? "" : "s"}`}
         actions={
@@ -102,6 +109,9 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
           </>
         }
       />
+      {sp.deleted ? (
+        <p className="border-edge-emerald/30 bg-edge-mint/40 text-edge-emerald mb-4 rounded-md border px-3 py-2 text-sm">Lead deleted.</p>
+      ) : null}
       <div className="mb-3 flex flex-wrap gap-1.5">
         {views.map((x) => {
           const active = x.query.split("&").filter(Boolean).sort().join("&") === current;
@@ -140,7 +150,8 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
         <FilterSelect name="sort" label="Sort" value={f.sort} options={SORT_OPTIONS} />
       </FilterBar>
       <FilterResults>
-        <LeadsTable rows={rows} assignees={assignable} />
+        <LeadsTable rows={rows} total={total} filters={qs.toString()} assignees={assignable} canDelete={can(v, "crm.leads.delete")} />
+        <Pagination page={page} pageSize={pageSize} total={total} noun="leads" />
       </FilterResults>
     </FilterScope>
   );

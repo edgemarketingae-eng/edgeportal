@@ -29,7 +29,10 @@ export async function getDefaultProject(): Promise<ProjectDoc> {
 export async function loadCrmScope(v: { userId: string; permissions: Set<Permission> }): Promise<CrmScope> {
   const me = new Types.ObjectId(v.userId);
   const all = v.permissions.has("crm.all");
-  const [projects, def] = await Promise.all([all ? [] : Project.find({ $or: [{ managerIds: me }, { memberIds: me }] }, { managerIds: 1 }).lean(), getDefaultProject()]);
+  const [projects, def] = await Promise.all([
+    all ? [] : Project.find({ $or: [{ managerIds: me }, { memberIds: me }] }, { managerIds: 1 }).lean(),
+    getDefaultProject(),
+  ]);
   const isManager = (p: { managerIds: Types.ObjectId[] }) => p.managerIds.some((x) => x.equals(me));
   return {
     userId: v.userId,
@@ -70,7 +73,12 @@ export function taskScopeFilter(s: CrmScope): Record<string, unknown> {
 }
 
 export function canSeeLead(lead: Pick<LeadDoc, "projectId" | "ownerId">, s: CrmScope) {
-  return s.all || (!!lead.ownerId && lead.ownerId.equals(s.me)) || managesProject(s, lead.projectId) || (!lead.ownerId && inProject(s, lead.projectId));
+  return (
+    s.all ||
+    (!!lead.ownerId && lead.ownerId.equals(s.me)) ||
+    managesProject(s, lead.projectId) ||
+    (!lead.ownerId && inProject(s, lead.projectId))
+  );
 }
 
 /** 404 (not 403) for a lead outside the viewer's scope, so ids never leak. */
@@ -92,13 +100,20 @@ export function canAssignIn(s: CrmScope, projectId: Types.ObjectId) {
   return has(s, "crm.assign") && managesProject(s, projectId);
 }
 
-/** Active staff whose roles grant crm.access. */
-export async function listCrmUsers(): Promise<{ id: string; name: string }[]> {
-  const roleIds = (await Role.find({ permissions: "crm.access" }, { _id: 1 }).lean()).map((r) => r._id);
-  if (!roleIds.length) return [];
-  const staff = await StaffProfile.find({ roleIds: { $in: roleIds } }, { _id: 1 }).lean();
-  const users = await AuthUser.find({ _id: { $in: staff.map((x) => x._id) }, disabledAt: null }, { name: 1 }).sort({ name: 1 }).lean();
-  return users.map((u) => ({ id: String(u._id), name: u.name }));
+/** Active staff whose roles grant crm.access, with their role names (for pickers). */
+export async function listCrmUsers(): Promise<{ id: string; name: string; roles: string[] }[]> {
+  const roles = await Role.find({}, { name: 1, permissions: 1 }).lean();
+  const crmRoleIds = roles.filter((r) => r.permissions?.includes("crm.access")).map((r) => r._id);
+  if (!crmRoleIds.length) return [];
+  const roleName = new Map(roles.map((r) => [String(r._id), r.name]));
+  const staff = await StaffProfile.find({ roleIds: { $in: crmRoleIds } }, { _id: 1, roleIds: 1 }).lean();
+  const rolesOf = new Map(
+    staff.map((x) => [String(x._id), (x.roleIds ?? []).map((r) => roleName.get(String(r))).filter((n): n is string => !!n)]),
+  );
+  const users = await AuthUser.find({ _id: { $in: staff.map((x) => x._id) }, disabledAt: null }, { name: 1 })
+    .sort({ name: 1 })
+    .lean();
+  return users.map((u) => ({ id: String(u._id), name: u.name, roles: rolesOf.get(String(u._id)) ?? [] }));
 }
 
 /** Managers and members of a project (every CRM user for the default project), active accounts only. */
@@ -108,7 +123,9 @@ export async function projectTeam(project: ProjectDoc | Types.ObjectId): Promise
   if (p.isDefault) return listCrmUsers();
   const ids = [...new Set([...p.managerIds, ...p.memberIds].map(String))].map((x) => new Types.ObjectId(x));
   if (!ids.length) return [];
-  const users = await AuthUser.find({ _id: { $in: ids }, disabledAt: null }, { name: 1 }).sort({ name: 1 }).lean();
+  const users = await AuthUser.find({ _id: { $in: ids }, disabledAt: null }, { name: 1 })
+    .sort({ name: 1 })
+    .lean();
   return users.map((u) => ({ id: String(u._id), name: u.name }));
 }
 
@@ -121,7 +138,8 @@ export async function assertAssignable(s: CrmScope, projectId: Types.ObjectId, u
   }
   if (!canAssignIn(s, projectId)) throw new ForbiddenError("You can only assign work within projects you manage.");
   const team = s.all ? await listCrmUsers() : await projectTeam(projectId);
-  if (!team.some((t) => t.id === userId)) throw new BusinessError("That person is not on this project's team", { [field]: "Not on the project team" });
+  if (!team.some((t) => t.id === userId))
+    throw new BusinessError("That person is not on this project's team", { [field]: "Not on the project team" });
   return new Types.ObjectId(userId);
 }
 

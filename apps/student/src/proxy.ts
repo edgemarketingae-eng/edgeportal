@@ -18,5 +18,6 @@ export const config = {
     "/notifications/:path*",
     "/profile/:path*",
     "/change-password/:path*",
+    "/docs/:path*",
   ],
 };

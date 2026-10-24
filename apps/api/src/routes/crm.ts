@@ -1,4 +1,5 @@
 import { crmRoutes } from "@edge/contracts";
+import { ROUND_ROBIN } from "@edge/domain/crm/enums";
 import { LEAD_STAGE_LABELS } from "@edge/domain/crm/labels";
 import type { Permission } from "@edge/domain/auth/permissions";
 import {
@@ -6,6 +7,7 @@ import {
   addTaskComment,
   assignLead,
   bulkAssignLeads,
+  bulkDeleteLeads,
   cancelTask,
   claimLead,
   completeTask,
@@ -14,6 +16,7 @@ import {
   createLead,
   createProject,
   createTask,
+  deleteLead,
   dueTaskCount,
   getBoard,
   getCrmDashboard,
@@ -90,10 +93,25 @@ export function crmRouter() {
   });
   register(r, crmRoutes.bulkAssign, async (req) => {
     const { actor, scope } = await crm(req, "crm.assign");
-    const updated = await bulkAssignLeads(req.valid.body.ids, req.valid.body.ownerId || null, actor, scope);
-    return { ok: true as const, updated, message: `${updated} lead${updated === 1 ? "" : "s"} ${req.valid.body.ownerId ? "assigned" : "unassigned"}.` };
+    const { ids, filters, ownerId } = req.valid.body;
+    const { updated, skipped } = await bulkAssignLeads({ ids, filters }, ownerId || null, actor, scope);
+    const verb = ownerId === ROUND_ROBIN ? "shared out round-robin" : ownerId ? "assigned" : "unassigned";
+    const skippedNote = skipped ? ` ${skipped} skipped (not yours to assign, or no sales executives on the project).` : "";
+    return { ok: true as const, updated, skipped, message: `${updated} lead${updated === 1 ? "" : "s"} ${verb}.${skippedNote}` };
   });
-  register(r, crmRoutes.lead, async (req) => getLeadDetail(req.valid.params.id, (await crm(req, "crm.read")).scope));
+  register(r, crmRoutes.bulkDelete, async (req) => {
+    const { actor, scope } = await crm(req, "crm.leads.delete");
+    const { deleted, skipped } = await bulkDeleteLeads({ ids: req.valid.body.ids, filters: req.valid.body.filters }, actor, scope);
+    return { ok: true as const, deleted, skipped };
+  });
+  register(r, crmRoutes.deleteLead, async (req) => {
+    const { actor, scope } = await crm(req, "crm.leads.delete");
+    await deleteLead(req.valid.params.id, actor, scope);
+    return ok("Lead deleted.");
+  });
+  register(r, crmRoutes.lead, async (req) =>
+    getLeadDetail(req.valid.params.id, (await crm(req, "crm.read")).scope, req.valid.query.activity),
+  );
   register(r, crmRoutes.update, async (req) => {
     const { actor, scope } = await crm(req, "crm.write");
     await updateLead(req.valid.params.id, req.valid.body, actor, scope);
@@ -128,8 +146,19 @@ export function crmRouter() {
   register(r, crmRoutes.convert, async (req) => {
     const { actor, scope } = await crm(req, "crm.convert");
     const b = req.valid.body;
-    const out = await convertLeadToStudent(req.valid.params.id, { batchId: b.batchId || undefined, sendSetPassword: b.sendSetPassword, actor, scope });
-    return { ok: true as const, studentId: out.studentId, message: b.sendSetPassword ? "Student account created. A set-password email is on its way." : "Student account created (no email sent)." };
+    const out = await convertLeadToStudent(req.valid.params.id, {
+      batchId: b.batchId || undefined,
+      sendSetPassword: b.sendSetPassword,
+      actor,
+      scope,
+    });
+    return {
+      ok: true as const,
+      studentId: out.studentId,
+      message: b.sendSetPassword
+        ? "Student account created. A set-password email is on its way."
+        : "Student account created (no email sent).",
+    };
   });
   register(r, crmRoutes.link, async (req) => {
     const { actor, scope } = await crm(req, "crm.convert");
@@ -241,11 +270,20 @@ export function crmRouter() {
     await saveCrmSettings(req.valid.body, (await crm(req, "crm.manage")).actor);
     return ok("CRM settings saved.");
   });
-  register(r, crmRoutes.importPreview, async (req) => (await crm(req, "crm.manage"), previewImport(req.valid.body.csv)));
+  register(
+    r,
+    crmRoutes.importPreview,
+    async (req) => (await crm(req, "crm.manage"), previewImport(req.valid.body.csv, req.valid.body.defaultCountry || null)),
+  );
   register(r, crmRoutes.importCsv, async (req) => {
     const { actor, scope } = await crm(req, "crm.manage");
     const b = req.valid.body;
-    const out = await importLeads(b.csv, { projectId: b.projectId, source: b.source, ownerId: b.ownerId || undefined }, actor, scope);
+    const out = await importLeads(
+      b.csv,
+      { projectId: b.projectId, source: b.source, ownerId: b.ownerId || undefined, defaultCountry: b.defaultCountry || null },
+      actor,
+      scope,
+    );
     return { ok: true as const, ...out, message: `${out.created} created, ${out.skipped} skipped, ${out.invalid} invalid.` };
   });
 
@@ -255,7 +293,13 @@ export function crmRouter() {
 /** Public lead intake (website forms): raw body, HMAC signature, rate limited. Mounted before express.json(). */
 export function leadWebhookRouter() {
   const r = Router();
-  const limiter = rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: "draft-8", legacyHeaders: false, message: { error: { code: "RATE_LIMITED", message: "Too many requests. Try again in a minute." } } });
+  const limiter = rateLimit({
+    windowMs: 60_000,
+    limit: 20,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: { error: { code: "RATE_LIMITED", message: "Too many requests. Try again in a minute." } },
+  });
   r.post("/api/webhooks/leads/:source", limiter, express.raw({ type: "*/*", limit: "256kb" }), async (req, res, next) => {
     try {
       const raw = Buffer.isBuffer(req.body) ? req.body.toString("utf8") : "";

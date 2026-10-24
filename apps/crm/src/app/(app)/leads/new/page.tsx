@@ -13,7 +13,7 @@ export default async function NewLeadPage(props: PageProps<"/leads/new">) {
   const projectId = typeof sp.project === "string" && options.projects.some((p) => p.id === sp.project) ? sp.project : "";
   return (
     <>
-      <PageHeader title="New lead" description="Everything except name and a contact can be filled in later." />
+      <PageHeader help="/docs/leads" title="New lead" description="Everything except name and a contact can be filled in later." />
       <LeadForm values={{ ...EMPTY_LEAD, projectId }} options={options} meId={v.user.id} />
     </>
   );

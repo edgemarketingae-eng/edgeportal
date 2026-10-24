@@ -28,27 +28,58 @@ function forwardCookies(res: Response, headers: Headers | undefined) {
 
 /** The account exists but cannot use this app: point them at the one they can use. */
 const wrongApp = (app: "student" | "console" | "crm", homes: ReturnType<typeof homesFor> | null) => {
-  const where = homes?.console ? `the staff console (${env.CONSOLE_APP_URL})` : homes?.crm ? `the CRM (${env.CRM_APP_URL})` : homes?.student ? `the student portal (${env.STUDENT_APP_URL})` : null;
+  const where = homes?.console
+    ? `the staff console (${env.CONSOLE_APP_URL})`
+    : homes?.crm
+      ? `the CRM (${env.CRM_APP_URL})`
+      : homes?.student
+        ? `the student portal (${env.STUDENT_APP_URL})`
+        : null;
   const label = app === "student" ? "the student portal" : app === "crm" ? "the CRM" : "the staff console";
-  return new ApiError(403, "FORBIDDEN", `This account cannot sign in to ${label}.${where ? ` Sign in at ${where} instead.` : " Contact the academy."}`);
+  return new ApiError(
+    403,
+    "FORBIDDEN",
+    `This account cannot sign in to ${label}.${where ? ` Sign in at ${where} instead.` : " Contact the academy."}`,
+  );
 };
 
 export function authRouter(auth: Auth) {
   const router = Router();
   // Mounted at the root with full contract paths; middleware is scoped to the prefix.
   router.use("/api/v1/auth", loadViewerMiddleware(auth), sameAppOrigin);
-  router.use("/api/v1/auth", rateLimit({ windowMs: 60_000, limit: 30, standardHeaders: "draft-8", legacyHeaders: false, message: { error: { code: "RATE_LIMITED", message: "Too many attempts. Please wait a minute." } } }));
+  router.use(
+    "/api/v1/auth",
+    rateLimit({
+      windowMs: 60_000,
+      limit: 30,
+      standardHeaders: "draft-8",
+      legacyHeaders: false,
+      message: { error: { code: "RATE_LIMITED", message: "Too many attempts. Please wait a minute." } },
+    }),
+  );
 
   register(router, authRoutes.studentSignup, async (req, res) => {
     const d = req.valid.body;
-    const phone = parsePhone(d.phone);
-    if (!phone) throw new ApiError(400, "VALIDATION", "Please fix the highlighted fields.", { phone: "Enter a valid mobile number, e.g. +971 50 123 4567" });
+    const phone = parsePhone(d.phone, d.country);
+    if (!phone)
+      throw new ApiError(400, "VALIDATION", "Please fix the highlighted fields.", {
+        phone: "Enter a valid mobile number with its country code",
+      });
+    const country = d.country ?? phone.country;
+    if (!country)
+      throw new ApiError(400, "VALIDATION", "Please fix the highlighted fields.", { country: "Choose your country of residence" });
     if (await AuthUser.exists({ phoneNumber: phone.e164 })) {
-      throw new ApiError(409, "CONFLICT", "This mobile number is already registered.", { phone: "This mobile number is already registered. Sign in instead." });
+      throw new ApiError(409, "CONFLICT", "This mobile number is already registered.", {
+        phone: "This mobile number is already registered. Sign in instead.",
+      });
     }
     let result;
     try {
-      result = await auth.api.signUpEmail({ body: { name: d.name, email: d.email, password: d.password }, headers: policyHeaders(req), returnHeaders: true });
+      result = await auth.api.signUpEmail({
+        body: { name: d.name, email: d.email, password: d.password },
+        headers: policyHeaders(req),
+        returnHeaders: true,
+      });
     } catch (e) {
       throw fromAuthError(e);
     }
@@ -56,7 +87,7 @@ export function authRouter(auth: Auth) {
     try {
       await StudentProfile.create({
         _id: new Types.ObjectId(userId),
-        country: phone.country ?? "AE",
+        country,
         pendingPhone: phone.e164,
         jetaFxClientId: d.jetaFxClientId || null,
         marketingConsent: d.marketingConsent,
@@ -69,7 +100,11 @@ export function authRouter(auth: Auth) {
     forwardCookies(res, result.headers);
     // CRM: link a matching lead to this new student (outbox row; never blocks sign-up).
     try {
-      await enqueueInTx("crm.autoLink", { userId, phone: phone.e164, email: d.email.toLowerCase(), reason: "signup" }, { dedupeId: `crm-link-signup-${userId}` });
+      await enqueueInTx(
+        "crm.autoLink",
+        { userId, phone: phone.e164, email: d.email.toLowerCase(), reason: "signup" },
+        { dedupeId: `crm-link-signup-${userId}` },
+      );
       await flushOutbox();
     } catch (e) {
       req.log?.warn({ err: e }, "crm auto-link enqueue failed");
@@ -88,7 +123,11 @@ export function authRouter(auth: Auth) {
     const pending = viewer.student?.pendingPhone;
     if (!pending) return { ok: true as const, home: homesFor(viewer).student ?? "/" };
     try {
-      const out = await auth.api.verifyPhoneNumber({ body: { phoneNumber: pending, code: req.valid.body.code, updatePhoneNumber: true }, headers: policyHeaders(req), returnHeaders: true });
+      const out = await auth.api.verifyPhoneNumber({
+        body: { phoneNumber: pending, code: req.valid.body.code, updatePhoneNumber: true },
+        headers: policyHeaders(req),
+        returnHeaders: true,
+      });
       forwardCookies(res, out.headers);
     } catch (e) {
       throw fromAuthError(e);
@@ -104,11 +143,13 @@ export function authRouter(auth: Auth) {
     let phone = viewer.student.pendingPhone;
     const { newPhone, channel } = req.valid.body;
     if (newPhone) {
-      const parsed = parsePhone(newPhone);
+      const parsed = parsePhone(newPhone, viewer.student.country);
       if (!parsed) throw new ApiError(400, "VALIDATION", "Please fix the highlighted fields.", { newPhone: "Enter a valid mobile number" });
-      if (await AuthUser.exists({ phoneNumber: parsed.e164 })) throw new ApiError(409, "CONFLICT", "This number is already registered.", { newPhone: "This number is already registered" });
+      if (await AuthUser.exists({ phoneNumber: parsed.e164 }))
+        throw new ApiError(409, "CONFLICT", "This number is already registered.", { newPhone: "This number is already registered" });
       phone = parsed.e164;
-      await StudentProfile.updateOne({ _id: new Types.ObjectId(viewer.userId) }, { $set: { pendingPhone: phone, country: parsed.country ?? viewer.student.country } });
+      // Country of residence is chosen at sign-up (and corrected by the academy), not inferred from a new SIM.
+      await StudentProfile.updateOne({ _id: new Types.ObjectId(viewer.userId) }, { $set: { pendingPhone: phone } });
     }
     await assertOtpAllowed(phone, clientIp(req));
     try {
@@ -121,7 +162,10 @@ export function authRouter(auth: Auth) {
 
   register(router, authRoutes.sendLoginOtp, async (req) => {
     const phone = parsePhone(req.valid.body.phone);
-    if (!phone) throw new ApiError(400, "VALIDATION", "Please fix the highlighted fields.", { phone: "Enter a valid mobile number" });
+    if (!phone)
+      throw new ApiError(400, "VALIDATION", "Please fix the highlighted fields.", {
+        phone: "Enter a valid mobile number with its country code",
+      });
     const user = await AuthUser.findOne({ phoneNumber: phone.e164 }, { phoneNumberVerified: 1, disabledAt: 1, twoFactorEnabled: 1 }).lean();
     const student = user ? await StudentProfile.exists({ _id: user._id }) : null;
     // Same answer whether or not the number exists; no OTP login for 2FA, disabled or staff accounts.
@@ -139,9 +183,14 @@ export function authRouter(auth: Auth) {
   register(router, authRoutes.verifyLoginOtp, async (req, res) => {
     const { phone, code } = req.valid.body;
     const user = await AuthUser.findOne({ phoneNumber: phone }, { phoneNumberVerified: 1, twoFactorEnabled: 1, disabledAt: 1 }).lean();
-    if (!user?.phoneNumberVerified || user.twoFactorEnabled || user.disabledAt) throw new ApiError(400, "VALIDATION", "That code is not correct or has expired.");
+    if (!user?.phoneNumberVerified || user.twoFactorEnabled || user.disabledAt)
+      throw new ApiError(400, "VALIDATION", "That code is not correct or has expired.");
     try {
-      const out = await auth.api.verifyPhoneNumber({ body: { phoneNumber: phone, code }, headers: policyHeaders(req), returnHeaders: true });
+      const out = await auth.api.verifyPhoneNumber({
+        body: { phoneNumber: phone, code },
+        headers: policyHeaders(req),
+        returnHeaders: true,
+      });
       forwardCookies(res, out.headers);
     } catch (e) {
       throw fromAuthError(e);
@@ -154,11 +203,20 @@ export function authRouter(auth: Auth) {
     let out;
     try {
       if (identifier.includes("@")) {
-        out = await auth.api.signInEmail({ body: { email: identifier.toLowerCase(), password }, headers: policyHeaders(req), returnHeaders: true });
+        out = await auth.api.signInEmail({
+          body: { email: identifier.toLowerCase(), password },
+          headers: policyHeaders(req),
+          returnHeaders: true,
+        });
       } else {
         const phone = parsePhone(identifier);
-        if (!phone) throw new ApiError(400, "VALIDATION", "Enter a valid email or mobile number.");
-        out = await auth.api.signInPhoneNumber({ body: { phoneNumber: phone.e164, password }, headers: policyHeaders(req), returnHeaders: true });
+        if (!phone)
+          throw new ApiError(400, "VALIDATION", "Enter your email, or your mobile number with its country code (e.g. +44 7400 123456).");
+        out = await auth.api.signInPhoneNumber({
+          body: { phoneNumber: phone.e164, password },
+          headers: policyHeaders(req),
+          returnHeaders: true,
+        });
       }
     } catch (e) {
       throw fromAuthError(e);

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { CACHE_STATES, CLASS_STATUSES, RECORDING_SOURCES, RECORDING_STATUSES } from "@edge/domain/enums";
-import { zOk } from "./common";
+import { paged, zOk, zPage } from "./common";
 import { route } from "./route";
 
 export const ClassSessionDto = z.object({
@@ -56,7 +56,15 @@ export const ScheduleClassInput = z.object({
   manualJoinUrl: z.union([z.literal(""), z.url()]).optional(),
   notify: z.boolean(),
 });
-export const RescheduleClassInput = ScheduleClassInput.pick({ title: true, description: true, date: true, time: true, durationMin: true, manualJoinUrl: true, notify: true });
+export const RescheduleClassInput = ScheduleClassInput.pick({
+  title: true,
+  description: true,
+  date: true,
+  time: true,
+  durationMin: true,
+  manualJoinUrl: true,
+  notify: true,
+});
 
 export const AddRecordingInput = z.object({
   batchId: z.string().min(1, "Choose a batch"),
@@ -71,7 +79,11 @@ const idParam = z.object({ id: z.string() });
 const option = z.object({ id: z.string(), name: z.string() });
 
 export const classRoutes = {
-  studentClasses: route({ method: "GET", path: "/api/v1/student/classes", response: z.object({ upcoming: z.array(ClassSessionDto), past: z.array(ClassSessionDto), joinWindowMinutes: z.number() }) }),
+  studentClasses: route({
+    method: "GET",
+    path: "/api/v1/student/classes",
+    response: z.object({ upcoming: z.array(ClassSessionDto), past: z.array(ClassSessionDto), joinWindowMinutes: z.number() }),
+  }),
   studentRecordings: route({ method: "GET", path: "/api/v1/student/recordings", response: z.array(RecordingDto) }),
   watch: route({
     method: "GET",
@@ -82,21 +94,59 @@ export const classRoutes = {
   staffOverview: route({
     method: "GET",
     path: "/api/v1/staff/overview",
-    response: z.object({ scopeAll: z.boolean(), batches: z.array(z.object({ id: z.string(), name: z.string(), startDate: z.string(), activeStudents: z.number() })), upcoming: z.array(ClassSessionDto) }),
+    response: z.object({
+      scopeAll: z.boolean(),
+      batches: z.array(z.object({ id: z.string(), name: z.string(), startDate: z.string(), activeStudents: z.number() })),
+      upcoming: z.array(ClassSessionDto),
+    }),
   }),
   manageClasses: route({
     method: "GET",
     path: "/api/v1/staff/classes",
-    response: z.object({ batches: z.array(option), hosts: z.array(option), defaultHostId: z.string().nullable(), upcoming: z.array(ClassSessionDto), past: z.array(ClassSessionDto) }),
+    query: zPage,
+    response: z.object({
+      batches: z.array(option),
+      hosts: z.array(option),
+      defaultHostId: z.string().nullable(),
+      upcoming: z.array(ClassSessionDto),
+      past: paged(ClassSessionDto),
+    }),
   }),
-  schedule: route({ method: "POST", path: "/api/v1/staff/classes", body: ScheduleClassInput, response: z.object({ id: z.string(), warning: z.string().nullable(), notified: z.number() }) }),
+  schedule: route({
+    method: "POST",
+    path: "/api/v1/staff/classes",
+    body: ScheduleClassInput,
+    response: z.object({ id: z.string(), warning: z.string().nullable(), notified: z.number() }),
+  }),
   reschedule: route({ method: "POST", path: "/api/v1/staff/classes/:id", params: idParam, body: RescheduleClassInput, response: zOk }),
-  cancel: route({ method: "POST", path: "/api/v1/staff/classes/:id/cancel", params: idParam, body: z.object({ reason: z.string().trim().default(""), notify: z.boolean().default(true) }), response: zOk }),
+  cancel: route({
+    method: "POST",
+    path: "/api/v1/staff/classes/:id/cancel",
+    params: idParam,
+    body: z.object({ reason: z.string().trim().default(""), notify: z.boolean().default(true) }),
+    response: zOk,
+  }),
   manageRecordings: route({
     method: "GET",
     path: "/api/v1/staff/recordings",
-    response: z.object({ batches: z.array(option), sessions: z.array(z.object({ id: z.string(), batchId: z.string(), label: z.string() })), recordings: z.array(RecordingDto) }),
+    query: zPage,
+    response: z.object({
+      batches: z.array(option),
+      sessions: z.array(z.object({ id: z.string(), batchId: z.string(), label: z.string() })),
+      recordings: paged(RecordingDto),
+    }),
   }),
-  addRecording: route({ method: "POST", path: "/api/v1/staff/recordings", body: AddRecordingInput, response: z.object({ id: z.string() }) }),
-  setRecordingStatus: route({ method: "POST", path: "/api/v1/staff/recordings/:id/status", params: idParam, body: z.object({ status: z.enum(["PUBLISHED", "HIDDEN"]) }), response: zOk }),
+  addRecording: route({
+    method: "POST",
+    path: "/api/v1/staff/recordings",
+    body: AddRecordingInput,
+    response: z.object({ id: z.string() }),
+  }),
+  setRecordingStatus: route({
+    method: "POST",
+    path: "/api/v1/staff/recordings/:id/status",
+    params: idParam,
+    body: z.object({ status: z.enum(["PUBLISHED", "HIDDEN"]) }),
+    response: zOk,
+  }),
 };

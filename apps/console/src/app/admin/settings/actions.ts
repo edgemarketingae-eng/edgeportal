@@ -38,11 +38,12 @@ export async function saveFeeRateAction(_prev: ActionState, form: FormData): Pro
         min: text(form, "min"),
         max: text(form, "max"),
         countries: text(form, "countries"),
+        excludeCountries: text(form, "excludeCountries"),
         enabled: checked(form, "enabled"),
       } satisfies RouteBody<typeof settingsRoutes.saveFeeRate>,
     }));
   } catch (e) {
-    return fail(e, values(form, ["label", "pctPercent", "fixed", "min", "max", "countries", "enabled"]));
+    return fail(e, values(form, ["label", "pctPercent", "fixed", "min", "max", "countries", "excludeCountries", "enabled"]));
   }
   refresh();
   return { ok: true, message: message ?? "Saved." };

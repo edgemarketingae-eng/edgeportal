@@ -13,7 +13,7 @@ export default async function NewBatchPage() {
   const courses = allCourses.filter((c) => c.isActive).sort((a, b) => a.title.localeCompare(b.title));
   return (
     <>
-      <PageHeader title="New batch" />
+      <PageHeader help="/admin/docs/batches" title="New batch" />
       <BatchForm
         courses={courses}
         mentors={mentors.map((m) => ({ id: m.userId, name: m.name }))}

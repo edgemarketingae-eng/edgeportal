@@ -1,4 +1,5 @@
 import { adminRoutes, paymentRoutes } from "@edge/contracts";
+import { countryName } from "@edge/domain/countries";
 import { LEAD_SOURCE_LABELS } from "@edge/domain/crm/labels";
 import { formatDate, formatDateTime } from "@edge/domain/dates";
 import { formatMoney } from "@edge/domain/money";
@@ -12,6 +13,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { DaysLeft } from "@/components/admin-ops/days-until";
 import { EnrollmentControls } from "@/components/admin-ops/enrollment-controls";
+import { StudentCountryForm } from "@/components/admin-ops/student-country-form";
 import { can, load, requireStaff } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Student" };
@@ -39,10 +41,11 @@ export default async function StudentDetailPage(props: PageProps<"/admin/student
   return (
     <>
       <PageHeader
+        help="/admin/docs/students"
         title={s.name}
         description={
           <>
-            {s.email} · {s.phoneNumber ?? `${s.pendingPhone ?? "no mobile"} (unverified)`} · {s.country}
+            {s.email} · {s.phoneNumber ?? `${s.pendingPhone ?? "no mobile"} (unverified)`} · {countryName(s.country)}
           </>
         }
         actions={
@@ -129,6 +132,14 @@ export default async function StudentDetailPage(props: PageProps<"/admin/student
             <CardTitle>Profile</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 text-sm">
+            <div>
+              <p className="text-muted-foreground">Country of residence</p>
+              {can(v, "student.update") ? (
+                <StudentCountryForm studentId={s.id} country={s.country} />
+              ) : (
+                <p className="font-semibold">{countryName(s.country)}</p>
+              )}
+            </div>
             <div>
               <p className="text-muted-foreground">Jeta FX client ID</p>
               <p className="font-semibold">{s.jetaFxClientId ?? "-"}</p>

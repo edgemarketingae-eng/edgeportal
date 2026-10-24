@@ -17,7 +17,7 @@ export default async function PaymentsPage() {
   const payments = await load(() => api(paymentRoutes.studentPayments));
   return (
     <>
-      <PageHeader title="Payments" description="Your payment history and receipts." />
+      <PageHeader help="/docs/paying" title="Payments" description="Your payment history and receipts." />
       <Card className="p-0">
         <Table>
           <TableHeader>

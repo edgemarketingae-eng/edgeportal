@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@edge/ui/components/ca
 import { Checkbox } from "@edge/ui/components/checkbox";
 import { Label } from "@edge/ui/components/label";
 import { Textarea } from "@edge/ui/components/textarea";
+import { NativeSelect } from "@edge/ui/components/native-select";
+import { CountrySelect } from "@edge/ui/forms/phone-input";
 import { Field, FormError, type ActionState } from "@edge/ui/forms/field";
 import { useActionState, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -41,7 +43,7 @@ export const EMPTY_LEAD: LeadFormValues = {
   name: "",
   phone: "",
   email: "",
-  country: "AE",
+  country: "",
   source: "INSTAGRAM",
   sourceDetail: "",
   courseInterestId: "",
@@ -58,26 +60,46 @@ export const EMPTY_LEAD: LeadFormValues = {
   ownerId: "",
 };
 
-const select = "h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm";
-
 /** The submitted values after a failed save (React resets the form after every action). */
 function restore(values: LeadFormValues, s?: Record<string, string>): LeadFormValues {
   if (!s) return values;
   return { ...values, ...s, marketingConsent: s.marketingConsent === "on", whatsappConsent: s.whatsappConsent === "on" };
 }
 
-function Select({ id, name, value, children, error }: { id: string; name: string; value: string; children: React.ReactNode; error?: string }) {
+function Select({
+  id,
+  name,
+  value,
+  children,
+  error,
+}: {
+  id: string;
+  name: string;
+  value: string;
+  children: React.ReactNode;
+  error?: string;
+}) {
   return (
     <>
-      <select id={id} name={name} defaultValue={value} className={select}>
+      <NativeSelect id={id} name={name} defaultValue={value} aria-invalid={!!error || undefined}>
         {children}
-      </select>
+      </NativeSelect>
       {error ? <p className="text-destructive text-xs">{error}</p> : null}
     </>
   );
 }
 
-export function LeadForm({ values, options, meId, projectName }: { values: LeadFormValues; options: CrmOptions; meId: string; projectName?: string }) {
+export function LeadForm({
+  values,
+  options,
+  meId,
+  projectName,
+}: {
+  values: LeadFormValues;
+  options: CrmOptions;
+  meId: string;
+  projectName?: string;
+}) {
   const [state, action, pending] = useActionState(saveLeadAction, {} as ActionState);
   useEffect(() => {
     if (state.ok) toast.success(state.message ?? "Saved");
@@ -103,13 +125,21 @@ export function LeadForm({ values, options, meId, projectName }: { values: LeadF
           <CardContent className="grid gap-4">
             <Field label="Name" name="name" defaultValue={v.name} error={fe.name} required />
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Mobile (WhatsApp)" name="phone" inputMode="tel" defaultValue={v.phone} error={fe.phone} placeholder="+971 50 123 4567" />
+              <Field label="Mobile (WhatsApp)" name="phone" type="tel" defaultValue={v.phone} error={fe.phone} />
               <Field label="Email" name="email" type="email" defaultValue={v.email} error={fe.email} />
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
-              <Field label="Country" name="country" defaultValue={v.country} error={fe.country} maxLength={2} hint="ISO code, e.g. AE" />
+              <Field label="Country" name="country" error={fe.country} hint="Detect uses the mobile number">
+                <CountrySelect
+                  id="country"
+                  name="country"
+                  defaultValue={v.country}
+                  emptyLabel="Detect from mobile"
+                  aria-invalid={!!fe.country || undefined}
+                />
+              </Field>
               <Field label="Language" name="language" defaultValue={v.language} error={fe.language} placeholder="English, Arabic, Hindi…" />
-              <div className="grid gap-1.5">
+              <div className="grid content-start gap-2">
                 <Label htmlFor="preferredChannel">Preferred channel</Label>
                 <Select id="preferredChannel" name="preferredChannel" value={v.preferredChannel} error={fe.preferredChannel}>
                   <option value="">Not set</option>
@@ -128,8 +158,13 @@ export function LeadForm({ values, options, meId, projectName }: { values: LeadF
               <label className="flex items-center gap-2 text-sm">
                 <Checkbox name="marketingConsent" defaultChecked={v.marketingConsent} /> Agreed to marketing emails (MailerLite)
               </label>
+              {creating ? (
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox name="allowDuplicate" /> Create even if a lead with this contact already exists
+                </label>
+              ) : null}
             </div>
-            <div className="grid gap-1.5">
+            <div className="grid content-start gap-2">
               <Label htmlFor="notes">Notes</Label>
               <Textarea id="notes" name="notes" rows={5} defaultValue={v.notes} />
               {fe.notes ? <p className="text-destructive text-xs">{fe.notes}</p> : null}
@@ -141,23 +176,23 @@ export function LeadForm({ values, options, meId, projectName }: { values: LeadF
             <CardTitle>Sales</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4">
-            <div className="grid gap-1.5">
+            <div className="grid content-start gap-2">
               <Label htmlFor="projectId">Project</Label>
               {creating ? (
-                <select id="projectId" name="projectId" value={projectId} onChange={(e) => setProjectId(e.target.value)} className={select} required>
+                <NativeSelect id="projectId" name="projectId" value={projectId} onChange={(e) => setProjectId(e.target.value)} required>
                   {options.projects.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               ) : (
                 <p className="text-sm font-medium">{projectName ?? "—"}</p>
               )}
               {fe.projectId ? <p className="text-destructive text-xs">{fe.projectId}</p> : null}
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="grid gap-1.5">
+              <div className="grid content-start gap-2">
                 <Label htmlFor="source">Source</Label>
                 <Select id="source" name="source" value={v.source} error={fe.source}>
                   {LEAD_SOURCES.map((s) => (
@@ -167,21 +202,27 @@ export function LeadForm({ values, options, meId, projectName }: { values: LeadF
                   ))}
                 </Select>
               </div>
-              <Field label="Source detail" name="sourceDetail" defaultValue={v.sourceDetail} error={fe.sourceDetail} placeholder="Campaign, post, referrer…" />
+              <Field
+                label="Source detail"
+                name="sourceDetail"
+                defaultValue={v.sourceDetail}
+                error={fe.sourceDetail}
+                placeholder="Campaign, post, referrer…"
+              />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="grid gap-1.5">
+              <div className="grid content-start gap-2">
                 <Label htmlFor="courseInterestId">Course of interest</Label>
-                <select id="courseInterestId" name="courseInterestId" value={courseId} onChange={(e) => setCourseId(e.target.value)} className={select}>
+                <NativeSelect id="courseInterestId" name="courseInterestId" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
                   <option value="">Not set</option>
                   {options.courses.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.title}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
-              <div className="grid gap-1.5">
+              <div className="grid content-start gap-2">
                 <Label htmlFor="batchInterestId">Batch of interest</Label>
                 <Select id="batchInterestId" name="batchInterestId" value={v.batchInterestId} error={fe.batchInterestId}>
                   <option value="">Not set</option>
@@ -194,7 +235,7 @@ export function LeadForm({ values, options, meId, projectName }: { values: LeadF
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="grid gap-1.5">
+              <div className="grid content-start gap-2">
                 <Label htmlFor="experienceLevel">Trading experience</Label>
                 <Select id="experienceLevel" name="experienceLevel" value={v.experienceLevel} error={fe.experienceLevel}>
                   <option value="">Unknown</option>
@@ -205,7 +246,7 @@ export function LeadForm({ values, options, meId, projectName }: { values: LeadF
                   ))}
                 </Select>
               </div>
-              <div className="grid gap-1.5">
+              <div className="grid content-start gap-2">
                 <Label htmlFor="temperature">Temperature</Label>
                 <Select id="temperature" name="temperature" value={v.temperature} error={fe.temperature}>
                   {LEAD_TEMPERATURES.map((t) => (
@@ -217,7 +258,7 @@ export function LeadForm({ values, options, meId, projectName }: { values: LeadF
               </div>
             </div>
             {creating && project?.canAssign && team.length > 1 ? (
-              <div className="grid gap-1.5">
+              <div className="grid content-start gap-2">
                 <Label htmlFor="ownerId">Owner</Label>
                 <Select id="ownerId" name="ownerId" value={v.ownerId || (team.some((t) => t.id === meId) ? meId : "")} error={fe.ownerId}>
                   <option value="">Unassigned (pool)</option>
@@ -230,7 +271,15 @@ export function LeadForm({ values, options, meId, projectName }: { values: LeadF
               </div>
             ) : null}
             <Field label="Tags" name="tags" defaultValue={v.tags} error={fe.tags} hint="Comma separated, e.g. webinar-oct, vip" />
-            {creating ? <Field label="First follow-up (optional)" name="nextFollowUpAt" type="datetime-local" defaultValue={v.nextFollowUpAt} error={fe.nextFollowUpAt} /> : null}
+            {creating ? (
+              <Field
+                label="First follow-up (optional)"
+                name="nextFollowUpAt"
+                type="datetime-local"
+                defaultValue={v.nextFollowUpAt}
+                error={fe.nextFollowUpAt}
+              />
+            ) : null}
           </CardContent>
         </Card>
       </div>

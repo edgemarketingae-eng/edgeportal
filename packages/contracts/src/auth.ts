@@ -1,12 +1,14 @@
 import { z } from "zod";
 import { route } from "./route";
-import { zEmail, zOk } from "./common";
+import { zCountry, zEmail, zOk } from "./common";
 
 /** Composite auth endpoints (policy lives in the API, cookies flow through the app rewrite). */
 export const StudentSignupInput = z.object({
   name: z.string().trim().min(2, "Enter your full name").max(80),
   email: zEmail(),
   phone: z.string().trim().min(6, "Enter your mobile number"),
+  /** Country of residence: decides VAT and which payment methods are offered. */
+  country: zCountry.optional(),
   password: z.string().min(8, "At least 8 characters").max(128),
   jetaFxClientId: z.string().trim().max(50).optional(),
   marketingConsent: z.boolean(),
@@ -45,7 +47,11 @@ export const authRoutes = {
   signInPassword: route({
     method: "POST",
     path: "/api/v1/auth/sign-in",
-    body: z.object({ identifier: z.string().trim().min(3, "Enter your email or mobile number"), password: z.string().min(1, "Enter your password"), app: z.enum(["student", "console", "crm"]) }),
+    body: z.object({
+      identifier: z.string().trim().min(3, "Enter your email or mobile number"),
+      password: z.string().min(1, "Enter your password"),
+      app: z.enum(["student", "console", "crm"]),
+    }),
     response: z.object({ ok: z.literal(true), home: z.string().optional(), twoFactorRedirect: z.boolean().optional() }),
   }),
 };

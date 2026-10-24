@@ -17,10 +17,16 @@ async function csvFromForm(form: FormData) {
 
 export async function previewImportAction(_prev: ImportState, form: FormData): Promise<ImportState> {
   const csv = await csvFromForm(form);
-  const vals = { csv, projectId: text(form, "projectId"), source: text(form, "source"), ownerId: text(form, "ownerId") };
+  const vals = {
+    csv,
+    projectId: text(form, "projectId"),
+    source: text(form, "source"),
+    ownerId: text(form, "ownerId"),
+    defaultCountry: text(form, "defaultCountry"),
+  };
   if (!csv) return { error: "Paste CSV text or choose a file.", values: vals };
   try {
-    const preview = await api(crmRoutes.importPreview, { body: { csv } });
+    const preview = await api(crmRoutes.importPreview, { body: { csv, defaultCountry: vals.defaultCountry } });
     return { ok: true, step: "preview", values: vals, preview };
   } catch (e) {
     return fail(e, vals);
@@ -29,9 +35,23 @@ export async function previewImportAction(_prev: ImportState, form: FormData): P
 
 export async function importLeadsAction(_prev: ImportState, form: FormData): Promise<ImportState> {
   const csv = text(form, "csv");
-  const vals = { csv, projectId: text(form, "projectId"), source: text(form, "source"), ownerId: text(form, "ownerId") };
+  const vals = {
+    csv,
+    projectId: text(form, "projectId"),
+    source: text(form, "source"),
+    ownerId: text(form, "ownerId"),
+    defaultCountry: text(form, "defaultCountry"),
+  };
   try {
-    const r = await api(crmRoutes.importCsv, { body: { csv, projectId: text(form, "projectId"), source: text(form, "source") as RouteBody<typeof crmRoutes.importCsv>["source"], ownerId: text(form, "ownerId") || undefined } });
+    const r = await api(crmRoutes.importCsv, {
+      body: {
+        csv,
+        projectId: text(form, "projectId"),
+        source: text(form, "source") as RouteBody<typeof crmRoutes.importCsv>["source"],
+        ownerId: text(form, "ownerId") || undefined,
+        defaultCountry: vals.defaultCountry,
+      },
+    });
     refresh();
     return { ok: true, step: "done", message: r.message, result: { created: r.created, skipped: r.skipped, invalid: r.invalid } };
   } catch (e) {

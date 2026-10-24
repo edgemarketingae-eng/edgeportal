@@ -14,7 +14,7 @@ export default async function StaffHome() {
   const { scopeAll, batches, upcoming } = await load(() => api(classRoutes.staffOverview));
   return (
     <>
-      <PageHeader title={`Hello, ${v.user.name.split(" ")[0]}`} description={v.staff.title ?? undefined} />
+      <PageHeader help="/staff/docs/dashboard" title={`Hello, ${v.user.name.split(" ")[0]}`} description={v.staff.title ?? undefined} />
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>

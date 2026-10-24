@@ -22,7 +22,10 @@ export function VerifyPhoneForm({ phone: initialPhone }: { phone: string }) {
   const [resendState, resend, resending] = useActionState(async (_prev: ActionState, form: FormData): Promise<ActionState> => {
     try {
       const newPhone = String(form.get("newPhone") ?? "").trim();
-      const res = await postAuth(authRoutes.resendPhoneOtp, { newPhone: newPhone || undefined, channel: String(form.get("channel") ?? "sms") });
+      const res = await postAuth(authRoutes.resendPhoneOtp, {
+        newPhone: newPhone || undefined,
+        channel: String(form.get("channel") ?? "sms"),
+      });
       setChanging(false);
       return { message: res.message, values: { phone: res.phone } };
     } catch (e) {
@@ -47,7 +50,9 @@ export function VerifyPhoneForm({ phone: initialPhone }: { phone: string }) {
         </Button>
       </form>
       <form action={resend} className="grid gap-3 rounded-lg border p-4">
-        {changing ? <Field label="New mobile number" name="newPhone" type="tel" placeholder="+971 50 123 4567" error={resendState.fieldErrors?.newPhone} required /> : null}
+        {changing ? (
+          <Field label="New mobile number" name="newPhone" type="tel" error={resendState.fieldErrors?.newPhone} required />
+        ) : null}
         <ChannelPicker />
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Button type="submit" variant="outline" size="sm" disabled={resending}>

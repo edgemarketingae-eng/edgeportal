@@ -18,7 +18,11 @@ function PasswordForm() {
   const [state, action, pending] = useActionState(async (_prev: ActionState, form: FormData): Promise<ActionState> => {
     const values = { identifier: str(form, "identifier") };
     try {
-      const res = await postAuth(authRoutes.signInPassword, { identifier: values.identifier, password: String(form.get("password") ?? ""), app: "student" });
+      const res = await postAuth(authRoutes.signInPassword, {
+        identifier: values.identifier,
+        password: String(form.get("password") ?? ""),
+        app: "student",
+      });
       return hardNavigate(res.home ?? "/dashboard");
     } catch (e) {
       return toActionState(e, values);
@@ -33,10 +37,17 @@ function PasswordForm() {
         autoComplete="username"
         defaultValue={state.values?.identifier}
         error={state.fieldErrors?.identifier}
-        placeholder="you@example.com or +971 50 123 4567"
+        placeholder="you@example.com or your mobile with country code"
         required
       />
-      <Field label="Password" name="password" type="password" autoComplete="current-password" error={state.fieldErrors?.password} required />
+      <Field
+        label="Password"
+        name="password"
+        type="password"
+        autoComplete="current-password"
+        error={state.fieldErrors?.password}
+        required
+      />
       <div className="-mt-2 text-right text-sm">
         <Link href="/forgot-password" className="text-edge-emerald underline-offset-4 hover:underline">
           Forgot password?
@@ -80,7 +91,6 @@ function OtpForm() {
           name="phone"
           type="tel"
           autoComplete="tel"
-          placeholder="+971 50 123 4567"
           defaultValue={sendState.values?.phone}
           error={sendState.fieldErrors?.phone}
           required

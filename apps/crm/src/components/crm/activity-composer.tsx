@@ -6,12 +6,12 @@ import { Button } from "@edge/ui/components/button";
 import { Checkbox } from "@edge/ui/components/checkbox";
 import { Label } from "@edge/ui/components/label";
 import { Textarea } from "@edge/ui/components/textarea";
+import { NativeSelect } from "@edge/ui/components/native-select";
 import { Field, FormError, type ActionState } from "@edge/ui/forms/field";
 import { useActionState, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { addActivityAction } from "@/lib/actions/leads";
 
-const select = "h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm";
 const PLACEHOLDER: Record<LeadTouchType, string> = {
   NOTE: "What did you learn? Budget, goals, objections…",
   CALL: "How did the call go?",
@@ -48,25 +48,25 @@ export function ActivityComposer({ leadId }: { leadId: string }) {
       {type === "CALL" ? (
         <div className="grid gap-1.5 sm:max-w-xs">
           <Label htmlFor="outcome">Outcome</Label>
-          <select id="outcome" name="outcome" className={select} defaultValue={v?.outcome ?? "ANSWERED"}>
+          <NativeSelect id="outcome" name="outcome" defaultValue={v?.outcome ?? "ANSWERED"}>
             {CALL_OUTCOMES.map((o) => (
               <option key={o} value={o}>
                 {CALL_OUTCOME_LABELS[o]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
       ) : null}
       {type === "WHATSAPP" || type === "EMAIL" ? (
         <div className="grid gap-1.5 sm:max-w-xs">
           <Label htmlFor="direction">Direction</Label>
-          <select id="direction" name="direction" className={select} defaultValue={v?.direction ?? "OUT"}>
+          <NativeSelect id="direction" name="direction" defaultValue={v?.direction ?? "OUT"}>
             <option value="OUT">Sent by us</option>
             <option value="IN">Received from the lead</option>
-          </select>
+          </NativeSelect>
         </div>
       ) : null}
-      <div className="grid gap-1.5">
+      <div className="grid content-start gap-2">
         <Textarea name="body" rows={3} placeholder={PLACEHOLDER[type]} defaultValue={v?.body} aria-label="Details" />
         {fe.body ? <p className="text-destructive text-xs">{fe.body}</p> : null}
       </div>
@@ -75,18 +75,25 @@ export function ActivityComposer({ leadId }: { leadId: string }) {
       </label>
       {schedule ? (
         <div className="grid gap-3 sm:grid-cols-3">
-          <Field label="When" name="nextFollowUpAt" type="datetime-local" required error={fe.nextFollowUpAt} defaultValue={v?.nextFollowUpAt} />
+          <Field
+            label="When"
+            name="nextFollowUpAt"
+            type="datetime-local"
+            required
+            error={fe.nextFollowUpAt}
+            defaultValue={v?.nextFollowUpAt}
+          />
           <Field label="Title" name="nextFollowUpTitle" placeholder="Follow up" defaultValue={v?.nextFollowUpTitle} />
-          <div className="grid gap-1.5">
+          <div className="grid content-start gap-2">
             <Label htmlFor="nextFollowUpType">Type</Label>
-            <select id="nextFollowUpType" name="nextFollowUpType" className={select} defaultValue={v?.nextFollowUpType ?? ""}>
+            <NativeSelect id="nextFollowUpType" name="nextFollowUpType" defaultValue={v?.nextFollowUpType ?? ""}>
               <option value="">Same as this activity</option>
               {FOLLOWUP_TYPES.map((t) => (
                 <option key={t} value={t}>
                   {FOLLOWUP_TYPE_LABELS[t]}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
         </div>
       ) : null}

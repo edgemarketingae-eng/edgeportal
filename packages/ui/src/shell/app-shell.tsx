@@ -1,10 +1,17 @@
-import { Bell, LogOut } from "lucide-react";
+import { Bell, CircleHelp, LogOut } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Logo } from "../brand/logo";
 import { Avatar, AvatarFallback } from "../components/avatar";
 import { Button } from "../components/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "../components/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../components/dropdown-menu";
 import { MobileNav } from "./mobile-nav";
 import { NavLinks, type NavItem } from "./nav";
 
@@ -35,6 +42,7 @@ export function AppShell({
   menuLinks = [],
   unread = 0,
   notificationsHref,
+  helpHref,
   signOutHref = "/sign-out",
   children,
 }: {
@@ -45,6 +53,8 @@ export function AppShell({
   menuLinks?: AreaLink[];
   unread?: number;
   notificationsHref: string;
+  /** The app's Help & docs page, linked from the header. */
+  helpHref?: string;
   signOutHref?: string;
   children: ReactNode;
 }) {
@@ -76,7 +86,20 @@ export function AppShell({
           <MobileNav items={items} logo={logo} />
           <span className="text-muted-foreground text-sm font-semibold lg:hidden">{areaLabel}</span>
           <div className="ml-auto flex items-center gap-1">
-            <Button asChild variant="ghost" size="icon" aria-label={`Notifications${unread ? ` (${unread} unread)` : ""}`} className="relative">
+            {helpHref ? (
+              <Button asChild variant="ghost" size="icon" aria-label="Help & docs" title="Help & docs">
+                <Link href={helpHref}>
+                  <CircleHelp />
+                </Link>
+              </Button>
+            ) : null}
+            <Button
+              asChild
+              variant="ghost"
+              size="icon"
+              aria-label={`Notifications${unread ? ` (${unread} unread)` : ""}`}
+              className="relative"
+            >
               <Link href={notificationsHref}>
                 <Bell />
                 {unread ? <span className="bg-edge-coral absolute top-1.5 right-1.5 size-2 rounded-full" /> : null}
@@ -127,12 +150,32 @@ export function AppShell({
   );
 }
 
-export function PageHeader({ title, description, actions }: { title: string; description?: ReactNode; actions?: ReactNode }) {
+/** `help` links to the docs guide for this page. */
+export function PageHeader({
+  title,
+  description,
+  actions,
+  help,
+}: {
+  title: string;
+  description?: ReactNode;
+  actions?: ReactNode;
+  help?: string;
+}) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
       <div>
         <h1 className="font-display text-2xl uppercase sm:text-3xl">{title}</h1>
-        {description ? <p className="text-muted-foreground mt-1 text-sm">{description}</p> : null}
+        {description || help ? (
+          <p className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            {description ? <span>{description}</span> : null}
+            {help ? (
+              <Link href={help} className="text-edge-emerald inline-flex items-center gap-1 text-xs font-semibold hover:underline">
+                <CircleHelp className="size-3.5" /> How this works
+              </Link>
+            ) : null}
+          </p>
+        ) : null}
       </div>
       {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
     </div>

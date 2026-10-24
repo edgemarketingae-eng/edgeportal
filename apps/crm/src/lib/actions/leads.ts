@@ -5,6 +5,7 @@ import { checked, dialogError, text, toActionState, values, type ActionState } f
 import { api } from "@edge/web/server";
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
+import { UNASSIGN } from "../bulk";
 import { fail, run } from "./common";
 
 const LEAD_FIELDS = [
@@ -32,6 +33,7 @@ const LEAD_FIELDS = [
 const ACTIVITY_FIELDS = ["type", "body", "outcome", "direction", "nextFollowUpAt", "nextFollowUpTitle", "nextFollowUpType"];
 
 type LeadBody = RouteBody<typeof crmRoutes.create>;
+type LeadFiltersBody = NonNullable<RouteBody<typeof crmRoutes.bulkDelete>["filters"]>;
 
 function leadBody(form: FormData): LeadBody {
   return {
@@ -100,7 +102,14 @@ export async function quickAddLeadAction(_prev: ActionState, form: FormData): Pr
 
 export async function setStageAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   return run(() =>
-    api(crmRoutes.stage, { params: { id: text(form, "id") }, body: { stage: text(form, "stage") as RouteBody<typeof crmRoutes.stage>["stage"], lostReason: text(form, "lostReason"), note: text(form, "note") } }),
+    api(crmRoutes.stage, {
+      params: { id: text(form, "id") },
+      body: {
+        stage: text(form, "stage") as RouteBody<typeof crmRoutes.stage>["stage"],
+        lostReason: text(form, "lostReason"),
+        note: text(form, "note"),
+      },
+    }),
   );
 }
 
@@ -116,10 +125,23 @@ export async function moveProjectAction(_prev: ActionState, form: FormData): Pro
   return run(() => api(crmRoutes.moveProject, { params: { id: text(form, "id") }, body: { projectId: text(form, "projectId") } }));
 }
 
-export async function bulkAssignAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+/** Ticked ids, or the list's filters when "select all matching" is on. */
+function bulkTarget(form: FormData): { ids?: string[]; filters?: LeadFiltersBody } | null {
+  if (text(form, "scope") === "filter") {
+    const q = new URLSearchParams(text(form, "filters"));
+    for (const k of ["page", "pageSize", "sort", "deleted"]) q.delete(k);
+    return { filters: Object.fromEntries(q) as LeadFiltersBody };
+  }
   const ids = form.getAll("ids").map(String).filter(Boolean);
-  if (!ids.length) return { error: "Select at least one lead." };
-  return run(() => api(crmRoutes.bulkAssign, { body: { ids, ownerId: text(form, "ownerId") } }));
+  return ids.length ? { ids } : null;
+}
+
+export async function bulkAssignAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const target = bulkTarget(form);
+  if (!target) return { error: "Select at least one lead." };
+  const owner = text(form, "ownerId");
+  if (!owner) return { error: "Choose who to assign the leads to." };
+  return run(() => api(crmRoutes.bulkAssign, { body: { ...target, ownerId: owner === UNASSIGN ? "" : owner } }));
 }
 
 export async function addActivityAction(_prev: ActionState, form: FormData): Promise<ActionState> {
@@ -146,7 +168,10 @@ export async function addActivityAction(_prev: ActionState, form: FormData): Pro
 export async function convertAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   let message: string;
   try {
-    ({ message } = await api(crmRoutes.convert, { params: { id: text(form, "id") }, body: { batchId: text(form, "batchId") || undefined, sendSetPassword: checked(form, "sendSetPassword") } }));
+    ({ message } = await api(crmRoutes.convert, {
+      params: { id: text(form, "id") },
+      body: { batchId: text(form, "batchId") || undefined, sendSetPassword: checked(form, "sendSetPassword") },
+    }));
   } catch (e) {
     return dialogError(e);
   }
@@ -164,4 +189,29 @@ export async function resendWelcomeAction(_prev: ActionState, form: FormData): P
 
 export async function mergeAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   return run(() => api(crmRoutes.merge, { params: { id: text(form, "id") }, body: { fromId: text(form, "fromId") } }));
+}
+
+export async function deleteLeadAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  if (text(form, "confirm").trim().toUpperCase() !== "DELETE") return { error: "Type DELETE to confirm." };
+  try {
+    await api(crmRoutes.deleteLead, { params: { id: text(form, "id") } });
+  } catch (e) {
+    return dialogError(e);
+  }
+  redirect("/leads?deleted=1");
+}
+
+export async function bulkDeleteLeadsAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const target = bulkTarget(form);
+  if (!target) return { error: "Select at least one lead." };
+  if (text(form, "confirm").trim().toUpperCase() !== "DELETE") return { error: "Type DELETE to confirm." };
+  let r: { deleted: number; skipped: number };
+  try {
+    r = await api(crmRoutes.bulkDelete, { body: target });
+  } catch (e) {
+    return dialogError(e);
+  }
+  refresh();
+  const msg = `${r.deleted} lead${r.deleted === 1 ? "" : "s"} deleted.`;
+  return { ok: true, message: r.skipped ? `${msg} ${r.skipped} skipped (linked to a student account or not visible to you).` : msg };
 }

@@ -15,9 +15,8 @@ import {
   type ReactNode,
 } from "react";
 import { Input } from "../components/input";
+import { NativeSelect } from "../components/native-select";
 import { cn } from "../lib/utils";
-
-const select = "h-9 rounded-lg border border-input bg-card px-2.5 text-sm";
 
 /**
  * List filters live in the URL so lists are shareable, exportable and work with Back. Changing them is a
@@ -49,6 +48,11 @@ function useNavigator(): Navigator {
   const scope = useContext(FilterContext);
   const own = useTransitionNavigator();
   return scope ?? own;
+}
+
+/** Navigate within the list's scope (results dim while the next page loads), e.g. from a page-size select. */
+export function useListNavigate() {
+  return useNavigator().navigate;
 }
 
 /** Shares one pending state between the filters, the view links and the results of a list page. */
@@ -224,13 +228,13 @@ export function FilterSelect({
 }) {
   return (
     // Keyed by the value so it shows the new one when the URL changes without this select (a link, Back).
-    <select key={value ?? ""} name={name} defaultValue={value ?? ""} className={select} aria-label={label}>
+    <NativeSelect size="sm" wrapperClassName="w-auto" key={value ?? ""} name={name} defaultValue={value ?? ""} aria-label={label}>
       <option value="">{allLabel ?? `${label}: all`}</option>
       {options.map(([v, l]) => (
         <option key={v} value={v}>
           {l}
         </option>
       ))}
-    </select>
+    </NativeSelect>
   );
 }

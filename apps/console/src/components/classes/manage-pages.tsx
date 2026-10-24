@@ -1,6 +1,7 @@
 import { classRoutes, type ClassSessionDto } from "@edge/contracts";
 import { dubaiParts } from "@edge/domain/classes/window";
 import { formatDate, formatDateTime } from "@edge/domain/dates";
+import { Pagination } from "@edge/ui/blocks/pagination";
 import { Badge } from "@edge/ui/components/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@edge/ui/components/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@edge/ui/components/table";
@@ -25,8 +26,11 @@ function editable(s: ClassSessionDto): ClassRow {
 }
 
 /** Class management for the viewer's batches (the API scopes them: a mentor's own, or all for admins). */
-export async function ClassesManager() {
-  const { batches, hosts, defaultHostId, upcoming, past } = await load(() => api(classRoutes.manageClasses));
+/** `page`: page of the past-and-cancelled list. */
+export async function ClassesManager({ page = 1 }: { page?: number }) {
+  const { batches, hosts, defaultHostId, upcoming, past } = await load(() =>
+    api(classRoutes.manageClasses, { query: { page, pageSize: 25 } }),
+  );
   return (
     <div className="grid gap-6">
       <Card>
@@ -112,7 +116,7 @@ export async function ClassesManager() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {past.map((s) => (
+            {past.rows.map((s) => (
               <TableRow key={s.id}>
                 <TableCell>
                   <span className="font-medium">{s.title}</span> <span className="text-muted-foreground text-xs">· {s.batchName}</span>
@@ -136,12 +140,14 @@ export async function ClassesManager() {
           </TableBody>
         </Table>
       </Card>
+      <Pagination page={past.page} pageSize={past.pageSize} total={past.total} noun="past classes" defaultSize={25} className="-mt-2" />
     </div>
   );
 }
 
-export async function RecordingsManager() {
-  const { batches, sessions, recordings } = await load(() => api(classRoutes.manageRecordings));
+export async function RecordingsManager({ page = 1 }: { page?: number }) {
+  const { batches, sessions, recordings: paged } = await load(() => api(classRoutes.manageRecordings, { query: { page, pageSize: 25 } }));
+  const recordings = paged.rows;
   return (
     <div className="grid gap-6">
       <Card>
@@ -213,6 +219,7 @@ export async function RecordingsManager() {
           </TableBody>
         </Table>
       </Card>
+      <Pagination page={paged.page} pageSize={paged.pageSize} total={paged.total} noun="recordings" defaultSize={25} className="-mt-2" />
     </div>
   );
 }

@@ -21,6 +21,7 @@ export default async function ProjectsPage() {
   return (
     <>
       <PageHeader
+        help="/docs/projects"
         title="Projects"
         description="Sales campaigns with their own team. A project manager runs everything inside; executives work their own leads and the project's pool."
         actions={
@@ -46,7 +47,9 @@ export default async function ProjectsPage() {
                 {p.code}
                 {p.courseTitle ? ` · ${p.courseTitle}` : ""}
                 {p.batchName ? ` · ${p.batchName}` : ""}
-                {p.startDate || p.endDate ? ` · ${p.startDate ? formatDate(p.startDate) : "…"} – ${p.endDate ? formatDate(p.endDate) : "…"}` : ""}
+                {p.startDate || p.endDate
+                  ? ` · ${p.startDate ? formatDate(p.startDate) : "…"} – ${p.endDate ? formatDate(p.endDate) : "…"}`
+                  : ""}
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3 text-sm">
@@ -58,19 +61,29 @@ export default async function ProjectsPage() {
                 <div>
                   <p className="text-2xl font-bold tabular-nums">
                     {p.stats.convertedMonth}
-                    {p.targetConversions ? <span className="text-muted-foreground text-sm font-normal"> / {p.targetConversions}</span> : null}
+                    {p.targetConversions ? (
+                      <span className="text-muted-foreground text-sm font-normal"> / {p.targetConversions}</span>
+                    ) : null}
                   </p>
                   <p className="text-muted-foreground text-xs">converted this month</p>
                 </div>
                 <div>
-                  <p className={`text-2xl font-bold tabular-nums ${p.stats.overdueTasks ? "text-destructive" : ""}`}>{p.stats.overdueTasks}</p>
+                  <p className={`text-2xl font-bold tabular-nums ${p.stats.overdueTasks ? "text-destructive" : ""}`}>
+                    {p.stats.overdueTasks}
+                  </p>
                   <p className="text-muted-foreground text-xs">overdue tasks</p>
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
                 <Badge variant="outline">{PROJECT_STATUS_LABELS[p.status]}</Badge>
-                {p.isDefault ? <Badge variant="outline">Open to everyone</Badge> : <Badge variant="outline">{p.stats.team} on the team</Badge>}
-                {p.managers.length ? <span className="text-muted-foreground text-xs">PM: {p.managers.map((m) => m.name).join(", ")}</span> : null}
+                {p.isDefault ? (
+                  <Badge variant="outline">Open to everyone</Badge>
+                ) : (
+                  <Badge variant="outline">{p.stats.team} on the team</Badge>
+                )}
+                {p.managers.length ? (
+                  <span className="text-muted-foreground text-xs">PM: {p.managers.map((m) => m.name).join(", ")}</span>
+                ) : null}
               </div>
             </CardContent>
           </Card>

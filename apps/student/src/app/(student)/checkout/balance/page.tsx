@@ -17,7 +17,11 @@ export default async function BalancePage() {
   if (!options.canPayBalance) redirect(options.canCheckout ? "/checkout" : "/dashboard");
   return (
     <>
-      <PageHeader title="Pay your balance" description={options.balanceDueOn ? `Due by ${formatDate(options.balanceDueOn)}` : undefined} />
+      <PageHeader
+        help="/docs/paying"
+        title="Pay your balance"
+        description={options.balanceDueOn ? `Due by ${formatDate(options.balanceDueOn)}` : undefined}
+      />
       <CheckoutForm mode="balance" options={options} />
     </>
   );

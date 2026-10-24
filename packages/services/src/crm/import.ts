@@ -1,12 +1,15 @@
 import type { ImportPreviewDto } from "@edge/contracts";
-import { AuthUser, Lead, StudentProfile } from "@edge/db";
-import type { LeadSource } from "@edge/domain/crm/enums";
+import { AuthUser, Lead, Project, StudentProfile } from "@edge/db";
+import { ROUND_ROBIN, type LeadSource } from "@edge/domain/crm/enums";
 import { csvToObjects } from "@edge/domain/csv";
 import type { Actor } from "@edge/domain/enums";
+import { isCountryCode } from "@edge/domain/countries";
 import { parsePhone } from "@edge/domain/phone";
 import { audit } from "../audit";
 import { BusinessError, ValidationError } from "../errors";
+import { oid } from "../ids";
 import { createLead } from "./leads";
+import { roundRobinPicker } from "./round-robin";
 import type { CrmScope } from "./scope";
 
 const MAX_ROWS = 2000;
@@ -41,32 +44,49 @@ interface ParsedRow {
   error: string | null;
 }
 
-function parseRows(csv: string): ParsedRow[] {
+/** `defaultCountry` only reads local numbers (no +code) in rows without their own country column value. */
+function parseRows(csv: string, defaultCountry?: string | null): ParsedRow[] {
   const { headers, rows } = csvToObjects(csv);
-  if (!headers.some((h) => COLUMNS.name.includes(h))) throw new ValidationError({ csv: "The first row must contain a 'name' column (plus phone and/or email)" });
+  if (!headers.some((h) => COLUMNS.name.includes(h)))
+    throw new ValidationError({ csv: "The first row must contain a 'name' column (plus phone and/or email)" });
   if (rows.length > MAX_ROWS) throw new ValidationError({ csv: `Import at most ${MAX_ROWS} rows at a time (${rows.length} given)` });
   return rows.map((obj, i) => {
     const name = pick(obj, "name").trim();
     const rawPhone = pick(obj, "phone").trim();
-    const country = (pick(obj, "country").trim().toUpperCase() || "AE").slice(0, 2);
-    const parsed = rawPhone ? parsePhone(rawPhone, country as never) : null;
+    const rowCountry = pick(obj, "country").trim().toUpperCase();
+    const parsed = rawPhone ? parsePhone(rawPhone, rowCountry || defaultCountry) : null;
     const email = pick(obj, "email").trim().toLowerCase() || null;
     let error: string | null = null;
     if (name.length < 2) error = "Missing name";
-    else if (rawPhone && !parsed) error = `Invalid phone: ${rawPhone}`;
+    else if (rowCountry && !isCountryCode(rowCountry)) error = `Unknown country code: ${rowCountry}`;
+    else if (rawPhone && !parsed) error = `Invalid phone (add the country code): ${rawPhone}`;
     else if (!parsed && !email) error = "No phone or email";
     else if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) error = `Invalid email: ${email}`;
-    return { row: i + 2, name, phone: parsed?.e164 ?? null, email, country: parsed?.country ?? country, notes: pick(obj, "notes"), tags: pick(obj, "tags"), sourceDetail: pick(obj, "sourceDetail"), language: pick(obj, "language"), error };
+    return {
+      row: i + 2,
+      name,
+      phone: parsed?.e164 ?? null,
+      email,
+      country: rowCountry || parsed?.country || "",
+      notes: pick(obj, "notes"),
+      tags: pick(obj, "tags"),
+      sourceDetail: pick(obj, "sourceDetail"),
+      language: pick(obj, "language"),
+      error,
+    };
   });
 }
 
 /** Which rows would be created, which already exist (lead or student) and which are invalid. */
-export async function previewImport(csv: string): Promise<ImportPreviewDto> {
-  const rows = parseRows(csv);
+export async function previewImport(csv: string, defaultCountry?: string | null): Promise<ImportPreviewDto> {
+  const rows = parseRows(csv, defaultCountry);
   const phones = rows.map((r) => r.phone).filter((x): x is string => !!x);
   const emails = rows.map((r) => r.email).filter((x): x is string => !!x);
   const [leads, users, pending] = await Promise.all([
-    Lead.find({ mergedIntoId: null, $or: [{ phone: { $in: phones } }, { email: { $in: emails } }] }, { phone: 1, email: 1, name: 1 }).lean(),
+    Lead.find(
+      { mergedIntoId: null, $or: [{ phone: { $in: phones } }, { email: { $in: emails } }] },
+      { phone: 1, email: 1, name: 1 },
+    ).lean(),
     AuthUser.find({ $or: [{ phoneNumber: { $in: phones } }, { email: { $in: emails } }] }, { phoneNumber: 1, email: 1, name: 1 }).lean(),
     StudentProfile.find({ pendingPhone: { $in: phones } }, { pendingPhone: 1 }).lean(),
   ]);
@@ -104,12 +124,25 @@ export async function previewImport(csv: string): Promise<ImportPreviewDto> {
 }
 
 /** Create a lead per valid row; duplicates (lead, account, or earlier row) are skipped, never merged. */
-export async function importLeads(csv: string, o: { projectId: string; source: LeadSource; ownerId?: string }, actor: Actor & { type: "USER" }, scope: CrmScope) {
-  const rows = parseRows(csv);
+export async function importLeads(
+  csv: string,
+  o: { projectId: string; source: LeadSource; ownerId?: string; defaultCountry?: string | null },
+  actor: Actor & { type: "USER" },
+  scope: CrmScope,
+) {
+  const rows = parseRows(csv, o.defaultCountry);
   let created = 0;
   let skipped = 0;
   let invalid = 0;
   const seen = new Set<string>();
+  // ROUND_ROBIN spreads the created leads across the project's sales executives.
+  const project = o.ownerId === ROUND_ROBIN ? await Project.findById(oid(o.projectId, "Project")).lean() : null;
+  const picker = project ? await roundRobinPicker(project) : null;
+  if (o.ownerId === ROUND_ROBIN && !picker?.size) {
+    throw new BusinessError("This project has no sales executives to share leads with. Add some to the project, or pick an owner.", {
+      ownerId: "No sales executives on this project",
+    });
+  }
   for (const r of rows) {
     if (r.error) {
       invalid++;
@@ -134,7 +167,7 @@ export async function importLeads(csv: string, o: { projectId: string; source: L
           notes: r.notes || undefined,
           tags: r.tags || undefined,
           language: r.language || undefined,
-          ownerId: o.ownerId ?? "",
+          ownerId: picker ? (picker.next() ?? "") : (o.ownerId ?? ""),
         },
         actor,
         scope,
@@ -147,6 +180,12 @@ export async function importLeads(csv: string, o: { projectId: string; source: L
       else throw e;
     }
   }
-  await audit({ actor, action: "lead.import", entityType: "Lead", entityId: "import", after: { projectId: o.projectId, source: o.source, rows: rows.length, created, skipped, invalid } });
+  await audit({
+    actor,
+    action: "lead.import",
+    entityType: "Lead",
+    entityId: "import",
+    after: { projectId: o.projectId, source: o.source, rows: rows.length, created, skipped, invalid },
+  });
   return { created, skipped, invalid };
 }

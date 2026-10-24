@@ -15,7 +15,7 @@ import {
   TASK_PRIORITIES,
 } from "@edge/domain/crm/enums";
 import { ENROLLMENT_STATUSES, PAYMENT_STATES } from "@edge/domain/enums";
-import { zEmail, zOk } from "./common";
+import { paged, zCountry, zEmail, zOk, zPage } from "./common";
 import { route } from "./route";
 import { RoleDto, StaffCreateInput, StaffRow, StaffUpdateInput } from "./staff";
 
@@ -50,17 +50,27 @@ export const LeadFilters = z.object({
   /** Default "open" hides CONVERTED and LOST unless a stage filter is given. */
   view: z.enum(["open", "all"]).optional(),
   sort: z.enum(["recent", "created", "followUp", "name"]).optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(10000).default(100),
+  ...zPage.shape,
 });
 export type LeadFilters = z.input<typeof LeadFilters>;
+
+/** The leads a bulk action applies to: the ticked ids, or every lead matching a filter ("select all matching"). */
+const bulkTargetShape = {
+  ids: z.array(z.string()).max(1000).optional(),
+  filters: LeadFilters.omit({ page: true, pageSize: true, sort: true }).optional(),
+};
+const hasTarget = (b: { ids?: string[]; filters?: unknown }) => (b.ids?.length ?? 0) > 0 || !!b.filters;
+export const BulkTarget = z.object(bulkTargetShape).refine(hasTarget, { message: "Select at least one lead", path: ["ids"] });
+export const BulkAssignInput = z
+  .object({ ...bulkTargetShape, ownerId: z.string() })
+  .refine(hasTarget, { message: "Select at least one lead", path: ["ids"] });
 
 export const LeadFields = z.object({
   projectId: z.string().min(1, "Choose a project"),
   name: z.string().trim().min(2, "Enter a name").max(80),
   phone: z.string().trim().max(30).optional(),
   email: z.union([z.literal(""), zEmail()]).optional(),
-  country: z.string().trim().toUpperCase().max(2).optional(),
+  country: z.union([z.literal(""), zCountry]).optional(),
   source: z.enum(LEAD_SOURCES),
   sourceDetail: z.string().trim().max(200).optional(),
   courseInterestId: z.string().optional(),
@@ -126,7 +136,7 @@ export const TaskInput = z.object({
 export type TaskInput = z.input<typeof TaskInput>;
 export const TaskUpdateInput = TaskInput.omit({ projectId: true, leadId: true }).partial();
 export type TaskUpdateInput = z.input<typeof TaskUpdateInput>;
-export const MoveTaskInput = z.object({ status: z.enum(CRM_TASK_STATUSES), orderedIds: z.array(z.string()).max(200).default([]) });
+export const MoveTaskInput = z.object({ status: z.enum(CRM_TASK_STATUSES), orderedIds: z.array(z.string()).max(600).default([]) });
 export const TaskCommentInput = z.object({ body: z.string().trim().min(1, "Write a comment").max(5000) });
 
 export const ProjectInput = z.object({
@@ -156,13 +166,18 @@ export const CrmSettingsInput = z.object({
 });
 
 export const CrmStaffCreateInput = StaffCreateInput.extend({ projectIds: z.array(z.string()).optional() });
-export const CrmRoleInput = z.object({ id: z.string().optional(), name: z.string().trim().min(2, "Enter a role name"), description: z.string().optional(), permissions: z.array(z.string()) });
+export const CrmRoleInput = z.object({
+  id: z.string().optional(),
+  name: z.string().trim().min(2, "Enter a role name"),
+  description: z.string().optional(),
+  permissions: z.array(z.string()),
+});
 
 // ---------------------------------------------------------------------------------------------
 // DTOs
 // ---------------------------------------------------------------------------------------------
 
-export const LeadOwnerRef = z.object({ id: z.string(), name: z.string() });
+export const LeadOwnerRef = z.object({ id: z.string(), name: z.string(), roles: z.array(z.string()).optional() });
 export const ProjectRef = z.object({ id: z.string(), name: z.string(), code: z.string() });
 
 export const LeadListItem = z.object({
@@ -170,7 +185,7 @@ export const LeadListItem = z.object({
   name: z.string(),
   phone: nullable,
   email: nullable,
-  country: z.string(),
+  country: nullable,
   source: z.enum(LEAD_SOURCES),
   sourceDetail: nullable,
   stage: z.enum(LEAD_STAGES),
@@ -248,10 +263,20 @@ export type TaskDto = z.infer<typeof TaskDto>;
 export const TaskCommentDto = z.object({ id: z.string(), body: z.string(), author: LeadOwnerRef.nullable(), createdAt: z.string() });
 export type TaskCommentDto = z.infer<typeof TaskCommentDto>;
 
-export const TaskDetail = z.object({ task: TaskDto, comments: z.array(TaskCommentDto), assignees: z.array(LeadOwnerRef), canEdit: z.boolean() });
+export const TaskDetail = z.object({
+  task: TaskDto,
+  comments: z.array(TaskCommentDto),
+  assignees: z.array(LeadOwnerRef),
+  canEdit: z.boolean(),
+});
 export type TaskDetail = z.infer<typeof TaskDetail>;
 
-export const BoardDto = z.object({ TODO: z.array(TaskDto), IN_PROGRESS: z.array(TaskDto), WAITING: z.array(TaskDto), DONE: z.array(TaskDto) });
+export const BoardDto = z.object({
+  TODO: z.array(TaskDto),
+  IN_PROGRESS: z.array(TaskDto),
+  WAITING: z.array(TaskDto),
+  DONE: z.array(TaskDto),
+});
 export type BoardDto = z.infer<typeof BoardDto>;
 
 export const ProjectStats = z.object({ openLeads: z.number(), convertedMonth: z.number(), overdueTasks: z.number(), team: z.number() });
@@ -280,7 +305,16 @@ export const ProjectDto = z.object({
 });
 export type ProjectDto = z.infer<typeof ProjectDto>;
 
-export const ProjectTeamMember = z.object({ id: z.string(), name: z.string(), email: z.string(), role: z.enum(["manager", "member"]), roles: z.array(z.string()), openLeads: z.number(), convertedMonth: z.number(), overdueTasks: z.number() });
+export const ProjectTeamMember = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string(),
+  role: z.enum(["manager", "member"]),
+  roles: z.array(z.string()),
+  openLeads: z.number(),
+  convertedMonth: z.number(),
+  overdueTasks: z.number(),
+});
 
 export const ProjectDetail = z.object({
   project: ProjectDto,
@@ -288,7 +322,11 @@ export const ProjectDetail = z.object({
   team: z.array(ProjectTeamMember),
   recentLeads: z.array(LeadListItem),
   openTasks: z.array(TaskDto),
-  options: z.object({ courses: z.array(z.object({ id: z.string(), title: z.string() })), batches: z.array(z.object({ id: z.string(), label: z.string(), courseId: z.string() })), staff: z.array(LeadOwnerRef) }),
+  options: z.object({
+    courses: z.array(z.object({ id: z.string(), title: z.string() })),
+    batches: z.array(z.object({ id: z.string(), label: z.string(), courseId: z.string() })),
+    staff: z.array(LeadOwnerRef),
+  }),
 });
 export type ProjectDetail = z.infer<typeof ProjectDetail>;
 
@@ -308,6 +346,8 @@ export type CrmOptions = z.infer<typeof CrmOptions>;
 export const LeadDetail = z.object({
   lead: LeadDto,
   activities: z.array(LeadActivityDto),
+  /** All activities on the lead; `activities` holds the newest ones only. */
+  activityTotal: z.number(),
   tasks: z.array(TaskDto),
   student: z
     .object({
@@ -321,7 +361,7 @@ export const LeadDetail = z.object({
   matchingStudent: z.object({ id: z.string(), name: z.string(), email: z.string() }).nullable(),
   duplicates: z.array(z.object({ id: z.string(), name: z.string(), phone: nullable, email: nullable, stage: z.enum(LEAD_STAGES) })),
   /** What the viewer may do with this lead. */
-  can: z.object({ assign: z.boolean(), claim: z.boolean(), moveProject: z.boolean() }),
+  can: z.object({ delete: z.boolean(), assign: z.boolean(), claim: z.boolean(), moveProject: z.boolean() }),
   options: CrmOptions,
 });
 export type LeadDetail = z.infer<typeof LeadDetail>;
@@ -341,7 +381,16 @@ export const CrmDashboardDto = z.object({
   winRate90d: z.number().nullable(),
   medianResponseHours: z.number().nullable(),
   bySource: z.array(z.object({ source: z.string(), leads: z.number(), contacted: z.number(), converted: z.number(), paid: z.number() })),
-  projects: z.array(z.object({ id: z.string(), name: z.string(), open: z.number(), convertedMonth: z.number(), overdue: z.number(), targetConversions: z.number().nullable() })),
+  projects: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      open: z.number(),
+      convertedMonth: z.number(),
+      overdue: z.number(),
+      targetConversions: z.number().nullable(),
+    }),
+  ),
   owners: z.array(z.object({ id: z.string(), name: z.string(), open: z.number(), overdue: z.number(), convertedMonth: z.number() })),
   myTasks: z.array(TaskDto),
 });
@@ -364,11 +413,23 @@ export const ImportPreviewDto = z.object({
   valid: z.number(),
   duplicates: z.number(),
   invalid: z.number(),
-  rows: z.array(z.object({ row: z.number(), name: z.string(), phone: nullable, email: nullable, status: z.enum(["ok", "duplicate", "invalid"]), reason: nullable })),
+  rows: z.array(
+    z.object({
+      row: z.number(),
+      name: z.string(),
+      phone: nullable,
+      email: nullable,
+      status: z.enum(["ok", "duplicate", "invalid"]),
+      reason: nullable,
+    }),
+  ),
 });
 export type ImportPreviewDto = z.infer<typeof ImportPreviewDto>;
 
-export const CrmStaffRow = StaffRow.extend({ projects: z.array(z.object({ id: z.string(), name: z.string(), role: z.enum(["manager", "member"]) })), openLeads: z.number() });
+export const CrmStaffRow = StaffRow.extend({
+  projects: z.array(z.object({ id: z.string(), name: z.string(), role: z.enum(["manager", "member"]) })),
+  openLeads: z.number(),
+});
 export type CrmStaffRow = z.infer<typeof CrmStaffRow>;
 
 // ---------------------------------------------------------------------------------------------
@@ -376,23 +437,68 @@ export type CrmStaffRow = z.infer<typeof CrmStaffRow>;
 // ---------------------------------------------------------------------------------------------
 
 const base = "/api/v1/crm";
-const taskFilters = z.object({ project: z.string().optional(), assignee: z.string().optional(), priority: z.enum(TASK_PRIORITIES).optional() });
+const taskFilters = z.object({
+  project: z.string().optional(),
+  assignee: z.string().optional(),
+  priority: z.enum(TASK_PRIORITIES).optional(),
+});
 
 export const crmRoutes = {
-  dashboard: route({ method: "GET", path: `${base}/dashboard`, query: z.object({ project: z.string().optional() }), response: CrmDashboardDto }),
+  dashboard: route({
+    method: "GET",
+    path: `${base}/dashboard`,
+    query: z.object({ project: z.string().optional() }),
+    response: CrmDashboardDto,
+  }),
   options: route({ method: "GET", path: `${base}/options`, response: CrmOptions }),
   dueCount: route({ method: "GET", path: `${base}/tasks/count`, response: z.object({ count: z.number() }) }),
 
-  leads: route({ method: "GET", path: `${base}/leads`, query: LeadFilters, response: z.object({ rows: z.array(LeadListItem), total: z.number() }) }),
+  leads: route({
+    method: "GET",
+    path: `${base}/leads`,
+    query: LeadFilters,
+    response: paged(LeadListItem),
+  }),
   leadsCsv: route({ method: "GET", path: `${base}/leads.csv`, query: LeadFilters, response: z.string() }),
   create: route({ method: "POST", path: `${base}/leads`, body: LeadInput, response: z.object({ id: z.string() }) }),
-  bulkAssign: route({ method: "POST", path: `${base}/bulk-assign`, body: z.object({ ids: z.array(z.string()).min(1, "Select at least one lead"), ownerId: z.string() }), response: z.object({ ok: z.literal(true), updated: z.number(), message: z.string().optional() }) }),
-  lead: route({ method: "GET", path: `${base}/leads/:id`, params: idParam, response: LeadDetail }),
+  bulkAssign: route({
+    method: "POST",
+    path: `${base}/bulk-assign`,
+    /** `ownerId`: a user id, "" to unassign, or ROUND_ROBIN for the project's sales executives. */
+    body: BulkAssignInput,
+    response: z.object({ ok: z.literal(true), updated: z.number(), skipped: z.number(), message: z.string().optional() }),
+  }),
+  bulkDelete: route({
+    method: "POST",
+    path: `${base}/bulk-delete`,
+    body: BulkTarget,
+    response: z.object({ ok: z.literal(true), deleted: z.number(), skipped: z.number() }),
+  }),
+  lead: route({
+    method: "GET",
+    path: `${base}/leads/:id`,
+    params: idParam,
+    query: z.object({ activity: z.coerce.number().int().min(1).max(1000).default(50) }),
+    response: LeadDetail,
+  }),
+  deleteLead: route({ method: "POST", path: `${base}/leads/:id/delete`, params: idParam, response: zOk }),
   update: route({ method: "POST", path: `${base}/leads/:id`, params: idParam, body: LeadUpdateInput, response: zOk }),
   stage: route({ method: "POST", path: `${base}/leads/:id/stage`, params: idParam, body: StageInput, response: zOk }),
-  assign: route({ method: "POST", path: `${base}/leads/:id/assign`, params: idParam, body: z.object({ ownerId: z.string() }), response: zOk }),
+  assign: route({
+    method: "POST",
+    path: `${base}/leads/:id/assign`,
+    params: idParam,
+    body: z.object({ ownerId: z.string() }),
+    response: zOk,
+  }),
   claim: route({ method: "POST", path: `${base}/leads/:id/claim`, params: idParam, response: zOk }),
-  moveProject: route({ method: "POST", path: `${base}/leads/:id/project`, params: idParam, body: z.object({ projectId: z.string().min(1, "Choose a project") }), response: zOk }),
+  moveProject: route({
+    method: "POST",
+    path: `${base}/leads/:id/project`,
+    params: idParam,
+    body: z.object({ projectId: z.string().min(1, "Choose a project") }),
+    response: zOk,
+  }),
   activity: route({ method: "POST", path: `${base}/leads/:id/activities`, params: idParam, body: ActivityInput, response: zOk }),
   convert: route({
     method: "POST",
@@ -401,17 +507,33 @@ export const crmRoutes = {
     body: z.object({ batchId: z.string().optional(), sendSetPassword: z.boolean().default(true) }),
     response: z.object({ ok: z.literal(true), studentId: z.string(), message: z.string() }),
   }),
-  link: route({ method: "POST", path: `${base}/leads/:id/link`, params: idParam, body: z.object({ studentId: z.string().min(1) }), response: zOk }),
+  link: route({
+    method: "POST",
+    path: `${base}/leads/:id/link`,
+    params: idParam,
+    body: z.object({ studentId: z.string().min(1) }),
+    response: zOk,
+  }),
   resendWelcome: route({ method: "POST", path: `${base}/leads/:id/resend-welcome`, params: idParam, response: zOk }),
   /** Merge `fromId` into `:id` (the survivor). */
-  merge: route({ method: "POST", path: `${base}/leads/:id/merge`, params: idParam, body: z.object({ fromId: z.string().min(1) }), response: zOk }),
+  merge: route({
+    method: "POST",
+    path: `${base}/leads/:id/merge`,
+    params: idParam,
+    body: z.object({ fromId: z.string().min(1) }),
+    response: zOk,
+  }),
 
   board: route({ method: "GET", path: `${base}/board`, query: taskFilters, response: BoardDto }),
   tasks: route({
     method: "GET",
     path: `${base}/tasks`,
-    query: taskFilters.extend({ scope: z.enum(["mine", "all"]).default("mine"), status: z.enum(["open", "done"]).default("open") }),
-    response: z.array(TaskDto),
+    query: taskFilters.extend({
+      scope: z.enum(["mine", "all"]).default("mine"),
+      status: z.enum(["open", "done"]).default("open"),
+      ...zPage.shape,
+    }),
+    response: paged(TaskDto),
   }),
   createTask: route({ method: "POST", path: `${base}/tasks`, body: TaskInput, response: z.object({ id: z.string() }) }),
   task: route({ method: "GET", path: `${base}/tasks/:id`, params: idParam, response: TaskDetail }),
@@ -425,33 +547,87 @@ export const crmRoutes = {
     response: zOk,
   }),
   cancelTask: route({ method: "POST", path: `${base}/tasks/:id/cancel`, params: idParam, response: zOk }),
-  rescheduleTask: route({ method: "POST", path: `${base}/tasks/:id/reschedule`, params: idParam, body: z.object({ dueAt: optLocalDateTime }), response: zOk }),
+  rescheduleTask: route({
+    method: "POST",
+    path: `${base}/tasks/:id/reschedule`,
+    params: idParam,
+    body: z.object({ dueAt: optLocalDateTime }),
+    response: zOk,
+  }),
   commentTask: route({ method: "POST", path: `${base}/tasks/:id/comments`, params: idParam, body: TaskCommentInput, response: zOk }),
 
-  projects: route({ method: "GET", path: `${base}/projects`, query: z.object({ status: z.enum(PROJECT_STATUSES).optional() }), response: z.array(ProjectDto) }),
+  projects: route({
+    method: "GET",
+    path: `${base}/projects`,
+    query: z.object({ status: z.enum(PROJECT_STATUSES).optional() }),
+    response: z.array(ProjectDto),
+  }),
   createProject: route({ method: "POST", path: `${base}/projects`, body: ProjectInput, response: z.object({ id: z.string() }) }),
   project: route({ method: "GET", path: `${base}/projects/:id`, params: idParam, response: ProjectDetail }),
   updateProject: route({ method: "POST", path: `${base}/projects/:id`, params: idParam, body: ProjectInput.partial(), response: zOk }),
   projectMember: route({ method: "POST", path: `${base}/projects/:id/members`, params: idParam, body: ProjectMemberInput, response: zOk }),
-  removeProjectMember: route({ method: "POST", path: `${base}/projects/:id/members/remove`, params: idParam, body: z.object({ userId: z.string().min(1) }), response: zOk }),
+  removeProjectMember: route({
+    method: "POST",
+    path: `${base}/projects/:id/members/remove`,
+    params: idParam,
+    body: z.object({ userId: z.string().min(1) }),
+    response: zOk,
+  }),
 
   team: route({ method: "GET", path: `${base}/team`, response: z.array(CrmStaffRow) }),
-  createStaff: route({ method: "POST", path: `${base}/team`, body: CrmStaffCreateInput, response: z.object({ id: z.string(), tempPassword: z.string().optional() }) }),
+  createStaff: route({
+    method: "POST",
+    path: `${base}/team`,
+    body: CrmStaffCreateInput,
+    response: z.object({ id: z.string(), tempPassword: z.string().optional() }),
+  }),
   staff: route({ method: "GET", path: `${base}/team/:id`, params: idParam, response: CrmStaffRow }),
   updateStaff: route({ method: "POST", path: `${base}/team/:id`, params: idParam, body: StaffUpdateInput, response: zOk }),
-  setStaffDisabled: route({ method: "POST", path: `${base}/team/:id/disabled`, params: idParam, body: z.object({ disabled: z.boolean() }), response: zOk }),
-  resetStaffPassword: route({ method: "POST", path: `${base}/team/:id/reset-password`, params: idParam, response: z.object({ ok: z.literal(true), tempPassword: z.string() }) }),
+  setStaffDisabled: route({
+    method: "POST",
+    path: `${base}/team/:id/disabled`,
+    params: idParam,
+    body: z.object({ disabled: z.boolean() }),
+    response: zOk,
+  }),
+  resetStaffPassword: route({
+    method: "POST",
+    path: `${base}/team/:id/reset-password`,
+    params: idParam,
+    response: z.object({ ok: z.literal(true), tempPassword: z.string() }),
+  }),
   roles: route({ method: "GET", path: `${base}/roles`, response: z.array(RoleDto) }),
   saveRole: route({ method: "POST", path: `${base}/roles`, body: CrmRoleInput, response: z.object({ id: z.string() }) }),
 
   settings: route({ method: "GET", path: `${base}/settings`, response: CrmSettingsDto }),
   saveSettings: route({ method: "POST", path: `${base}/settings`, body: CrmSettingsInput, response: zOk }),
 
-  importPreview: route({ method: "POST", path: `${base}/import/preview`, body: z.object({ csv: z.string().min(1, "Paste or upload a CSV").max(2_000_000) }), response: ImportPreviewDto }),
+  importPreview: route({
+    method: "POST",
+    path: `${base}/import/preview`,
+    body: z.object({
+      csv: z.string().min(1, "Paste or upload a CSV").max(2_000_000),
+      defaultCountry: z.union([z.literal(""), zCountry]).optional(),
+    }),
+    response: ImportPreviewDto,
+  }),
   importCsv: route({
     method: "POST",
     path: `${base}/import`,
-    body: z.object({ csv: z.string().min(1).max(2_000_000), projectId: z.string().min(1, "Choose a project"), source: z.enum(LEAD_SOURCES).default("IMPORT"), ownerId: z.string().optional() }),
-    response: z.object({ ok: z.literal(true), created: z.number(), skipped: z.number(), invalid: z.number(), message: z.string().optional() }),
+    body: z.object({
+      csv: z.string().min(1).max(2_000_000),
+      projectId: z.string().min(1, "Choose a project"),
+      source: z.enum(LEAD_SOURCES).default("IMPORT"),
+      /** A user id, or ROUND_ROBIN to spread the rows across the project's sales executives. */
+      ownerId: z.string().optional(),
+      defaultCountry: z.union([z.literal(""), zCountry]).optional(),
+    }),
+    response: z.object({
+      ok: z.literal(true),
+      created: z.number(),
+      skipped: z.number(),
+      invalid: z.number(),
+      message: z.string().optional(),
+    }),
   }),
 };
