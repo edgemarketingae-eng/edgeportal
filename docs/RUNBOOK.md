@@ -147,7 +147,8 @@ The API also throttles OTP sends per number and per IP. Step-by-step setup: [TWI
 - **Transactional email** goes through MailerSend. Verify the sending domain (SPF, DKIM, DMARC and return-path
   DNS records) and set `MAILERSEND_API_KEY` and `EMAIL_FROM`.
 - **Broadcasts** use MailerLite: set `MAILERLITE_API_KEY`. The system maintains `Portal · ...` groups (all students,
-  per batch, per status, per payment state) for students who gave marketing consent.
+  per batch, per status, per payment state) for students who gave marketing consent. Step-by-step setup:
+  [MAILERLITE.md](MAILERLITE.md).
 
 ## 4. Everyday operations
 
