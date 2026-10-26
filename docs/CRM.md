@@ -158,6 +158,22 @@ New website leads go to the **General** project, unassigned; the project's manag
 with `crm.all`) are notified. With **round-robin** on in Settings, each new lead is handed to a sales executive
 instead (same rule as below; the owner is notified). If there are no sales executives it stays unassigned as above.
 
+## Free class landing page
+
+The student app's home page (`/`, public) promotes the free live class. The visitor enters name and WhatsApp number;
+the student app's server action calls `POST /api/v1/public/free-class/leads` (internal token only, so nothing is exposed
+on the public API host; rate limited to 10 per 10 minutes per visitor IP; a hidden honeypot field drops bots).
+
+- The lead goes through the same intake as the website form (`ingestInboundLead`): source WEBSITE, detail "Free live
+  class landing page", tag `free-live-class`, the ad's UTM tags, WhatsApp consent.
+- A new lead is always round-robined in **General**, whatever the Settings checkbox, but only among sales executives
+  with a **phone** on their staff profile (console Staff or CRM Team). A known lead keeps its owner; an unowned one is
+  assigned the same way.
+- The visitor is sent to `wa.me/<owner's phone>` with a message ready to send, so they write first. A SYSTEM entry on the
+  timeline tells the owner to expect it. With no eligible owner (or an owner without a phone), the academy's Support
+  WhatsApp from console Settings is used; with neither, the visitor just sees a thank-you.
+- The class title, Dubai date/time and platform come from console Settings → Free live class.
+
 ## Round-robin
 
 One rule everywhere (`packages/services/src/crm/round-robin.ts`): leads are handed out one at a time, each to whoever
@@ -168,7 +184,8 @@ managers and admins don't receive round-robin leads unless they also hold the Sa
 
 Used by: bulk assign on the leads list (_Round-robin to sales executives_; each lead within its own project; leads in
 projects with no sales executives are skipped and counted), CSV import (_Round-robin to the project's sales
-executives_; refused when the project has none), and website leads when the Settings checkbox is on.
+executives_; refused when the project has none), website leads when the Settings checkbox is on, and free class
+landing leads (always, limited to sales executives with a phone).
 
 ## CSV import
 

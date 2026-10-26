@@ -60,7 +60,10 @@ export default async function TeamPage() {
                     </Link>
                     {s.title ? <div className="text-muted-foreground text-xs">{s.title}</div> : null}
                   </TableCell>
-                  <TableCell className="hidden md:table-cell">{s.email}</TableCell>
+                  <TableCell className="hidden md:table-cell">
+                    {s.email}
+                    {s.phone ? <div className="text-muted-foreground text-xs">{s.phone}</div> : null}
+                  </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
                       {s.roles.map((r) => (

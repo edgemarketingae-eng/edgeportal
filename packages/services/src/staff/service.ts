@@ -8,6 +8,7 @@ import { env } from "../env";
 import { BusinessError, NotFoundError } from "../errors";
 import { oid } from "../ids";
 import { queueEmail } from "../notifications/email";
+import { normalizePhone } from "../crm/common";
 import { flushOutbox } from "../runtime";
 import { invalidateRoleCache } from "../auth/viewer";
 import { encryptTempPassword } from "./temp-password";
@@ -82,10 +83,11 @@ export async function createUserWithPassword(input: {
 }
 
 export async function createStaff(
-  input: { name: string; email: string; roleKeys: string[]; title?: string; workspaceEmail?: string; password?: string },
+  input: { name: string; email: string; roleKeys: string[]; title?: string; workspaceEmail?: string; phone?: string; password?: string },
   actor: Actor,
 ) {
   const email = input.email.trim().toLowerCase();
+  const phone = normalizePhone(input.phone);
   if (await AuthUser.exists({ email })) throw new BusinessError("A user with this email already exists", { email: "Already in use" });
   if (!input.roleKeys.length) throw new BusinessError("Choose at least one role");
   const roles = await rolesByKeys(input.roleKeys);
@@ -101,6 +103,7 @@ export async function createStaff(
         _id: userId,
         title: input.title || null,
         workspaceEmail: input.workspaceEmail?.trim().toLowerCase() || null,
+        phone,
         roleIds: roles.map((r) => r._id),
         tempPasswordEnc,
       },
@@ -122,10 +125,11 @@ export async function createStaff(
 
 export async function updateStaff(
   userId: string,
-  input: { name: string; roleKeys: string[]; title?: string; workspaceEmail?: string },
+  input: { name: string; roleKeys: string[]; title?: string; workspaceEmail?: string; phone?: string },
   actor: Actor & { type: "USER" },
 ) {
   const _id = oid(userId, "Staff member");
+  const phone = normalizePhone(input.phone);
   if (!input.roleKeys.length) throw new BusinessError("Choose at least one role");
   const roles = await rolesByKeys(input.roleKeys);
   const staff = await StaffProfile.findById(_id).lean();
@@ -144,6 +148,8 @@ export async function updateStaff(
         $set: {
           title: input.title || null,
           workspaceEmail: input.workspaceEmail?.trim().toLowerCase() || null,
+          // Omitted keeps the saved number; an empty string clears it.
+          ...(input.phone === undefined ? {} : { phone }),
           roleIds: roles.map((r) => r._id),
         },
       },
@@ -153,8 +159,8 @@ export async function updateStaff(
       action: "staff.update",
       entityType: "User",
       entityId: userId,
-      before: { roles: current.map((r) => r.key) },
-      after: { roles: input.roleKeys, title: input.title },
+      before: { roles: current.map((r) => r.key), phone: staff.phone ?? null },
+      after: { roles: input.roleKeys, title: input.title, phone: input.phone === undefined ? (staff.phone ?? null) : phone },
     });
   });
 }

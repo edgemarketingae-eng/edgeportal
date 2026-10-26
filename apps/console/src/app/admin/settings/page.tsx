@@ -5,7 +5,8 @@ import { PageHeader } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { FeeRateForm, GeneralSettingsForm, OdooMappingForm } from "@/components/settings/settings-forms";
+import { toDubaiLocal } from "@edge/domain/dates";
+import { FeeRateForm, FreeClassForm, GeneralSettingsForm, OdooMappingForm } from "@/components/settings/settings-forms";
 import { can, load, requireStaff } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -69,6 +70,28 @@ export default async function SettingsPage() {
                   joinWindowMinutes: String(s.joinWindowMinutes),
                   checkoutExpiryMinutes: String(s.checkoutExpiryMinutes),
                   ...s.academy,
+                }}
+              />
+            </CardContent>
+          </Card>
+        ) : null}
+        {fees ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Free live class (landing page)</CardTitle>
+              <CardDescription>
+                The next free class shown on the student app&apos;s home page. Visitors who join are added to the CRM General project,
+                assigned to a sales executive who has a phone number, and sent to that person&apos;s WhatsApp.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <FreeClassForm
+                v={{
+                  enabled: s.freeClass.enabled,
+                  title: s.freeClass.title,
+                  startsAt: s.freeClass.startsAt ? toDubaiLocal(s.freeClass.startsAt) : "",
+                  durationMinutes: String(s.freeClass.durationMinutes),
+                  platform: s.freeClass.platform,
                 }}
               />
             </CardContent>

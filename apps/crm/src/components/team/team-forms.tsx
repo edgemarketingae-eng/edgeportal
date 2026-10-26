@@ -47,6 +47,7 @@ export function CreateCrmStaffForm({ roles, projects }: { roles: RoleOption[]; p
         <Field label="Login email" name="email" type="email" defaultValue={v?.email} required />
         <Field label="Job title" name="title" defaultValue={v?.title} />
         <Field label="Google Workspace email" name="workspaceEmail" type="email" defaultValue={v?.workspaceEmail} hint="Only needed for Meet consultations later." />
+        <Field label="Phone (WhatsApp)" name="phone" type="tel" defaultValue={v?.phone} hint="Sales executives need this to receive leads from the free class page." />
       </div>
       <RoleChecks roles={roles} selected={list(v?.roleKeys)} />
       {projects.length ? (
@@ -71,7 +72,7 @@ export function CreateCrmStaffForm({ roles, projects }: { roles: RoleOption[]; p
   );
 }
 
-export function EditCrmStaffForm({ user, roles }: { user: { id: string; name: string; title: string; workspaceEmail: string; roleKeys: string[] }; roles: RoleOption[] }) {
+export function EditCrmStaffForm({ user, roles }: { user: { id: string; name: string; title: string; workspaceEmail: string; phone: string; roleKeys: string[] }; roles: RoleOption[] }) {
   const [state, action, pending] = useActionState(updateCrmStaffAction, {} as ActionState);
   useEffect(() => {
     if (state.ok) toast.success(state.message ?? "Saved");
@@ -85,6 +86,7 @@ export function EditCrmStaffForm({ user, roles }: { user: { id: string; name: st
         <Field label="Full name" name="name" defaultValue={v?.name ?? user.name} required />
         <Field label="Job title" name="title" defaultValue={v?.title ?? user.title} />
         <Field label="Google Workspace email" name="workspaceEmail" type="email" defaultValue={v?.workspaceEmail ?? user.workspaceEmail} />
+        <Field label="Phone (WhatsApp)" name="phone" type="tel" defaultValue={v?.phone ?? user.phone} hint="Sales executives need this to receive leads from the free class page." />
       </div>
       <RoleChecks roles={roles} selected={v ? list(v.roleKeys) : user.roleKeys} />
       <Button className="w-fit" disabled={pending}>

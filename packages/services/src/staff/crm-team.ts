@@ -63,15 +63,15 @@ export async function listCrmRoles() {
   return (await listRoles()).filter(isCrmRole);
 }
 
-export async function createCrmStaff(input: { name: string; email: string; roleKeys: string[]; title?: string; workspaceEmail?: string; projectIds?: string[] }, actor: Actor & { type: "USER" }) {
+export async function createCrmStaff(input: { name: string; email: string; roleKeys: string[]; title?: string; workspaceEmail?: string; phone?: string; projectIds?: string[] }, actor: Actor & { type: "USER" }) {
   await assertCrmRoleKeys(input.roleKeys);
-  const out = await createStaff({ name: input.name, email: input.email, roleKeys: input.roleKeys, title: input.title, workspaceEmail: input.workspaceEmail }, actor);
+  const out = await createStaff({ name: input.name, email: input.email, roleKeys: input.roleKeys, title: input.title, workspaceEmail: input.workspaceEmail, phone: input.phone }, actor);
   const projectIds = (input.projectIds ?? []).map((p) => oid(p, "Project"));
   if (projectIds.length) await Project.updateMany({ _id: { $in: projectIds }, isDefault: { $ne: true } }, { $addToSet: { memberIds: new Types.ObjectId(out.id) } });
   return out;
 }
 
-export async function updateCrmStaff(id: string, input: { name: string; roleKeys: string[]; title?: string; workspaceEmail?: string }, actor: Actor & { type: "USER" }) {
+export async function updateCrmStaff(id: string, input: { name: string; roleKeys: string[]; title?: string; workspaceEmail?: string; phone?: string }, actor: Actor & { type: "USER" }) {
   await assertPureCrmUser(id);
   await assertCrmRoleKeys(input.roleKeys);
   await updateStaff(id, input, actor);

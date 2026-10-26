@@ -32,6 +32,7 @@ async function StudentShell({ children }: { children: React.ReactNode }) {
       unread={v.unreadNotifications}
       notificationsHref="/notifications"
       helpHref="/docs"
+      homeHref="/dashboard"
     >
       {children}
     </AppShell>

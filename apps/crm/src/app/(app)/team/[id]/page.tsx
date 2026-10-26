@@ -50,6 +50,7 @@ export default async function TeamMemberPage(props: PageProps<"/team/[id]">) {
                 name: s.name,
                 title: s.title ?? "",
                 workspaceEmail: s.workspaceEmail ?? "",
+                phone: s.phone ?? "",
                 roleKeys: s.roles.map((r) => r.key),
               }}
             />

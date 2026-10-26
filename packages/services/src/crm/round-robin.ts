@@ -10,12 +10,16 @@ const SALES_EXECUTIVE = "sales_executive";
  */
 export async function salesExecutivesFor(
   project: Pick<ProjectDoc, "_id" | "isDefault" | "managerIds" | "memberIds">,
+  opts: { withPhone?: boolean } = {},
 ): Promise<{ id: string; name: string }[]> {
   const role = await Role.findOne({ key: SALES_EXECUTIVE }, { _id: 1 }).lean();
   if (!role) return [];
   const team = project.isDefault ? null : [...project.managerIds, ...project.memberIds];
   if (team && !team.length) return [];
-  const staff = await StaffProfile.find({ roleIds: role._id, ...(team ? { _id: { $in: team } } : {}) }, { _id: 1 }).lean();
+  const staff = await StaffProfile.find(
+    { roleIds: role._id, ...(team ? { _id: { $in: team } } : {}), ...(opts.withPhone ? { phone: { $nin: [null, ""] } } : {}) },
+    { _id: 1 },
+  ).lean();
   if (!staff.length) return [];
   const users = await AuthUser.find({ _id: { $in: staff.map((x) => x._id) }, disabledAt: null }, { name: 1 })
     .sort({ name: 1 })
@@ -26,10 +30,14 @@ export async function salesExecutivesFor(
 /**
  * Hands out a project's sales executives one lead at a time, always to whoever holds the fewest open leads in
  * that project, counting what this batch has already handed out. A batch spreads evenly and stays fair with the
- * existing load. `next()` is null when the project has no sales executives.
+ * existing load. `next()` is null when the project has no sales executives. `withPhone` limits it to people
+ * with a saved phone (leads that are handed straight to a WhatsApp chat).
  */
-export async function roundRobinPicker(project: Pick<ProjectDoc, "_id" | "isDefault" | "managerIds" | "memberIds">) {
-  const execs = await salesExecutivesFor(project);
+export async function roundRobinPicker(
+  project: Pick<ProjectDoc, "_id" | "isDefault" | "managerIds" | "memberIds">,
+  opts: { withPhone?: boolean } = {},
+) {
+  const execs = await salesExecutivesFor(project, opts);
   const counts = execs.length
     ? await Lead.aggregate<{ _id: Types.ObjectId; n: number }>([
         {

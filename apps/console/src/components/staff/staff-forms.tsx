@@ -53,6 +53,13 @@ export function CreateStaffForm({ roles }: { roles: RoleOption[] }) {
           defaultValue={v?.workspaceEmail}
           hint="Needed for mentors: Meet classes are created in this calendar."
         />
+        <Field
+          label="Phone (WhatsApp)"
+          name="phone"
+          type="tel"
+          defaultValue={v?.phone}
+          hint="Optional. Sales executives need it to receive free class leads on WhatsApp."
+        />
       </div>
       <RoleChecks roles={roles} selected={list(v?.roleKeys)} />
       <Button className="w-fit" disabled={pending}>
@@ -66,7 +73,7 @@ export function EditStaffForm({
   user,
   roles,
 }: {
-  user: { id: string; name: string; title: string; workspaceEmail: string; roleKeys: string[] };
+  user: { id: string; name: string; title: string; workspaceEmail: string; phone: string; roleKeys: string[] };
   roles: RoleOption[];
 }) {
   const [state, action, pending] = useActionState(updateStaffAction, {} as ActionState);
@@ -82,6 +89,13 @@ export function EditStaffForm({
         <Field label="Full name" name="name" defaultValue={v?.name ?? user.name} required />
         <Field label="Job title" name="title" defaultValue={v?.title ?? user.title} />
         <Field label="Google Workspace email" name="workspaceEmail" type="email" defaultValue={v?.workspaceEmail ?? user.workspaceEmail} />
+        <Field
+          label="Phone (WhatsApp)"
+          name="phone"
+          type="tel"
+          defaultValue={v?.phone ?? user.phone}
+          hint="Optional. Sales executives need it to receive free class leads on WhatsApp."
+        />
       </div>
       <RoleChecks roles={roles} selected={v ? list(v.roleKeys) : user.roleKeys} />
       <Button className="w-fit" disabled={pending}>

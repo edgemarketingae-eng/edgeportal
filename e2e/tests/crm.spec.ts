@@ -31,6 +31,7 @@ test("1. the CRM admin creates a project with the sales desk on it and a CRM-onl
   await page.goto(`${E2E.crm}/team`);
   await page.getByLabel("Full name").fill(account.name);
   await page.getByLabel("Login email").fill(account.email);
+  await page.getByLabel("Phone (WhatsApp)").fill(`50${uniq}`); // local number, UAE dial code preselected
   await page
     .getByRole("group", { name: "CRM roles" })
     .getByLabel(/^Sales executive/)
@@ -39,6 +40,7 @@ test("1. the CRM admin creates a project with the sales desk on it and a CRM-onl
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByText(/Account created/)).toBeVisible();
   await expect(page.getByRole("link", { name: account.name })).toBeVisible();
+  await expect(page.getByText(`+97150${uniq}`)).toBeVisible();
 
   // Until they sign in, the team list shows the temporary password, masked until revealed.
   const row = page.getByRole("row").filter({ has: page.getByRole("link", { name: account.name }) });

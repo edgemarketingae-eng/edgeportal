@@ -2,16 +2,17 @@ import type { SettingsDto } from "@edge/contracts";
 import { FeeRate } from "@edge/db";
 import { isCountryCode } from "@edge/domain/countries";
 import type { Actor } from "@edge/domain/enums";
+import { fromDubaiLocal } from "@edge/domain/dates";
 import { toMinor } from "@edge/domain/money";
 import { audit } from "./audit";
 import { env } from "./env";
-import { BusinessError, NotFoundError } from "./errors";
+import { BusinessError, NotFoundError, ValidationError } from "./errors";
 import { getSetting, setSetting } from "./settings";
 
 const optMinor = (v?: string) => (v && v.trim() ? toMinor(v) : null);
 
 export async function getSettingsDto(): Promise<SettingsDto> {
-  const [rates, vatCountries, vatRate, offsets, join, expiry, academy, odoo] = await Promise.all([
+  const [rates, vatCountries, vatRate, offsets, join, expiry, academy, odoo, freeClass] = await Promise.all([
     FeeRate.find({ gateway: { $ne: "MOCK" } })
       .sort({ sortOrder: 1 })
       .lean(),
@@ -22,6 +23,7 @@ export async function getSettingsDto(): Promise<SettingsDto> {
     getSetting("payments.checkoutExpiryMinutes"),
     getSetting("academy.profile"),
     getSetting("odoo.mapping"),
+    getSetting("marketing.freeClass"),
   ]);
   return {
     feeRates: rates.map((r) => ({
@@ -45,6 +47,7 @@ export async function getSettingsDto(): Promise<SettingsDto> {
     joinWindowMinutes: join,
     checkoutExpiryMinutes: expiry,
     academy,
+    freeClass,
     odoo,
     modes: {
       Payments: env.PAYMENTS_MODE,
@@ -152,6 +155,23 @@ export async function saveGeneralSettings(
     actor.id,
   );
   await audit({ actor, action: "settings.general.update", entityType: "Setting", entityId: "general", after: d });
+}
+
+export async function saveFreeClassSettings(
+  d: { enabled: boolean; title: string; startsAt: string; durationMinutes: number; platform: string },
+  actor: Actor & { type: "USER" },
+) {
+  const at = d.startsAt ? fromDubaiLocal(d.startsAt) : null;
+  if (d.startsAt && !at) throw new ValidationError({ startsAt: "Choose a valid date and time" });
+  const next = {
+    enabled: d.enabled,
+    title: d.title,
+    startsAt: at?.toISOString() ?? null,
+    durationMinutes: d.durationMinutes,
+    platform: d.platform,
+  };
+  await setSetting("marketing.freeClass", next, actor.id);
+  await audit({ actor, action: "settings.freeClass.update", entityType: "Setting", entityId: "marketing.freeClass", after: next });
 }
 
 export async function saveOdooMapping(

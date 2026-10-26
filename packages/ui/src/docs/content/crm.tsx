@@ -1269,6 +1269,10 @@ export const crmDocs: DocModule[] = [
                 Enter the <Ui>Full name</Ui> and <Ui>Login email</Ui>. <Ui>Job title</Ui> is optional.
               </>
               <>
+                Add their <Ui>Phone (WhatsApp)</Ui> if they should receive free class leads: visitors who join from the landing page are
+                sent straight to their WhatsApp. You can add or change it later on their page.
+              </>
+              <>
                 Tick one or more <Ui>CRM roles</Ui> (see Your role in the CRM).
               </>
               <>

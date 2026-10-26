@@ -1157,6 +1157,9 @@ const staff: DocModule = {
               For mentors, enter their <Ui>Google Workspace email</Ui>. Their Meet classes are created in this calendar.
             </>
             <>
+              Optionally add their <Ui>Phone (WhatsApp)</Ui>. Sales executives need it to receive leads from the free class landing page.
+            </>
+            <>
               Tick one or more <Ui>Roles</Ui>. See <To href="/admin/docs/roles">Who can do what</To>.
             </>
             <>
@@ -1207,8 +1210,8 @@ const staff: DocModule = {
               [
                 "Details and roles",
                 <>
-                  Change the name, job title, Google Workspace email or roles, then click <Ui>Save</Ui>. Only a super admin can add or
-                  remove super admin, and nobody can remove their own super admin role.
+                  Change the name, job title, Google Workspace email, phone or roles, then click <Ui>Save</Ui>. Clear the phone to remove
+                  it. Only a super admin can add or remove super admin, and nobody can remove their own super admin role.
                 </>,
               ],
               [
@@ -1402,7 +1405,7 @@ const settings: DocModule = {
                 <>
                   <Ui>Academy name</Ui>, <Ui>Support email</Ui>, <Ui>Support WhatsApp</Ui>, <Ui>Website</Ui>
                 </>,
-                "The academy's contact details. The support email is shown to students in messages such as a rejection or a manual lock.",
+                "The academy's contact details. The support email is shown to students in messages such as a rejection or a manual lock. Visitors on the free class landing page are sent to the support WhatsApp when no sales executive has a phone.",
               ],
             ]}
           />
@@ -1410,6 +1413,40 @@ const settings: DocModule = {
             Click <Ui>Save settings</Ui>. A student&apos;s VAT treatment is fixed at their first payment, so VAT changes only affect new
             students.
           </P>
+        </>
+      ),
+    },
+    {
+      id: "free-class",
+      title: "Free live class (landing page)",
+      body: (
+        <>
+          <P>
+            The student app&apos;s home page promotes the free live class to visitors from ads and social posts. Visitors tap{" "}
+            <Ui>Join free class</Ui> and enter their name and WhatsApp number. The lead is created in the CRM <b>General</b> project and
+            given to the sales executive with a phone number who holds the fewest open leads there. The visitor is then sent to that
+            person&apos;s WhatsApp with a message ready to send. A returning visitor keeps the sales executive they already have.
+          </P>
+          <Terms
+            head={["Field", "What it does (default)"]}
+            rows={[
+              [
+                <Ui key="c">Show the next class on the landing page</Ui>,
+                "Untick to hide the date and title; the page then shows general copy. (off)",
+              ],
+              [<Ui key="c">Class title</Ui>, "Shown on the page and in the visitor's WhatsApp message. (Free Live Forex & Gold Class)"],
+              [
+                <Ui key="c">Starts at (Dubai time)</Ui>,
+                "Shows the date with a countdown. Leave empty, or let it pass, and the page invites people to the next class.",
+              ],
+              [<Ui key="c">Duration (minutes)</Ui>, "How long the class runs. (90)"],
+              [<Ui key="c">Where it happens</Ui>, "For example Live on Zoom."],
+            ]}
+          />
+          <Note kind="info">
+            Only sales executives with a phone on their staff profile receive these leads. With nobody eligible, the lead stays unassigned
+            and visitors are sent to the support WhatsApp from General settings.
+          </Note>
         </>
       ),
     },

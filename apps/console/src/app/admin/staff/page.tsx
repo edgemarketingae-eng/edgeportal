@@ -33,6 +33,7 @@ export default async function StaffPage() {
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead className="hidden md:table-cell">Email</TableHead>
+              <TableHead className="hidden lg:table-cell">Phone</TableHead>
               <TableHead>Roles</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
@@ -47,6 +48,7 @@ export default async function StaffPage() {
                   {s.title ? <div className="text-muted-foreground text-xs">{s.title}</div> : null}
                 </TableCell>
                 <TableCell className="hidden md:table-cell">{s.email}</TableCell>
+                <TableCell className="hidden lg:table-cell">{s.phone ?? <span className="text-muted-foreground">-</span>}</TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-1">
                     {s.roles.map((r) => (

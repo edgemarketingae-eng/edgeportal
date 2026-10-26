@@ -19,12 +19,13 @@ export async function createCrmStaffAction(_prev: ActionState, form: FormData): 
         email: text(form, "email"),
         title: text(form, "title"),
         workspaceEmail: text(form, "workspaceEmail"),
+        phone: text(form, "phone"),
         roleKeys: form.getAll("roleKeys").map(String),
         projectIds: form.getAll("projectIds").map(String).filter(Boolean),
       } satisfies RouteBody<typeof crmRoutes.createStaff>,
     });
   } catch (e) {
-    return fail(e, { ...submitted(form, ["name", "email", "title", "workspaceEmail"], "roleKeys"), projectIds: form.getAll("projectIds").map(String).join(",") });
+    return fail(e, { ...submitted(form, ["name", "email", "title", "workspaceEmail", "phone"], "roleKeys"), projectIds: form.getAll("projectIds").map(String).join(",") });
   }
   refresh();
   return { ok: true, message: r.tempPassword ? `Account created. Temporary password ${r.tempPassword} was emailed.` : "Account created." };
@@ -34,10 +35,10 @@ export async function updateCrmStaffAction(_prev: ActionState, form: FormData): 
   try {
     await api(crmRoutes.updateStaff, {
       params: { id: text(form, "userId") },
-      body: { name: text(form, "name"), title: text(form, "title"), workspaceEmail: text(form, "workspaceEmail"), roleKeys: form.getAll("roleKeys").map(String) } satisfies RouteBody<typeof crmRoutes.updateStaff>,
+      body: { name: text(form, "name"), title: text(form, "title"), workspaceEmail: text(form, "workspaceEmail"), phone: text(form, "phone"), roleKeys: form.getAll("roleKeys").map(String) } satisfies RouteBody<typeof crmRoutes.updateStaff>,
     });
   } catch (e) {
-    return fail(e, submitted(form, ["name", "title", "workspaceEmail"], "roleKeys"));
+    return fail(e, submitted(form, ["name", "title", "workspaceEmail", "phone"], "roleKeys"));
   }
   refresh();
   return { ok: true, message: "Saved." };

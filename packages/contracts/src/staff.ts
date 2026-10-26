@@ -8,6 +8,7 @@ export const StaffRow = z.object({
   email: z.string(),
   title: z.string().nullable(),
   workspaceEmail: z.string().nullable(),
+  phone: z.string().nullable(),
   roles: z.array(z.object({ key: z.string(), name: z.string() })),
   disabled: z.boolean(),
   invited: z.boolean(),
@@ -35,6 +36,7 @@ export const StaffCreateInput = z.object({
   email: zEmail(),
   title: z.string().trim().optional(),
   workspaceEmail: optionalEmail,
+  phone: z.string().trim().max(30).optional(),
   roleKeys: z.array(z.string()).min(1, "Choose at least one role"),
 });
 export const StaffUpdateInput = StaffCreateInput.omit({ email: true });

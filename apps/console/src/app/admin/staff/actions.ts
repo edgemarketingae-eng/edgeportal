@@ -24,11 +24,12 @@ export async function createStaffAction(_prev: ActionState, form: FormData): Pro
         email: text(form, "email"),
         title: text(form, "title"),
         workspaceEmail: text(form, "workspaceEmail"),
+        phone: text(form, "phone"),
         roleKeys: form.getAll("roleKeys").map(String),
       } satisfies RouteBody<typeof staffRoutes.create>,
     });
   } catch (e) {
-    return fail(e, submitted(form, ["name", "email", "title", "workspaceEmail"], "roleKeys"));
+    return fail(e, submitted(form, ["name", "email", "title", "workspaceEmail", "phone"], "roleKeys"));
   }
   refresh();
   return { ok: true, message: r.tempPassword ? `Account created. Temporary password ${r.tempPassword} was emailed.` : "Account created." };
@@ -42,11 +43,12 @@ export async function updateStaffAction(_prev: ActionState, form: FormData): Pro
         name: text(form, "name"),
         title: text(form, "title"),
         workspaceEmail: text(form, "workspaceEmail"),
+        phone: text(form, "phone"),
         roleKeys: form.getAll("roleKeys").map(String),
       } satisfies RouteBody<typeof staffRoutes.update>,
     });
   } catch (e) {
-    return fail(e, submitted(form, ["name", "title", "workspaceEmail"], "roleKeys"));
+    return fail(e, submitted(form, ["name", "title", "workspaceEmail", "phone"], "roleKeys"));
   }
   refresh();
   return { ok: true, message: "Saved." };

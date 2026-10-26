@@ -27,7 +27,7 @@ export async function seed(opts: { production: boolean; adminEmail?: string; adm
     { email: "finance@edgeacademy.local", name: "Finance Desk", roleKeys: ["finance"] },
     { email: "crm-admin@edgeacademy.local", name: "CRM Admin", roleKeys: ["crm_admin"] },
     { email: "pm@edgeacademy.local", name: "Demo Project Manager", roleKeys: ["project_manager"] },
-    { email: "sales@edgeacademy.local", name: "Sales Desk", roleKeys: ["sales_executive"] },
+    { email: "sales@edgeacademy.local", name: "Sales Desk", roleKeys: ["sales_executive"], phone: "+971500000001" },
   ];
   for (const d of demo) {
     if (!(await AuthUser.exists({ email: d.email }))) await createStaff({ ...d, password: "ChangeMe!2026" }, { type: "SYSTEM", id: "seed" });

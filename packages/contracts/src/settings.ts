@@ -28,6 +28,13 @@ export const SettingsDto = z.object({
   joinWindowMinutes: z.number(),
   checkoutExpiryMinutes: z.number(),
   academy: z.object({ name: z.string(), supportEmail: z.string(), supportWhatsapp: z.string(), website: z.string() }),
+  freeClass: z.object({
+    enabled: z.boolean(),
+    title: z.string(),
+    startsAt: z.string().nullable(),
+    durationMinutes: z.number(),
+    platform: z.string(),
+  }),
   odoo: z.object({
     courseProductId: z.number().nullable(),
     feeProductId: z.number().nullable(),
@@ -63,6 +70,15 @@ export const GeneralSettingsInput = z.object({
   website: z.string().trim(),
 });
 
+export const FreeClassSettingsInput = z.object({
+  enabled: z.boolean(),
+  title: z.string().trim().min(3, "Enter a title").max(100),
+  /** datetime-local, Dubai time; empty = no date shown. */
+  startsAt: z.string().trim(),
+  durationMinutes: z.coerce.number().int().min(15, "At least 15 minutes").max(480, "At most 8 hours"),
+  platform: z.string().trim().max(80),
+});
+
 const optId = z.union([z.literal(""), z.coerce.number().int().positive()]).optional();
 export const OdooMappingInput = z.object({
   courseProductId: optId,
@@ -76,5 +92,6 @@ export const settingsRoutes = {
   get: route({ method: "GET", path: "/api/v1/admin/settings", response: SettingsDto }),
   saveFeeRate: route({ method: "POST", path: "/api/v1/admin/settings/fee-rates", body: FeeRateInput, response: zOk }),
   saveGeneral: route({ method: "POST", path: "/api/v1/admin/settings/general", body: GeneralSettingsInput, response: zOk }),
+  saveFreeClass: route({ method: "POST", path: "/api/v1/admin/settings/free-class", body: FreeClassSettingsInput, response: zOk }),
   saveOdoo: route({ method: "POST", path: "/api/v1/admin/settings/odoo", body: OdooMappingInput, response: zOk }),
 };

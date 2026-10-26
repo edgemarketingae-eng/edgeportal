@@ -39,9 +39,36 @@ export const ProfileInput = z.object({
   marketingConsent: z.boolean(),
 });
 
+export const FreeClassDto = z.object({
+  title: z.string(),
+  /** ISO; null when no upcoming date is set. */
+  startsAt: z.string().nullable(),
+  durationMinutes: z.number(),
+  platform: z.string(),
+});
+export type FreeClassDto = z.infer<typeof FreeClassDto>;
+
+const utmField = z.string().trim().max(200).optional();
+export const FreeClassLeadInput = z.object({
+  name: z.string().trim().min(2, "Enter your name").max(80, "Name is too long"),
+  phone: z.string().trim().min(6, "Enter your WhatsApp number").max(30),
+  /** Honeypot: people never see or fill it. */
+  website: z.string().max(200).optional(),
+  utm: z.object({ source: utmField, medium: utmField, campaign: utmField, content: utmField, term: utmField }).optional(),
+});
+
 export const studentRoutes = {
   portal: route({ method: "GET", path: "/api/v1/student/portal", response: PortalDto }),
   /** No session needed (sign-up page): the batch new students are assigned to. */
   enrollingNow: route({ method: "GET", path: "/api/v1/public/enrolling-now", response: z.object({ batch: z.object({ name: z.string(), startDate: z.string() }).nullable() }) }),
+  /** No session needed (landing page): the next free live class, or null when switched off. */
+  freeClass: route({ method: "GET", path: "/api/v1/public/free-class", response: z.object({ freeClass: FreeClassDto.nullable() }) }),
+  /** No session needed (landing page): creates the CRM lead and returns the assigned sales executive's WhatsApp link. */
+  freeClassLead: route({
+    method: "POST",
+    path: "/api/v1/public/free-class/leads",
+    body: FreeClassLeadInput,
+    response: z.object({ ok: z.literal(true), whatsappUrl: z.string().nullable(), contactName: z.string().nullable() }),
+  }),
   updateProfile: route({ method: "POST", path: "/api/v1/student/profile", body: ProfileInput, response: zOk }),
 };

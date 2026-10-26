@@ -40,6 +40,23 @@ export const SETTINGS = {
     schema: z.object({ name: z.string(), supportEmail: z.string(), supportWhatsapp: z.string(), website: z.string() }),
     default: { name: "Edge Trading Academy", supportEmail: "support@edgeacademy.ae", supportWhatsapp: "", website: "https://edgeacademy.ae" },
   },
+  /** The free live class promoted on the student app's landing page. */
+  "marketing.freeClass": {
+    schema: z.object({
+      enabled: z.boolean(),
+      title: z.string(),
+      startsAt: z.string().nullable(),
+      durationMinutes: z.number().int().min(15).max(480),
+      platform: z.string(),
+    }),
+    default: {
+      enabled: false,
+      title: "Free Live Forex & Gold Class",
+      startsAt: null as string | null,
+      durationMinutes: 90,
+      platform: "Live on Zoom / Google Meet",
+    },
+  },
 } as const;
 
 export type SettingKey = keyof typeof SETTINGS;

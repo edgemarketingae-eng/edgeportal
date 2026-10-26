@@ -1,5 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { Course, Lead, LeadInboundEvent, Types, withTx, type LeadInboundEventDoc } from "@edge/db";
+import { Course, Lead, LeadInboundEvent, Project, Types, withTx, type LeadInboundEventDoc } from "@edge/db";
 import { now } from "@edge/domain/clock";
 import { INBOUND_SOURCES } from "@edge/domain/crm/enums";
 import { parseTags } from "@edge/domain/crm/machine";
@@ -11,7 +11,7 @@ import { env } from "../env";
 import { notifyUser } from "../notifications/in-app";
 import { getSetting } from "../settings";
 import { escapeRegex, findDuplicateLeads, leadHref, normalizeEmail, recordActivity } from "./common";
-import { createLead } from "./leads";
+import { applyAssign, createLead } from "./leads";
 import { roundRobinPicker } from "./round-robin";
 import { getDefaultProject, notifyProjectManagers } from "./scope";
 
@@ -128,12 +128,17 @@ async function matchCourse(text?: string) {
   return c ? String(c._id) : null;
 }
 
-/** Create the lead, or append an INBOUND entry to an existing live lead with the same phone/email. */
+/**
+ * Create the lead, or append an INBOUND entry to an existing live lead with the same phone/email.
+ * `assignExecWithPhone` (free class landing page) always round-robins an unowned lead to a sales executive
+ * who has a phone, whatever the CRM's round-robin setting, because the visitor is sent to that person's WhatsApp.
+ */
 export async function ingestInboundLead(
   source: string,
   p: InboundLeadPayload,
   eventId: Types.ObjectId | null,
-): Promise<{ leadId: string; existing: boolean }> {
+  opts: { assignExecWithPhone?: boolean } = {},
+): Promise<{ leadId: string; existing: boolean; ownerId: string | null }> {
   const email = normalizeEmail(p.email);
   const parsedPhone = p.phone?.trim() ? parsePhone(p.phone, p.country?.toUpperCase()) : null;
   const phone = parsedPhone?.e164 ?? null;
@@ -151,6 +156,11 @@ export async function ingestInboundLead(
   const [existing] = await findDuplicateLeads({ phone, email });
   if (existing) {
     const at = now();
+    let ownerId = existing.ownerId ? String(existing.ownerId) : null;
+    if (!ownerId && opts.assignExecWithPhone) {
+      const project = await Project.findById(existing.projectId).lean();
+      ownerId = project ? (await roundRobinPicker(project, { withPhone: true })).next() : null;
+    }
     await withTx(async () => {
       const set: Record<string, unknown> = { lastActivityAt: at };
       if (existing.stage === "LOST") Object.assign(set, { stage: "NEW", stageChangedAt: at, lostReason: null, lostNote: null });
@@ -169,7 +179,8 @@ export async function ingestInboundLead(
       });
       if (existing.stage === "LOST")
         await recordActivity(existing._id, "STAGE_CHANGED", actor, { data: { from: "LOST", to: "NEW", auto: true } });
-      if (existing.ownerId)
+      if (!existing.ownerId && ownerId) await applyAssign(existing, new Types.ObjectId(ownerId), actor);
+      else if (existing.ownerId)
         await notifyUser(String(existing.ownerId), {
           title: `${existing.name} enquired again`,
           body: p.message?.trim().slice(0, 140) || `New enquiry from the ${source}`,
@@ -182,12 +193,16 @@ export async function ingestInboundLead(
           href: leadHref(existing._id),
         });
     });
-    return { leadId: String(existing._id), existing: true };
+    return { leadId: String(existing._id), existing: true, ownerId };
   }
 
   const cfg = await getSetting("crm.config");
   const project = await getDefaultProject();
-  const ownerId = cfg.roundRobin ? ((await roundRobinPicker(project)).next() ?? "") : "";
+  const ownerId = opts.assignExecWithPhone
+    ? ((await roundRobinPicker(project, { withPhone: true })).next() ?? "")
+    : cfg.roundRobin
+      ? ((await roundRobinPicker(project)).next() ?? "")
+      : "";
   const leadId = await createLead(
     {
       projectId: String(project._id),
@@ -217,7 +232,7 @@ export async function ingestInboundLead(
       body: `${p.name}${p.course ? ` · ${p.course}` : ""}`,
       href: leadHref(leadId),
     });
-  return { leadId, existing: false };
+  return { leadId, existing: false, ownerId: ownerId || null };
 }
 
 /** Job: reprocess inbox events whose processing failed or never finished. */

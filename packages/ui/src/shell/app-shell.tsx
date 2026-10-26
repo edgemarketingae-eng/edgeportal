@@ -44,6 +44,7 @@ export function AppShell({
   notificationsHref,
   helpHref,
   signOutHref = "/sign-out",
+  homeHref = "/",
   children,
 }: {
   items: NavItem[];
@@ -56,10 +57,12 @@ export function AppShell({
   /** The app's Help & docs page, linked from the header. */
   helpHref?: string;
   signOutHref?: string;
+  /** Where the logo goes (the student app's `/` is its public landing page). */
+  homeHref?: string;
   children: ReactNode;
 }) {
   const logo = (
-    <Link href="/" aria-label="Home">
+    <Link href={homeHref} aria-label="Home">
       <Logo height={30} />
     </Link>
   );

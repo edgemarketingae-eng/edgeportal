@@ -27,6 +27,7 @@ import {
   saveBatch,
   saveCourse,
   saveFeeRate,
+  saveFreeClassSettings,
   saveGeneralSettings,
   saveOdooMapping,
   saveRole,
@@ -159,6 +160,10 @@ export function adminRouter() {
   register(r, settingsRoutes.saveGeneral, async (req) => {
     await saveGeneralSettings(req.valid.body, actorOf(requirePermission(req, "settings.fees")));
     return { ok: true as const, message: "Settings saved." };
+  });
+  register(r, settingsRoutes.saveFreeClass, async (req) => {
+    await saveFreeClassSettings(req.valid.body, actorOf(requirePermission(req, "settings.fees")));
+    return { ok: true as const, message: "Free class saved." };
   });
   register(r, settingsRoutes.saveOdoo, async (req) => {
     await saveOdooMapping(req.valid.body, actorOf(requirePermission(req, "settings.integrations")));

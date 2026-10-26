@@ -48,6 +48,7 @@ export default async function StaffMemberPage(props: PageProps<"/admin/staff/[id
               name: s.name,
               title: s.title ?? "",
               workspaceEmail: s.workspaceEmail ?? "",
+              phone: s.phone ?? "",
               roleKeys: s.roles.map((r) => r.key),
             }}
           />

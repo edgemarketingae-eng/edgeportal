@@ -8,7 +8,7 @@ import { Label } from "@edge/ui/components/label";
 import { Field, FormError, type ActionState } from "@edge/ui/forms/field";
 import { useActionState, useEffect } from "react";
 import { toast } from "sonner";
-import { saveFeeRateAction, saveGeneralSettingsAction, saveOdooMappingAction } from "@/app/admin/settings/actions";
+import { saveFeeRateAction, saveFreeClassAction, saveGeneralSettingsAction, saveOdooMappingAction } from "@/app/admin/settings/actions";
 
 const JOURNAL_GATEWAYS = GATEWAYS.filter((g) => g !== "MOCK");
 
@@ -137,6 +137,48 @@ export function GeneralSettingsForm({ v: initial }: { v: GeneralValues }) {
       </div>
       <Button className="w-fit" disabled={pending}>
         {pending ? "Saving…" : "Save settings"}
+      </Button>
+    </form>
+  );
+}
+
+export interface FreeClassValues {
+  enabled: boolean;
+  title: string;
+  startsAt: string;
+  durationMinutes: string;
+  platform: string;
+}
+
+export function FreeClassForm({ v: initial }: { v: FreeClassValues }) {
+  const [state, action, pending] = useActionState(saveFreeClassAction, {} as ActionState);
+  useToast(state);
+  const v = state.values;
+  return (
+    <form key={formKey(state)} action={action} className="grid gap-4">
+      <FormError state={state} />
+      <label className="flex items-center gap-2 text-sm">
+        <Checkbox name="enabled" defaultChecked={v ? v.enabled === "on" : initial.enabled} /> Show the next class on the landing page
+      </label>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Class title" name="title" defaultValue={v?.title ?? initial.title} required />
+        <Field
+          label="Starts at (Dubai time)"
+          name="startsAt"
+          type="datetime-local"
+          defaultValue={v?.startsAt ?? initial.startsAt}
+          hint="Leave empty to show general copy without a date."
+        />
+        <Field
+          label="Duration (minutes)"
+          name="durationMinutes"
+          type="number"
+          defaultValue={v?.durationMinutes ?? initial.durationMinutes}
+        />
+        <Field label="Where it happens" name="platform" defaultValue={v?.platform ?? initial.platform} hint="e.g. Live on Zoom" />
+      </div>
+      <Button className="w-fit" disabled={pending}>
+        {pending ? "Saving…" : "Save free class"}
       </Button>
     </form>
   );

@@ -60,6 +60,24 @@ export async function saveGeneralSettingsAction(_prev: ActionState, form: FormDa
   return { ok: true, message: "Settings saved." };
 }
 
+export async function saveFreeClassAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  try {
+    await api(settingsRoutes.saveFreeClass, {
+      body: {
+        enabled: checked(form, "enabled"),
+        title: text(form, "title"),
+        startsAt: text(form, "startsAt"),
+        durationMinutes: text(form, "durationMinutes"),
+        platform: text(form, "platform"),
+      } satisfies RouteBody<typeof settingsRoutes.saveFreeClass>,
+    });
+  } catch (e) {
+    return fail(e, values(form, ["enabled", "title", "startsAt", "durationMinutes", "platform"]));
+  }
+  refresh();
+  return { ok: true, message: "Free class saved." };
+}
+
 export async function saveOdooMappingAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   try {
     await api(settingsRoutes.saveOdoo, {

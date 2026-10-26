@@ -26,6 +26,7 @@ export async function listStaff(ids?: Types.ObjectId[]) {
         email: u.email,
         title: p.title ?? null,
         workspaceEmail: p.workspaceEmail ?? null,
+        phone: p.phone ?? null,
         roles: (p.roleIds ?? [])
           .map((r) => roleById.get(String(r)))
           .filter(Boolean)
