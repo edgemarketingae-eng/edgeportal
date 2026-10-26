@@ -65,9 +65,9 @@ export default function LandingPage() {
         <header className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-5 sm:px-6">
           <Image src="/brand/edge-logo-primary.svg" alt="Edge Trading Academy" width={144} height={36} unoptimized priority />
           <nav className="flex items-center gap-3 sm:gap-5">
-            <Link href="/login" className="text-edge-ink/70 hover:text-edge-ink text-sm font-semibold">
+            {/* <Link href="/login" className="text-edge-ink/70 hover:text-edge-ink text-sm font-semibold">
               Student login
-            </Link>
+            </Link> */}
             <JoinButton className="hidden h-11 rounded-xl px-5 text-xs sm:inline-flex">Join now</JoinButton>
           </nav>
         </header>
