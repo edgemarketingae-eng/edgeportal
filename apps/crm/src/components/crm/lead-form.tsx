@@ -3,15 +3,17 @@
 import type { CrmOptions } from "@edge/contracts";
 import { EXPERIENCE_LEVELS, LEAD_CHANNELS, LEAD_SOURCES, LEAD_TEMPERATURES } from "@edge/domain/crm/enums";
 import { EXPERIENCE_LABELS, LEAD_CHANNEL_LABELS, LEAD_SOURCE_LABELS, LEAD_TEMPERATURE_LABELS } from "@edge/domain/crm/labels";
+import { dialogLayout } from "@edge/ui/blocks/action-dialog";
 import { Button } from "@edge/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@edge/ui/components/card";
 import { Checkbox } from "@edge/ui/components/checkbox";
+import { DialogClose, DialogFooter } from "@edge/ui/components/dialog";
 import { Label } from "@edge/ui/components/label";
 import { Textarea } from "@edge/ui/components/textarea";
 import { NativeSelect } from "@edge/ui/components/native-select";
 import { CountrySelect } from "@edge/ui/forms/phone-input";
 import { Field, FormError, type ActionState } from "@edge/ui/forms/field";
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { saveLeadAction } from "@/lib/actions/leads";
 
@@ -89,21 +91,51 @@ function Select({
   );
 }
 
+/** A titled block of the form: a card on the page, a plain section inside the edit dialog. Each is its own size container. */
+function Section({ title, dialog, className, children }: { title: string; dialog: boolean; className?: string; children: ReactNode }) {
+  if (dialog)
+    return (
+      <section className={`@container grid content-start gap-4 ${className ?? ""}`}>
+        <h3 className="text-muted-foreground border-b pb-2 text-xs font-bold tracking-[0.12em] uppercase">{title}</h3>
+        {children}
+      </section>
+    );
+  return (
+    <Card className={className}>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="@container grid gap-4">{children}</CardContent>
+    </Card>
+  );
+}
+
+/** Two fields side by side once their section is wide enough (a container query, so it works in the page and the dialog). */
+const pair = "grid items-start gap-4 @sm:grid-cols-2";
+
 export function LeadForm({
   values,
   options,
   meId,
   projectName,
+  variant = "page",
+  onSaved,
 }: {
   values: LeadFormValues;
   options: CrmOptions;
   meId: string;
   projectName?: string;
+  /** "dialog": plain sections, a scrolling body and a pinned Cancel / Save footer (the lead page's Edit dialog). */
+  variant?: "page" | "dialog";
+  onSaved?: () => void;
 }) {
   const [state, action, pending] = useActionState(saveLeadAction, {} as ActionState);
   useEffect(() => {
-    if (state.ok) toast.success(state.message ?? "Saved");
-  }, [state]);
+    if (!state.ok) return;
+    toast.success(state.message ?? "Saved");
+    onSaved?.();
+  }, [state, onSaved]);
+  const dialog = variant === "dialog";
   const fe = state.fieldErrors ?? {};
   const v = restore(values, state.values);
   const creating = !values.id;
@@ -113,23 +145,19 @@ export function LeadForm({
   const team = options.teams[projectId] ?? [];
   const batches = courseId ? options.batches.filter((b) => b.courseId === courseId) : options.batches;
   return (
-    <form key={JSON.stringify(state.values ?? {})} action={action} className="grid gap-4">
+    <form key={JSON.stringify(state.values ?? {})} action={action} className={dialog ? dialogLayout.form : "grid gap-4"}>
       {values.id ? <input type="hidden" name="id" value={values.id} /> : null}
       {!creating ? <input type="hidden" name="projectId" value={values.projectId} /> : null}
-      <FormError state={state} />
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Contact</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4">
+      <div className={dialog ? `${dialogLayout.body} @container` : "@container grid gap-4"}>
+        <FormError state={state} />
+        <div className={`grid items-start gap-6 @3xl:grid-cols-2 ${dialog ? "" : "@3xl:gap-4"}`}>
+          <Section title="Contact" dialog={dialog}>
             <Field label="Name" name="name" defaultValue={v.name} error={fe.name} required />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Mobile (WhatsApp)" name="phone" type="tel" defaultValue={v.phone} error={fe.phone} />
-              <Field label="Email" name="email" type="email" defaultValue={v.email} error={fe.email} />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Field label="Country" name="country" error={fe.country} hint="Detect uses the mobile number">
+            {/* The phone gets its own row: the country picker plus a usable number box need ~16rem. */}
+            <Field label="Mobile (WhatsApp)" name="phone" type="tel" defaultValue={v.phone} error={fe.phone} />
+            <Field label="Email" name="email" type="email" defaultValue={v.email} error={fe.email} />
+            <div className={pair}>
+              <Field label="Country" name="country" error={fe.country}>
                 <CountrySelect
                   id="country"
                   name="country"
@@ -138,7 +166,6 @@ export function LeadForm({
                   aria-invalid={!!fe.country || undefined}
                 />
               </Field>
-              <Field label="Language" name="language" defaultValue={v.language} error={fe.language} placeholder="English, Arabic, Hindi…" />
               <div className="grid content-start gap-2">
                 <Label htmlFor="preferredChannel">Preferred channel</Label>
                 <Select id="preferredChannel" name="preferredChannel" value={v.preferredChannel} error={fe.preferredChannel}>
@@ -151,6 +178,7 @@ export function LeadForm({
                 </Select>
               </div>
             </div>
+            <Field label="Language" name="language" defaultValue={v.language} error={fe.language} placeholder="English, Arabic, Hindi…" />
             <div className="grid gap-2">
               <label className="flex items-center gap-2 text-sm">
                 <Checkbox name="whatsappConsent" defaultChecked={v.whatsappConsent} /> OK to message on WhatsApp
@@ -166,16 +194,11 @@ export function LeadForm({
             </div>
             <div className="grid content-start gap-2">
               <Label htmlFor="notes">Notes</Label>
-              <Textarea id="notes" name="notes" rows={5} defaultValue={v.notes} />
+              <Textarea id="notes" name="notes" rows={dialog ? 4 : 5} defaultValue={v.notes} />
               {fe.notes ? <p className="text-destructive text-xs">{fe.notes}</p> : null}
             </div>
-          </CardContent>
-        </Card>
-        <Card className="h-fit">
-          <CardHeader>
-            <CardTitle>Sales</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4">
+          </Section>
+          <Section title="Sales" dialog={dialog} className="h-fit">
             <div className="grid content-start gap-2">
               <Label htmlFor="projectId">Project</Label>
               {creating ? (
@@ -191,7 +214,7 @@ export function LeadForm({
               )}
               {fe.projectId ? <p className="text-destructive text-xs">{fe.projectId}</p> : null}
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className={pair}>
               <div className="grid content-start gap-2">
                 <Label htmlFor="source">Source</Label>
                 <Select id="source" name="source" value={v.source} error={fe.source}>
@@ -210,7 +233,7 @@ export function LeadForm({
                 placeholder="Campaign, post, referrer…"
               />
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className={pair}>
               <div className="grid content-start gap-2">
                 <Label htmlFor="courseInterestId">Course of interest</Label>
                 <NativeSelect id="courseInterestId" name="courseInterestId" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
@@ -234,7 +257,7 @@ export function LeadForm({
                 </Select>
               </div>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className={pair}>
               <div className="grid content-start gap-2">
                 <Label htmlFor="experienceLevel">Trading experience</Label>
                 <Select id="experienceLevel" name="experienceLevel" value={v.experienceLevel} error={fe.experienceLevel}>
@@ -265,6 +288,7 @@ export function LeadForm({
                   {team.map((o) => (
                     <option key={o.id} value={o.id}>
                       {o.name}
+                      {o.available === false ? " (Off)" : ""}
                     </option>
                   ))}
                 </Select>
@@ -280,12 +304,25 @@ export function LeadForm({
                 error={fe.nextFollowUpAt}
               />
             ) : null}
-          </CardContent>
-        </Card>
+          </Section>
+        </div>
       </div>
-      <Button type="submit" size="lg" className="w-fit" disabled={pending}>
-        {pending ? "Saving…" : creating ? "Create lead" : "Save lead"}
-      </Button>
+      {dialog ? (
+        <DialogFooter className={dialogLayout.footer}>
+          <DialogClose asChild>
+            <Button type="button" variant="ghost">
+              Cancel
+            </Button>
+          </DialogClose>
+          <Button type="submit" disabled={pending}>
+            {pending ? "Saving…" : "Save lead"}
+          </Button>
+        </DialogFooter>
+      ) : (
+        <Button type="submit" size="lg" className="w-fit" disabled={pending}>
+          {pending ? "Saving…" : creating ? "Create lead" : "Save lead"}
+        </Button>
+      )}
     </form>
   );
 }

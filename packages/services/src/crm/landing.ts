@@ -1,5 +1,5 @@
 import type { FreeClassDto } from "@edge/contracts";
-import { AuthUser, StaffProfile, Types } from "@edge/db";
+import { Types } from "@edge/db";
 import { now } from "@edge/domain/clock";
 import { whatsappDigits } from "@edge/domain/crm/machine";
 import { HOME_COUNTRY } from "@edge/domain/countries";
@@ -7,6 +7,7 @@ import { parsePhone } from "@edge/domain/phone";
 import { getSetting } from "../settings";
 import { recordActivity } from "./common";
 import { ingestInboundLead } from "./ingest";
+import { reachableExec } from "./round-robin";
 
 /** Free live class landing page (student app home): the class it promotes and the lead it captures. */
 
@@ -26,17 +27,10 @@ export function freeClassWhatsappUrl(phone: string, greet: string, visitor: stri
   return `https://wa.me/${whatsappDigits(phone)}?text=${encodeURIComponent(text)}`;
 }
 
-/** The owner's phone when they have one and are active; otherwise the academy's support WhatsApp. */
+/** The owner's phone when they are active, not Off and have one; otherwise the academy's support WhatsApp. */
 async function contactFor(ownerId: string | null) {
-  if (ownerId) {
-    const _id = new Types.ObjectId(ownerId);
-    const [profile, user] = await Promise.all([
-      StaffProfile.findById(_id, { phone: 1 }).lean(),
-      AuthUser.findById(_id, { name: 1, disabledAt: 1 }).lean(),
-    ]);
-    if (profile?.phone && user && !user.disabledAt)
-      return { phone: profile.phone, name: user.name, greet: user.name.split(/\s+/)[0]!, exec: true };
-  }
+  const exec = await reachableExec(ownerId);
+  if (exec) return { phone: exec.phone, name: exec.name, greet: exec.name.split(/\s+/)[0]!, exec: true };
   const academy = await getSetting("academy.profile");
   // The academy's own number, typed by an admin in Dubai, so a local number is read as UAE.
   const support = academy.supportWhatsapp.trim() ? parsePhone(academy.supportWhatsapp, HOME_COUNTRY) : null;

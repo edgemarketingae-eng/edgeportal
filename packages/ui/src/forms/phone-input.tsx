@@ -92,9 +92,9 @@ export function PhoneInput({
 
   const current = countryByCode(country);
   return (
-    <div data-slot="phone-input" className={cn("flex w-full gap-2", className)}>
+    <div data-slot="phone-input" className={cn("flex w-full min-w-[16rem] gap-2", className)}>
       <input ref={hidden} type="hidden" name={name} value={toValue(text, country)} />
-      <div className="relative w-[6.5rem] shrink-0">
+      <div className="relative w-[7.5rem] shrink-0">
         {/* The native select keeps phones' own picker; the chip on top shows just flag and code. */}
         <div aria-hidden className={cn(controlClass, controlSize.md, "pointer-events-none flex items-center gap-1.5 pr-7 tabular-nums")}>
           <span className="text-base leading-none">{current?.flag}</span>
@@ -135,7 +135,7 @@ export function PhoneInput({
             if (detected && detected !== country && countryByCode(detected)) pick(detected);
           }
         }}
-        className={cn(controlClass, controlSize.md, "min-w-0 flex-1 tabular-nums")}
+        className={cn(controlClass, controlSize.md, "min-w-[7rem] flex-1 tabular-nums")}
       />
     </div>
   );

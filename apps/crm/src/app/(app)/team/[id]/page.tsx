@@ -1,6 +1,7 @@
 import { crmRoutes } from "@edge/contracts";
 import { formatDateTime } from "@edge/domain/dates";
 import { ActionButton } from "@edge/ui/blocks/action-dialog";
+import { AvailabilitySwitch } from "@edge/ui/blocks/availability";
 import { PendingInvite } from "@edge/ui/blocks/secret-reveal";
 import { Card, CardContent, CardHeader, CardTitle } from "@edge/ui/components/card";
 import { PageHeader } from "@edge/ui/shell/app-shell";
@@ -8,7 +9,7 @@ import { api } from "@edge/web/server";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { EditCrmStaffForm, ResetPasswordButton } from "@/components/team/team-forms";
-import { toggleCrmStaffAction } from "@/lib/actions/team";
+import { toggleCrmStaffAction, toggleCrmStaffAvailableAction } from "@/lib/actions/team";
 import { load, requireCrm } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Team member" };
@@ -22,9 +23,12 @@ export default async function TeamMemberPage(props: PageProps<"/team/[id]">) {
       <PageHeader
         help="/docs/team"
         title={s.name}
-        description={`${s.email}${s.disabled ? " · disabled" : ""}${s.lastSignInAt ? ` · last sign-in ${formatDateTime(s.lastSignInAt)}` : ""} · ${s.openLeads} open lead${s.openLeads === 1 ? "" : "s"}`}
+        description={`${s.email}${s.disabled ? " · disabled" : ""}${s.available ? "" : " · Off"}${s.lastSignInAt ? ` · last sign-in ${formatDateTime(s.lastSignInAt)}` : ""} · ${s.openLeads} open lead${s.openLeads === 1 ? "" : "s"}`}
         actions={
           <>
+            {s.roles.some((r) => r.key === "sales_executive") || !s.available ? (
+              <AvailabilitySwitch action={toggleCrmStaffAvailableAction} userId={s.id} name={s.name} available={s.available} showLabel />
+            ) : null}
             <ResetPasswordButton userId={s.id} />
             <ActionButton
               action={toggleCrmStaffAction}

@@ -10,7 +10,7 @@ import {
 import { formatDate, formatDateTime } from "@edge/domain/dates";
 import { EnrollmentBadge, LeadStageBadge, PaymentStateBadge, TemperatureBadge } from "@edge/ui/blocks/status-badges";
 import { Badge } from "@edge/ui/components/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@edge/ui/components/card";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@edge/ui/components/card";
 import { PageHeader } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
 import type { Metadata } from "next";
@@ -20,7 +20,7 @@ import { ActivityComposer } from "@/components/crm/activity-composer";
 import { describeActivity } from "@/components/crm/activity-text";
 import { FollowUpDue, TimeAgo } from "@/components/crm/due";
 import { LeadControls } from "@/components/crm/lead-controls";
-import { LeadForm } from "@/components/crm/lead-form";
+import { EditLeadDialog } from "@/components/crm/edit-lead-dialog";
 import { AddTaskDialog, CancelTaskButton, CompleteTaskDialog, RescheduleTaskDialog } from "@/components/crm/task-actions";
 import { can, CONSOLE_URL, load, requireCrm } from "@/lib/load";
 
@@ -116,6 +116,37 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Details</CardTitle>
+            {canWrite && !l.mergedIntoId ? (
+              <CardAction>
+                <EditLeadDialog
+                  values={{
+                    id: l.id,
+                    projectId: l.project.id,
+                    name: l.name,
+                    phone: l.phone ?? "",
+                    email: l.email ?? "",
+                    country: l.country ?? "",
+                    source: l.source,
+                    sourceDetail: l.sourceDetail ?? "",
+                    courseInterestId: l.courseInterestId ?? "",
+                    batchInterestId: l.batchInterestId ?? "",
+                    experienceLevel: l.experienceLevel ?? "",
+                    temperature: l.temperature,
+                    preferredChannel: l.preferredChannel ?? "",
+                    language: l.language ?? "",
+                    tags: l.tags.join(", "),
+                    notes: l.notes ?? "",
+                    marketingConsent: l.consent.marketing,
+                    whatsappConsent: l.consent.whatsapp,
+                    nextFollowUpAt: "",
+                    ownerId: l.ownerId ?? "",
+                  }}
+                  options={options}
+                  meId={v.user.id}
+                  projectName={l.project.name}
+                />
+              </CardAction>
+            ) : null}
           </CardHeader>
           <CardContent>
             <dl className="grid gap-4 text-sm sm:grid-cols-2">
@@ -185,40 +216,6 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
                 </div>
               ) : null}
             </dl>
-            {canWrite && !l.mergedIntoId ? (
-              <details className="mt-4">
-                <summary className="text-edge-emerald cursor-pointer text-sm font-semibold">Edit details</summary>
-                <div className="mt-3">
-                  <LeadForm
-                    values={{
-                      id: l.id,
-                      projectId: l.project.id,
-                      name: l.name,
-                      phone: l.phone ?? "",
-                      email: l.email ?? "",
-                      country: l.country ?? "",
-                      source: l.source,
-                      sourceDetail: l.sourceDetail ?? "",
-                      courseInterestId: l.courseInterestId ?? "",
-                      batchInterestId: l.batchInterestId ?? "",
-                      experienceLevel: l.experienceLevel ?? "",
-                      temperature: l.temperature,
-                      preferredChannel: l.preferredChannel ?? "",
-                      language: l.language ?? "",
-                      tags: l.tags.join(", "),
-                      notes: l.notes ?? "",
-                      marketingConsent: l.consent.marketing,
-                      whatsappConsent: l.consent.whatsapp,
-                      nextFollowUpAt: "",
-                      ownerId: l.ownerId ?? "",
-                    }}
-                    options={options}
-                    meId={v.user.id}
-                    projectName={l.project.name}
-                  />
-                </div>
-              </details>
-            ) : null}
           </CardContent>
         </Card>
 

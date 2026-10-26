@@ -46,6 +46,7 @@ import {
   rescheduleTask,
   saveCrmRole,
   saveCrmSettings,
+  setCrmStaffAvailable,
   setCrmStaffDisabled,
   setProjectMember,
   setStage,
@@ -256,6 +257,11 @@ export function crmRouter() {
     const { actor } = await crm(req, "crm.staff.manage");
     await setCrmStaffDisabled(req.valid.params.id, req.valid.body.disabled, actor);
     return ok(req.valid.body.disabled ? "Account disabled and signed out." : "Account enabled.");
+  });
+  register(r, crmRoutes.setStaffAvailable, async (req) => {
+    const { actor } = await crm(req, "crm.staff.manage");
+    await setCrmStaffAvailable(req.valid.params.id, req.valid.body.available, actor);
+    return ok(req.valid.body.available ? "Back on: receiving leads again." : "Marked Off: no new leads until they're back.");
   });
   register(r, crmRoutes.resetStaffPassword, async (req) => {
     const { actor } = await crm(req, "crm.staff.manage");

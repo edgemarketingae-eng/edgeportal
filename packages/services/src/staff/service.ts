@@ -8,6 +8,7 @@ import { env } from "../env";
 import { BusinessError, NotFoundError } from "../errors";
 import { oid } from "../ids";
 import { queueEmail } from "../notifications/email";
+import { notifyUser } from "../notifications/in-app";
 import { normalizePhone } from "../crm/common";
 import { flushOutbox } from "../runtime";
 import { invalidateRoleCache } from "../auth/viewer";
@@ -172,6 +173,25 @@ export async function setStaffDisabled(userId: string, disabled: boolean, actor:
     await AuthUser.updateOne({ _id }, { $set: { disabledAt: disabled ? new Date() : null } });
     if (disabled) await AuthSession.deleteMany({ userId: _id });
     await audit({ actor, action: disabled ? "staff.disable" : "staff.enable", entityType: "User", entityId: userId });
+  });
+}
+
+/** Mark someone Off (no automatic leads, no landing-page WhatsApp handoffs) or back on. They stay visible everywhere. */
+export async function setStaffAvailable(userId: string, available: boolean, actor: Actor & { type: "USER" }) {
+  const _id = oid(userId, "Staff member");
+  const staff = await StaffProfile.findById(_id, { available: 1 }).lean();
+  if (!staff) throw new NotFoundError("Staff member");
+  if ((staff.available !== false) === available) return;
+  await withTx(async () => {
+    await StaffProfile.updateOne({ _id }, { $set: { available, availabilityChangedAt: new Date() } });
+    await audit({ actor, action: available ? "staff.available" : "staff.off", entityType: "User", entityId: userId });
+    if (userId !== actor.id)
+      await notifyUser(
+        userId,
+        available
+          ? { title: "You're back on", body: "New leads can be assigned to you again." }
+          : { title: "You're marked Off", body: "No new leads will be assigned to you until you're back on." },
+      );
   });
 }
 

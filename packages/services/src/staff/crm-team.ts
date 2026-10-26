@@ -6,7 +6,7 @@ import type { Actor } from "@edge/domain/enums";
 import { BusinessError, NotFoundError } from "../errors";
 import { oid } from "../ids";
 import { listRoles, listStaff } from "./queries";
-import { createStaff, resetStaffPassword, rolesByKeys, saveRole, setStaffDisabled, updateStaff } from "./service";
+import { createStaff, resetStaffPassword, rolesByKeys, saveRole, setStaffAvailable, setStaffDisabled, updateStaff } from "./service";
 
 /**
  * Staff and role management from inside the CRM. A CRM admin may only touch "pure CRM users"
@@ -80,6 +80,11 @@ export async function updateCrmStaff(id: string, input: { name: string; roleKeys
 export async function setCrmStaffDisabled(id: string, disabled: boolean, actor: Actor & { type: "USER" }) {
   await assertPureCrmUser(id);
   await setStaffDisabled(id, disabled, actor);
+}
+
+export async function setCrmStaffAvailable(id: string, available: boolean, actor: Actor & { type: "USER" }) {
+  await assertPureCrmUser(id);
+  await setStaffAvailable(id, available, actor);
 }
 
 export async function resetCrmStaffPassword(id: string, actor: Actor & { type: "USER" }) {

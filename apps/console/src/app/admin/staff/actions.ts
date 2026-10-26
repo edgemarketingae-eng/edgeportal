@@ -65,6 +65,20 @@ export async function toggleStaffAction(_prev: ActionState, form: FormData): Pro
   return { ok: true, message: disable ? "Account disabled and signed out." : "Account enabled." };
 }
 
+export async function toggleStaffAvailableAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  let message: string | undefined;
+  try {
+    ({ message } = await api(staffRoutes.setAvailable, {
+      params: { id: text(form, "userId") },
+      body: { available: text(form, "available") === "1" },
+    }));
+  } catch (e) {
+    return fail(e);
+  }
+  refresh();
+  return { ok: true, message: message ?? "Saved." };
+}
+
 export async function resetStaffPasswordAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   let pw: string;
   try {

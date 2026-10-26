@@ -1,12 +1,13 @@
 import { staffRoutes } from "@edge/contracts";
 import { formatDateTime } from "@edge/domain/dates";
 import { ActionButton } from "@edge/ui/blocks/action-dialog";
+import { AvailabilitySwitch } from "@edge/ui/blocks/availability";
 import { PendingInvite } from "@edge/ui/blocks/secret-reveal";
 import { Card, CardContent, CardHeader, CardTitle } from "@edge/ui/components/card";
 import { PageHeader } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
 import type { Metadata } from "next";
-import { toggleStaffAction } from "@/app/admin/staff/actions";
+import { toggleStaffAction, toggleStaffAvailableAction } from "@/app/admin/staff/actions";
 import { EditStaffForm, ResetPasswordButton } from "@/components/staff/staff-forms";
 import { load, requireStaff } from "@/lib/load";
 
@@ -21,9 +22,13 @@ export default async function StaffMemberPage(props: PageProps<"/admin/staff/[id
       <PageHeader
         help="/admin/docs/staff"
         title={s.name}
-        description={`${s.email}${s.disabled ? " · disabled" : ""}${s.lastSignInAt ? ` · last sign-in ${formatDateTime(s.lastSignInAt)}` : ""}`}
+        description={`${s.email}${s.disabled ? " · disabled" : ""}${s.available ? "" : " · Off"}${s.lastSignInAt ? ` · last sign-in ${formatDateTime(s.lastSignInAt)}` : ""}`}
         actions={
           <>
+            {/* Only sales executives receive automatic leads, so only they can be marked Off. */}
+            {s.roles.some((r) => r.key === "sales_executive") || !s.available ? (
+              <AvailabilitySwitch action={toggleStaffAvailableAction} userId={s.id} name={s.name} available={s.available} showLabel />
+            ) : null}
             <ResetPasswordButton userId={s.id} />
             <ActionButton
               action={toggleStaffAction}

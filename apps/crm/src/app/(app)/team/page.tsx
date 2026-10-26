@@ -1,4 +1,5 @@
 import { crmRoutes } from "@edge/contracts";
+import { AvailabilitySwitch, OffBadge } from "@edge/ui/blocks/availability";
 import { StaffStatus } from "@edge/ui/blocks/secret-reveal";
 import { Badge } from "@edge/ui/components/badge";
 import { Button } from "@edge/ui/components/button";
@@ -9,6 +10,7 @@ import { api } from "@edge/web/server";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CreateCrmStaffForm } from "@/components/team/team-forms";
+import { toggleCrmStaffAvailableAction } from "@/lib/actions/team";
 import { load, requireCrm } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Team" };
@@ -41,13 +43,14 @@ export default async function TeamPage() {
               <TableHead>Roles</TableHead>
               <TableHead className="hidden lg:table-cell">Projects</TableHead>
               <TableHead className="text-right">Open leads</TableHead>
+              <TableHead>Receiving leads</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {staff.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground py-10 text-center">
+                <TableCell colSpan={7} className="text-muted-foreground py-10 text-center">
                   No CRM staff yet. Add the first account below.
                 </TableCell>
               </TableRow>
@@ -85,7 +88,18 @@ export default async function TeamPage() {
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{s.openLeads}</TableCell>
                   <TableCell>
-                    <StaffStatus disabled={s.disabled} invited={s.invited} tempPassword={s.tempPassword} />
+                    {/* Only sales executives receive automatic leads. */}
+                    {s.roles.some((r) => r.key === "sales_executive") || !s.available ? (
+                      <AvailabilitySwitch action={toggleCrmStaffAvailableAction} userId={s.id} name={s.name} available={s.available} />
+                    ) : (
+                      <span className="text-muted-foreground text-xs">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <StaffStatus disabled={s.disabled} invited={s.invited} tempPassword={s.tempPassword} />
+                      {s.available ? null : <OffBadge />}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))

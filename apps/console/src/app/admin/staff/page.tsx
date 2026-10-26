@@ -1,4 +1,5 @@
 import { staffRoutes } from "@edge/contracts";
+import { OffBadge } from "@edge/ui/blocks/availability";
 import { StaffStatus } from "@edge/ui/blocks/secret-reveal";
 import { Badge } from "@edge/ui/components/badge";
 import { Button } from "@edge/ui/components/button";
@@ -59,7 +60,10 @@ export default async function StaffPage() {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <StaffStatus disabled={s.disabled} invited={s.invited} tempPassword={s.tempPassword} />
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <StaffStatus disabled={s.disabled} invited={s.invited} tempPassword={s.tempPassword} />
+                    {s.available ? null : <OffBadge />}
+                  </div>
                 </TableCell>
               </TableRow>
             ))}

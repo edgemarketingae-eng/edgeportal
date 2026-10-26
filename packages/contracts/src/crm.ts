@@ -177,7 +177,13 @@ export const CrmRoleInput = z.object({
 // DTOs
 // ---------------------------------------------------------------------------------------------
 
-export const LeadOwnerRef = z.object({ id: z.string(), name: z.string(), roles: z.array(z.string()).optional() });
+export const LeadOwnerRef = z.object({
+  id: z.string(),
+  name: z.string(),
+  roles: z.array(z.string()).optional(),
+  /** False while marked Off; pickers label them, automatic assignment skips them. */
+  available: z.boolean().optional(),
+});
 export const ProjectRef = z.object({ id: z.string(), name: z.string(), code: z.string() });
 
 export const LeadListItem = z.object({
@@ -588,6 +594,13 @@ export const crmRoutes = {
     path: `${base}/team/:id/disabled`,
     params: idParam,
     body: z.object({ disabled: z.boolean() }),
+    response: zOk,
+  }),
+  setStaffAvailable: route({
+    method: "POST",
+    path: `${base}/team/:id/available`,
+    params: idParam,
+    body: z.object({ available: z.boolean() }),
     response: zOk,
   }),
   resetStaffPassword: route({

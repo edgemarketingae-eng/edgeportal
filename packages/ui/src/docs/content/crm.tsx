@@ -533,6 +533,10 @@ export const crmDocs: DocModule[] = [
                 Project managers, CRM managers and admins don&apos;t, unless they also hold the Sales executive role and are on the team.
               </>
               <>In the General project, which is open to everyone, every active sales executive takes part.</>
+              <>
+                People marked <b>Off</b> on the Team page are skipped until they&apos;re back on. You can still assign leads to them by
+                hand; pickers show them as &ldquo;(Off)&rdquo;.
+              </>
               <>Each lead is shared within its own project. If you select leads from several projects, each project is shared separately.</>
               <>
                 Leads in a project with no sales executives are skipped and counted in the message. Add sales executives to the project (
@@ -579,7 +583,7 @@ export const crmDocs: DocModule[] = [
               ]}
             />
             <P>
-              Change the temperature from <Ui>Edit details</Ui> on the lead page.
+              Change the temperature with <Ui>Edit</Ui> on the lead page&apos;s Details card.
             </P>
           </>
         ),
@@ -607,7 +611,7 @@ export const crmDocs: DocModule[] = [
               <>The buttons at the top for contacting, moving and converting the lead.</>
               <>
                 <Ui>Details</Ui>: stage, next follow-up, course and batch of interest, experience, preferred channel, consent, first and
-                last contact, tags and notes. Press <Ui>Edit details</Ui> to change them, then <Ui>Save lead</Ui>.
+                last contact, tags and notes. Press <Ui>Edit</Ui> on the Details card to change them in a dialog, then <Ui>Save lead</Ui>.
               </>
               <>
                 <Ui>Tasks</Ui>: this lead&apos;s open follow-ups.
@@ -1330,7 +1334,14 @@ export const crmDocs: DocModule[] = [
                 password at their next sign-in.
               </>
               <>
-                <Ui>Disable account</Ui> blocks sign-in and signs them out straight away. <Ui>Enable account</Ui> lets them back in.
+                <Ui>Receiving leads</Ui> (also a switch on the team list, for sales executives): turn it off to mark them <b>Off</b> while
+                they&apos;re on leave or off shift. Round-robin, website and landing-page leads skip them, and free class visitors are never
+                sent to their WhatsApp; a returning visitor whose owner is Off is handed to someone who is on. They keep their account,
+                leads and tasks, and you can still assign to them by hand. Turn it back on when they return.
+              </>
+              <>
+                <Ui>Disable account</Ui> blocks sign-in and signs them out straight away. <Ui>Enable account</Ui> lets them back in. Use it
+                for people who leave, not for time off.
               </>
               <>
                 Under <Ui>Details and roles</Ui>, change their name, job title or roles and press <Ui>Save</Ui>.

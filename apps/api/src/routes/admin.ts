@@ -31,6 +31,7 @@ import {
   saveGeneralSettings,
   saveOdooMapping,
   saveRole,
+  setStaffAvailable,
   setStaffDisabled,
   studentsCsv,
   unlockEnrollment,
@@ -135,6 +136,13 @@ export function adminRouter() {
   register(r, staffRoutes.setDisabled, async (req) => {
     await setStaffDisabled(req.valid.params.id, req.valid.body.disabled, actorOf(requirePermission(req, "staff.manage")));
     return { ok: true as const, message: req.valid.body.disabled ? "Account disabled and signed out." : "Account enabled." };
+  });
+  register(r, staffRoutes.setAvailable, async (req) => {
+    await setStaffAvailable(req.valid.params.id, req.valid.body.available, actorOf(requirePermission(req, "staff.manage")));
+    return {
+      ok: true as const,
+      message: req.valid.body.available ? "Back on: receiving leads again." : "Marked Off: no new leads until they're back.",
+    };
   });
   register(r, staffRoutes.resetPassword, async (req) => ({
     ok: true as const,

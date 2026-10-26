@@ -8,8 +8,13 @@ import {
   createStaff,
   getDefaultProject,
   getPublicFreeClass,
+  listCrmUsers,
   listStaff,
+  NotFoundError,
+  salesExecutivesFor,
+  setCrmStaffAvailable,
   setSetting,
+  setStaffAvailable,
   updateStaff,
   ValidationError,
 } from "../src";
@@ -144,5 +149,62 @@ describe("free class landing", () => {
     expect((await getPublicFreeClass())!.startsAt).toBe(fc.startsAt); // started an hour ago, still running
     await setSetting("marketing.freeClass", { ...fc, startsAt: "2026-10-06T03:00:00.000Z" });
     expect(await getPublicFreeClass()).toMatchObject({ title: "Live Class", startsAt: null });
+  });
+});
+
+describe("staff Off", () => {
+  const admin = async () => ({ type: "USER" as const, id: await exec("Boss", undefined, "crm_admin") });
+
+  it("skips Off people in round-robin and on the landing page, but keeps them in pickers and manual assignment", async () => {
+    const actor = await admin();
+    const offExec = await exec("Aisha Away", "+971500000021");
+    const onExec = await exec("Omar On", "+971500000022");
+    await setStaffAvailable(offExec, false, actor);
+    expect((await listStaff()).find((s) => s.id === offExec)!.available).toBe(false);
+    expect((await salesExecutivesFor(await getDefaultProject())).map((e) => e.id)).toEqual([onExec]);
+
+    const r = await captureFreeClassLead({ name: "New Visitor", phone: "+971554440001" });
+    expect(await ownerOf("+971554440001")).toBe(onExec);
+    expect(r.contactName).toBe("Omar On");
+
+    // Still a normal team member: listed (marked Off) and assignable by hand.
+    expect((await listCrmUsers()).find((u) => u.id === offExec)).toMatchObject({ available: false });
+    const g = String((await getDefaultProject())._id);
+    await createLead({ projectId: g, name: "Manual", phone: "+971554440002", source: "WALK_IN", ownerId: offExec }, { type: "SYSTEM" });
+    expect(await ownerOf("+971554440002")).toBe(offExec);
+  });
+
+  it("hands a returning visitor's lead from an Off owner to an available one, or keeps it and uses support when nobody is on", async () => {
+    const actor = await admin();
+    const first = await exec("Faris First", "+971500000031");
+    const g = String((await getDefaultProject())._id);
+    const lead = await createLead(
+      { projectId: g, name: "Returning", phone: "+971554440010", source: "WEBSITE", ownerId: first },
+      { type: "SYSTEM" },
+    );
+    await setStaffAvailable(first, false, actor);
+
+    // Nobody else is on: the owner stays, the visitor goes to support (none configured here).
+    expect(await captureFreeClassLead({ name: "Returning", phone: "+971554440010" })).toEqual({ whatsappUrl: null, contactName: null });
+    expect(await ownerOf("+971554440010")).toBe(first);
+
+    const second = await exec("Sana Second", "+971500000032");
+    const r = await captureFreeClassLead({ name: "Returning", phone: "+971554440010" });
+    expect(await ownerOf("+971554440010")).toBe(second);
+    expect(r.whatsappUrl).toMatch(/^https:\/\/wa\.me\/971500000032\?/);
+    expect(await LeadActivity.countDocuments({ leadId: new Types.ObjectId(lead), type: "ASSIGNED", "data.to": second })).toBe(1);
+
+    // Back on: new leads may go to them again.
+    await setStaffAvailable(first, true, actor);
+    expect((await salesExecutivesFor(await getDefaultProject())).map((e) => e.id).sort()).toEqual([first, second].sort());
+  });
+
+  it("is managed from the CRM for CRM-only staff", async () => {
+    const actor = await admin();
+    const finance = await exec("Fin Person", undefined, "finance");
+    await expect(setCrmStaffAvailable(finance, false, actor)).rejects.toBeInstanceOf(NotFoundError);
+    const e = await exec("Crm Exec", "+971500000041");
+    await setCrmStaffAvailable(e, false, actor);
+    expect((await StaffProfile.findById(e).lean())!.available).toBe(false);
   });
 });

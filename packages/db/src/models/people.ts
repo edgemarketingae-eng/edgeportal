@@ -21,6 +21,9 @@ const staffProfileSchema = new Schema(
     workspaceEmail: { type: String, default: null },
     /** Optional E.164 mobile; sales executives need it to receive free class leads on WhatsApp. */
     phone: { type: String, default: null },
+    /** Off = on leave / off shift: skipped by every automatic assignment, still visible everywhere else. */
+    available: { type: Boolean, default: true },
+    availabilityChangedAt: { type: Date, default: null },
     bio: { type: String, default: null },
     photoUrl: { type: String, default: null },
     roleIds: { type: [ObjectId], default: [] },

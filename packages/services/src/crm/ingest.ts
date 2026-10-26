@@ -12,7 +12,7 @@ import { notifyUser } from "../notifications/in-app";
 import { getSetting } from "../settings";
 import { escapeRegex, findDuplicateLeads, leadHref, normalizeEmail, recordActivity } from "./common";
 import { applyAssign, createLead } from "./leads";
-import { roundRobinPicker } from "./round-robin";
+import { reachableExec, roundRobinPicker } from "./round-robin";
 import { getDefaultProject, notifyProjectManagers } from "./scope";
 
 const minutesAgo = (m: number) => new Date(now().getTime() - m * 60_000);
@@ -157,9 +157,12 @@ export async function ingestInboundLead(
   if (existing) {
     const at = now();
     let ownerId = existing.ownerId ? String(existing.ownerId) : null;
-    if (!ownerId && opts.assignExecWithPhone) {
+    // The visitor is about to message the owner on WhatsApp: an owner who is Off (or unreachable) hands the lead on.
+    let reassignTo: string | null = null;
+    if (opts.assignExecWithPhone && !(await reachableExec(ownerId))) {
       const project = await Project.findById(existing.projectId).lean();
-      ownerId = project ? (await roundRobinPicker(project, { withPhone: true })).next() : null;
+      reassignTo = project ? (await roundRobinPicker(project, { withPhone: true })).next() : null;
+      if (reassignTo) ownerId = reassignTo;
     }
     await withTx(async () => {
       const set: Record<string, unknown> = { lastActivityAt: at };
@@ -179,7 +182,7 @@ export async function ingestInboundLead(
       });
       if (existing.stage === "LOST")
         await recordActivity(existing._id, "STAGE_CHANGED", actor, { data: { from: "LOST", to: "NEW", auto: true } });
-      if (!existing.ownerId && ownerId) await applyAssign(existing, new Types.ObjectId(ownerId), actor);
+      if (reassignTo) await applyAssign(existing, new Types.ObjectId(reassignTo), actor);
       else if (existing.ownerId)
         await notifyUser(String(existing.ownerId), {
           title: `${existing.name} enquired again`,

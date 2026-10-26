@@ -17,7 +17,12 @@ export async function salesExecutivesFor(
   const team = project.isDefault ? null : [...project.managerIds, ...project.memberIds];
   if (team && !team.length) return [];
   const staff = await StaffProfile.find(
-    { roleIds: role._id, ...(team ? { _id: { $in: team } } : {}), ...(opts.withPhone ? { phone: { $nin: [null, ""] } } : {}) },
+    {
+      roleIds: role._id,
+      available: { $ne: false },
+      ...(team ? { _id: { $in: team } } : {}),
+      ...(opts.withPhone ? { phone: { $nin: [null, ""] } } : {}),
+    },
     { _id: 1 },
   ).lean();
   if (!staff.length) return [];
@@ -62,4 +67,16 @@ export async function roundRobinPicker(
       return best;
     },
   };
+}
+
+/** Can a lead be handed straight to this person's WhatsApp: an active account, not Off, with a phone. */
+export async function reachableExec(userId: string | Types.ObjectId | null | undefined) {
+  if (!userId) return null;
+  const _id = new Types.ObjectId(String(userId));
+  const [profile, user] = await Promise.all([
+    StaffProfile.findById(_id, { phone: 1, available: 1 }).lean(),
+    AuthUser.findById(_id, { name: 1, disabledAt: 1 }).lean(),
+  ]);
+  if (!profile?.phone || profile.available === false || !user || user.disabledAt) return null;
+  return { id: String(_id), name: user.name, phone: profile.phone };
 }

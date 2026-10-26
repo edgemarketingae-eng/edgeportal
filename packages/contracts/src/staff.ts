@@ -9,6 +9,8 @@ export const StaffRow = z.object({
   title: z.string().nullable(),
   workspaceEmail: z.string().nullable(),
   phone: z.string().nullable(),
+  /** False while the person is marked Off (no automatic leads). */
+  available: z.boolean(),
   roles: z.array(z.object({ key: z.string(), name: z.string() })),
   disabled: z.boolean(),
   invited: z.boolean(),
@@ -58,6 +60,13 @@ export const staffRoutes = {
     path: "/api/v1/admin/staff/:id/disabled",
     params: idParam,
     body: z.object({ disabled: z.boolean() }),
+    response: zOk,
+  }),
+  setAvailable: route({
+    method: "POST",
+    path: "/api/v1/admin/staff/:id/available",
+    params: idParam,
+    body: z.object({ available: z.boolean() }),
     response: zOk,
   }),
   resetPassword: route({

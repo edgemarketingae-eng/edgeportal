@@ -59,6 +59,7 @@ export function ProjectOwnerFields({
             {team.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.name}
+                {o.available === false ? " (Off)" : ""}
               </option>
             ))}
           </NativeSelect>
@@ -82,8 +83,10 @@ export function QuickAddLead({ options, meId }: { options: CrmOptions; meId: str
         </Button>
       }
       submitLabel="Add lead"
+      size="lg"
+      bodyClassName="sm:grid-cols-2 [&>[role=alert]]:col-span-full"
     >
-      <Field label="Name" name="name" required autoFocus />
+      <Field label="Name" name="name" required autoFocus className="sm:col-span-2" />
       <Field label="Mobile (WhatsApp)" name="phone" type="tel" />
       <Field label="Email" name="email" type="email" />
       <div className="grid content-start gap-2">
@@ -98,11 +101,11 @@ export function QuickAddLead({ options, meId }: { options: CrmOptions; meId: str
       </div>
       <ProjectOwnerFields options={options} meId={meId} />
       <Field label="Next follow-up (optional)" name="nextFollowUpAt" type="datetime-local" />
-      <div className="grid content-start gap-2">
+      <div className="grid content-start gap-2 sm:col-span-2">
         <Label htmlFor="qa-notes">Notes</Label>
-        <Textarea id="qa-notes" name="notes" rows={2} />
+        <Textarea id="qa-notes" name="notes" rows={3} />
       </div>
-      <label className="flex items-center gap-2 text-sm">
+      <label className="flex items-center gap-2 text-sm sm:col-span-2">
         <Checkbox name="allowDuplicate" /> Create even if a lead with this contact already exists
       </label>
     </ActionDialog>

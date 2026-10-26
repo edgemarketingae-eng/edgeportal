@@ -101,32 +101,42 @@ export function canAssignIn(s: CrmScope, projectId: Types.ObjectId) {
 }
 
 /** Active staff whose roles grant crm.access, with their role names (for pickers). */
-export async function listCrmUsers(): Promise<{ id: string; name: string; roles: string[] }[]> {
+export async function listCrmUsers(): Promise<{ id: string; name: string; roles: string[]; available: boolean }[]> {
   const roles = await Role.find({}, { name: 1, permissions: 1 }).lean();
   const crmRoleIds = roles.filter((r) => r.permissions?.includes("crm.access")).map((r) => r._id);
   if (!crmRoleIds.length) return [];
   const roleName = new Map(roles.map((r) => [String(r._id), r.name]));
-  const staff = await StaffProfile.find({ roleIds: { $in: crmRoleIds } }, { _id: 1, roleIds: 1 }).lean();
+  const staff = await StaffProfile.find({ roleIds: { $in: crmRoleIds } }, { _id: 1, roleIds: 1, available: 1 }).lean();
+  const off = new Set(staff.filter((x) => x.available === false).map((x) => String(x._id)));
   const rolesOf = new Map(
     staff.map((x) => [String(x._id), (x.roleIds ?? []).map((r) => roleName.get(String(r))).filter((n): n is string => !!n)]),
   );
   const users = await AuthUser.find({ _id: { $in: staff.map((x) => x._id) }, disabledAt: null }, { name: 1 })
     .sort({ name: 1 })
     .lean();
-  return users.map((u) => ({ id: String(u._id), name: u.name, roles: rolesOf.get(String(u._id)) ?? [] }));
+  return users.map((u) => ({
+    id: String(u._id),
+    name: u.name,
+    roles: rolesOf.get(String(u._id)) ?? [],
+    available: !off.has(String(u._id)),
+  }));
 }
 
 /** Managers and members of a project (every CRM user for the default project), active accounts only. */
-export async function projectTeam(project: ProjectDoc | Types.ObjectId): Promise<{ id: string; name: string }[]> {
+export async function projectTeam(project: ProjectDoc | Types.ObjectId): Promise<{ id: string; name: string; available?: boolean }[]> {
   const p = project instanceof Types.ObjectId ? await Project.findById(project).lean() : project;
   if (!p) return [];
   if (p.isDefault) return listCrmUsers();
   const ids = [...new Set([...p.managerIds, ...p.memberIds].map(String))].map((x) => new Types.ObjectId(x));
   if (!ids.length) return [];
-  const users = await AuthUser.find({ _id: { $in: ids }, disabledAt: null }, { name: 1 })
-    .sort({ name: 1 })
-    .lean();
-  return users.map((u) => ({ id: String(u._id), name: u.name }));
+  const [users, off] = await Promise.all([
+    AuthUser.find({ _id: { $in: ids }, disabledAt: null }, { name: 1 })
+      .sort({ name: 1 })
+      .lean(),
+    StaffProfile.find({ _id: { $in: ids }, available: false }, { _id: 1 }).lean(),
+  ]);
+  const offIds = new Set(off.map((x) => String(x._id)));
+  return users.map((u) => ({ id: String(u._id), name: u.name, available: !offIds.has(String(u._id)) }));
 }
 
 /** Resolve an owner/assignee for a project: yourself is always fine inside your projects; others need crm.assign in a managed project and must be on the team. */

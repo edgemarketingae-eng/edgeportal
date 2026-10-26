@@ -169,6 +169,8 @@ on the public API host; rate limited to 10 per 10 minutes per visitor IP; a hidd
 - A new lead is always round-robined in **General**, whatever the Settings checkbox, but only among sales executives
   with a **phone** on their staff profile (console Staff or CRM Team). A known lead keeps its owner; an unowned one is
   assigned the same way.
+- An existing owner who is Off, disabled or has no phone hands the lead to an available sales executive (ASSIGNED
+  activity); with nobody available the owner is kept and the visitor goes to Support WhatsApp.
 - The visitor is sent to `wa.me/<owner's phone>` with a message ready to send, so they write first. A SYSTEM entry on the
   timeline tells the owner to expect it. With no eligible owner (or an owner without a phone), the academy's Support
   WhatsApp from console Settings is used; with neither, the visitor just sees a thank-you.
@@ -180,7 +182,9 @@ One rule everywhere (`packages/services/src/crm/round-robin.ts`): leads are hand
 holds the **fewest open leads in that project**, counting what the current batch has already handed out. Eligible
 people are active users (not disabled) with the **Sales executive** role who are on the project's team (managers or
 members). In the General project (open to everyone) that is every active sales executive. Project managers, CRM
-managers and admins don't receive round-robin leads unless they also hold the Sales executive role.
+managers and admins don't receive round-robin leads unless they also hold the Sales executive role. People marked **Off**
+(`StaffProfile.available = false`, the Team page switch in the CRM or the staff page in the console) are skipped
+everywhere round-robin runs, but stay in owner filters and manual assign pickers (labelled "(Off)").
 
 Used by: bulk assign on the leads list (_Round-robin to sales executives_; each lead within its own project; leads in
 projects with no sales executives are skipped and counted), CSV import (_Round-robin to the project's sales

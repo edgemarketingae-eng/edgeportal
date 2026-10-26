@@ -94,7 +94,15 @@ function BulkDelete({ target, onDone }: { target: Target; onDone: () => void }) 
   );
 }
 
-function BulkAssign({ target, assignees, onDone }: { target: Target; assignees: { id: string; name: string }[]; onDone: () => void }) {
+function BulkAssign({
+  target,
+  assignees,
+  onDone,
+}: {
+  target: Target;
+  assignees: { id: string; name: string; available?: boolean }[];
+  onDone: () => void;
+}) {
   const [, formAction, pending] = useActionState(async (prev: ActionState, form: FormData) => {
     const r = await bulkAssignAction(prev, form);
     if (r.ok) {
@@ -115,6 +123,7 @@ function BulkAssign({ target, assignees, onDone }: { target: Target; assignees: 
         {assignees.map((o) => (
           <option key={o.id} value={o.id}>
             {o.name}
+            {o.available === false ? " (Off)" : ""}
           </option>
         ))}
         <option value={UNASSIGN}>Unassign (back to the pool)</option>
@@ -141,7 +150,7 @@ export function LeadsTable({
   rows: LeadListItem[];
   total: number;
   filters: string;
-  assignees: { id: string; name: string }[];
+  assignees: { id: string; name: string; available?: boolean }[];
   canDelete?: boolean;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());

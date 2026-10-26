@@ -4,9 +4,24 @@ import { useActionState, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { FormError, type ActionState } from "../forms/field";
 import { Button } from "../components/button";
+import { cn } from "../lib/utils";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "../components/dialog";
 
 type Action = (prev: ActionState, form: FormData) => Promise<ActionState>;
+
+const SIZES = { sm: "sm:max-w-sm", md: "sm:max-w-lg", lg: "sm:max-w-2xl", xl: "sm:max-w-4xl" };
+
+/**
+ * Header, scrolling body and pinned footer for a dialog form: tall forms scroll inside the dialog instead of
+ * running off the screen. Pass the result's `content` to DialogContent.
+ */
+export const dialogLayout = {
+  content: "flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0",
+  form: "flex min-h-0 flex-1 flex-col",
+  header: "px-5 pt-5 pb-3 pr-12",
+  body: "grid min-h-0 flex-1 content-start gap-4 overflow-y-auto overscroll-contain px-5 pt-1 pb-5",
+  footer: "m-0 rounded-b-xl",
+};
 
 /** A button that opens a dialog with a small form bound to a server action. Toasts on success. */
 export function ActionDialog({
@@ -18,6 +33,8 @@ export function ActionDialog({
   children,
   submitLabel = "Confirm",
   destructive,
+  size = "sm",
+  bodyClassName,
 }: {
   action: Action;
   trigger: ReactNode;
@@ -27,6 +44,9 @@ export function ActionDialog({
   children?: ReactNode;
   submitLabel?: string;
   destructive?: boolean;
+  /** Width from the sm breakpoint up: sm 24rem, md 32rem, lg 42rem, xl 56rem. */
+  size?: keyof typeof SIZES;
+  bodyClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [state, formAction, pending] = useActionState(async (prev: ActionState, form: FormData) => {
@@ -41,18 +61,20 @@ export function ActionDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent>
-        <form action={formAction} className="grid gap-4">
-          <DialogHeader>
+      <DialogContent className={cn(dialogLayout.content, SIZES[size])}>
+        <form action={formAction} className={dialogLayout.form}>
+          <DialogHeader className={dialogLayout.header}>
             <DialogTitle>{title}</DialogTitle>
             {description ? <DialogDescription>{description}</DialogDescription> : null}
           </DialogHeader>
           {Object.entries(hidden).map(([k, v]) => (
             <input key={k} type="hidden" name={k} value={v} />
           ))}
-          <FormError state={state} />
-          {children}
-          <DialogFooter>
+          <div className={cn(dialogLayout.body, bodyClassName)}>
+            <FormError state={state} />
+            {children}
+          </div>
+          <DialogFooter className={dialogLayout.footer}>
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
               Cancel
             </Button>

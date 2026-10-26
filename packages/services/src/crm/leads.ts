@@ -575,7 +575,7 @@ export async function getCrmOptions(scope: CrmScope): Promise<CrmOptions> {
   ]);
   const active = projects.filter((p) => p.status !== "ARCHIVED");
   const everyone = scope.all ? await listCrmUsers() : null;
-  const teams: Record<string, { id: string; name: string }[]> = {};
+  const teams: Record<string, { id: string; name: string; available?: boolean }[]> = {};
   for (const p of active)
     teams[String(p._id)] = canAssignIn(scope, p._id) ? (everyone ?? (await projectTeam(p))) : [{ id: scope.userId, name: "Me" }];
   return {

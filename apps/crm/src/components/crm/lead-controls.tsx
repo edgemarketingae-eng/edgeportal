@@ -150,6 +150,7 @@ export function LeadControls({ lead, options, matchingStudent, duplicates, can }
               {team.map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.name}
+                  {o.available === false ? " (Off)" : ""}
                 </option>
               ))}
             </NativeSelect>
