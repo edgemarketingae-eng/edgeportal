@@ -160,7 +160,7 @@ describe("Forex Growth Hub form", () => {
       name: "Ravi Kumar",
       whatsapp: "+971 551110001",
       phone: "+91 9876543210",
-      page: "https://growthhub.edgeacademy.ae/",
+      page: "https://growthhub.edgeverse.ae/",
       utm: { source: "ig", medium: "social" },
     });
     expect(r.contactName).toBe("Hana Hub");

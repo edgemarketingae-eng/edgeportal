@@ -236,7 +236,7 @@ on the public API host; rate limited to 10 per 10 minutes per visitor IP; a hidd
 
 ## Forex Growth Hub form
 
-The Forex Growth Hub (`growthhub.edgeacademy.ae`, a static site with the recorded free classes) has a contact form in
+The Forex Growth Hub (`growthhub.edgeverse.ae`, a static site with the recorded free classes) has a contact form in
 its hero. The browser posts straight to `POST https://api.edgeacademy.ae/api/public/growth-hub/leads`. There is no
 secret, because the page is public. Instead:
 

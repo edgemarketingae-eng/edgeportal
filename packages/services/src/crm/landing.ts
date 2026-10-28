@@ -11,7 +11,7 @@ import { reachableExec } from "./round-robin";
 
 /**
  * Public lead pages that send the visitor straight to a sales executive's WhatsApp: the free live class landing
- * page (student app home) and the Forex Growth Hub form (growthhub.edgeacademy.ae, a separate static site).
+ * page (student app home) and the Forex Growth Hub form (growthhub.edgeverse.ae, a separate static site).
  */
 
 const SOURCE_DETAIL = "Free live class landing page";
