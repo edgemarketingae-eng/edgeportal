@@ -1,7 +1,7 @@
 import type { CrmStaffRow } from "@edge/contracts";
 import { Lead, Project, Role, StaffProfile, Types } from "@edge/db";
 import { isCrmPermission, isCrmRole } from "@edge/domain/auth/permissions";
-import { OPEN_LEAD_STAGES } from "@edge/domain/crm/enums";
+import { OPEN_LEAD_STAGES, type ContactChannel } from "@edge/domain/crm/enums";
 import type { Actor } from "@edge/domain/enums";
 import { BusinessError, NotFoundError } from "../errors";
 import { oid } from "../ids";
@@ -63,15 +63,25 @@ export async function listCrmRoles() {
   return (await listRoles()).filter(isCrmRole);
 }
 
-export async function createCrmStaff(input: { name: string; email: string; roleKeys: string[]; title?: string; workspaceEmail?: string; phone?: string; projectIds?: string[] }, actor: Actor & { type: "USER" }) {
+type StaffContact = { phone?: string; telegramUsername?: string; contactChannel?: ContactChannel };
+
+export async function createCrmStaff(
+  input: { name: string; email: string; roleKeys: string[]; title?: string; workspaceEmail?: string; projectIds?: string[] } & StaffContact,
+  actor: Actor & { type: "USER" },
+) {
   await assertCrmRoleKeys(input.roleKeys);
-  const out = await createStaff({ name: input.name, email: input.email, roleKeys: input.roleKeys, title: input.title, workspaceEmail: input.workspaceEmail, phone: input.phone }, actor);
+  const { projectIds: _projects, ...staff } = input;
+  const out = await createStaff(staff, actor);
   const projectIds = (input.projectIds ?? []).map((p) => oid(p, "Project"));
   if (projectIds.length) await Project.updateMany({ _id: { $in: projectIds }, isDefault: { $ne: true } }, { $addToSet: { memberIds: new Types.ObjectId(out.id) } });
   return out;
 }
 
-export async function updateCrmStaff(id: string, input: { name: string; roleKeys: string[]; title?: string; workspaceEmail?: string; phone?: string }, actor: Actor & { type: "USER" }) {
+export async function updateCrmStaff(
+  id: string,
+  input: { name: string; roleKeys: string[]; title?: string; workspaceEmail?: string } & StaffContact,
+  actor: Actor & { type: "USER" },
+) {
   await assertPureCrmUser(id);
   await assertCrmRoleKeys(input.roleKeys);
   await updateStaff(id, input, actor);

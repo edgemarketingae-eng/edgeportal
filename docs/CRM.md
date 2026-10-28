@@ -216,50 +216,72 @@ New website leads go to the **General** project, unassigned; the project's manag
 with `crm.all`) are notified. With **round-robin** on in Settings, each new lead is handed to a sales executive
 instead (same rule as below; the owner is notified). If there are no sales executives it stays unassigned as above.
 
+## Chat channel (WhatsApp or Telegram)
+
+Landing pages send each visitor straight to a sales executive's chat. Each staff member has a **chat channel**
+(CRM → Team → the person → "Chat with leads on"): **WhatsApp** (uses their phone) or **Telegram** (uses their
+Telegram username, e.g. `@edge_sara`). Move someone to Telegram when their WhatsApp number is at risk of a ban
+from too many new chats; their leads and every later visitor follow at once.
+
+- Telegram needs a username (5–32 letters, numbers or `_`; `@name` and `t.me/name` are accepted). The console's
+  staff form doesn't show these fields and leaves them as they are.
+- A sales executive can receive landing page leads only if they can be reached on their channel: a phone for
+  WhatsApp, a username for Telegram ("reachable"). Otherwise round-robin skips them, and a visitor whose lead they own
+  is handed to someone reachable (as for an owner who is Off).
+- Links: WhatsApp `https://wa.me/<digits>?text=…`, Telegram `https://t.me/<username>?text=…`, with the visitor's
+  first message typed in. The fallback (no reachable owner) is always the academy's Support WhatsApp.
+- The SYSTEM timeline entry says where the visitor was sent (`data.channel`, plus `data.whatsapp` or `data.telegram`).
+
 ## Free class landing page
 
-The student app's home page (`/`, public) promotes the free live class. The visitor enters name and WhatsApp number;
+The student app's home page (`/`, public) has "Contact support" buttons. The visitor enters name and WhatsApp number;
 the student app's server action calls `POST /api/v1/public/free-class/leads` (internal token only, so nothing is exposed
 on the public API host; rate limited to 10 per 10 minutes per visitor IP; a hidden honeypot field drops bots).
 
 - The lead goes through the same intake as the website form (`ingestInboundLead`): source WEBSITE, detail "Free live
   class landing page", tag `free-live-class`, the ad's UTM tags, WhatsApp consent.
-- A new lead is always round-robined in **General**, whatever the Settings checkbox, but only among sales executives
-  with a **phone** on their staff profile (console Staff or CRM Team). A known lead keeps its owner; an unowned one is
-  assigned the same way.
-- An existing owner who is Off, disabled or has no phone hands the lead to an available sales executive (ASSIGNED
+- A new lead is always round-robined in **General**, whatever the Settings checkbox, but only among **reachable**
+  sales executives (see Chat channel). A known lead keeps its owner; an unowned one is assigned the same way.
+- An existing owner who is Off, disabled or not reachable hands the lead to a reachable sales executive (ASSIGNED
   activity); with nobody available the owner is kept and the visitor goes to Support WhatsApp.
-- The visitor is sent to `wa.me/<owner's phone>` with a message ready to send, so they write first. A SYSTEM entry on the
-  timeline tells the owner to expect it. With no eligible owner (or an owner without a phone), the academy's Support
-  WhatsApp from console Settings is used; with neither, the visitor just sees a thank-you.
+- Response: `{ ok, contactUrl, channel, contactName }`. The visitor is sent to the owner's WhatsApp or Telegram with a
+  message ready to send, so they write first. A SYSTEM entry on the timeline tells the owner to expect it. With no
+  eligible owner the academy's Support WhatsApp from console Settings is used; with neither, the visitor just sees a
+  thank-you.
 - The class title, Dubai date/time and platform come from console Settings → Free live class.
 
-## Forex Growth Hub form
+## Forex Growth Hub forms
 
-The Forex Growth Hub (`growthhub.edgeverse.ae`, a static site with the recorded free classes) has a contact form in
-its hero. The browser posts straight to `POST https://api.edgeacademy.ae/api/public/growth-hub/leads`. There is no
-secret, because the page is public. Instead:
+The Forex Growth Hub (`growthhub.edgeverse.ae`, a static site with the recorded free classes) posts straight from the
+browser to `POST https://api.edgeacademy.ae/api/public/growth-hub/leads` from its Inner Circle form (`enroll.html`,
+after the enrollment is saved to the Google Sheet). The endpoint also takes a general enquiry (`intent: "enquiry"`);
+the site had a hero contact form for it, removed on 2026-10-29. There is no secret, because the page is public.
+Instead:
 
 - Only the site origins in `PUBLIC_FORM_ORIGINS` (comma-separated) are allowed. Any other browser origin gets `403`,
   and the CORS preflight is answered for the listed ones only.
 - It is rate limited to 10 per 10 minutes per visitor IP, and a hidden honeypot field (`website`) drops bots.
 
-Body (JSON): `name`, `whatsapp` (required), `phone` (the call number, optional), `page`, `utm{}`.
-Response: `{ ok, whatsappUrl, contactName }`, the same as the landing page.
+Body (JSON): `intent` (`enquiry`, the default, or `inner-circle`), `name`, `whatsapp` (required), `phone` (the call
+number, optional), `email`, `jetaFxClientId`, `page`, `utm{}`. Response: `{ ok, contactUrl, channel, contactName }`.
 
 - The lead takes the same path as the free class landing page above, with one difference: a **new** lead goes to the
   **Free Course support** project (code `FREE-COURSE-SUPPORT`).
-  - Source WEBSITE, detail "Forex Growth Hub", tag `growth-hub`, WhatsApp consent.
-  - It is round-robined among the sales executives **on that project's team** who have a phone.
+  - Source WEBSITE, detail "Forex Growth Hub" (or "Forex Growth Hub · Inner Circle"), tag `growth-hub` (plus
+    `inner-circle`), WhatsApp consent.
+  - It is round-robined among the **reachable** sales executives on that project's team.
   - If that project is missing or not ACTIVE, the lead goes to General instead and the API logs a warning.
-  - A known lead stays in its own project and keeps its owner; an owner who is Off hands it to someone else on that
-    project.
-  - With no eligible owner (for example nobody on the team has a phone), the lead is left unassigned and the
+  - A known lead stays in its own project and keeps its owner; an owner who is Off or not reachable hands it to
+    someone else on that project.
+  - With no eligible owner (for example nobody on the team is reachable), the lead is left unassigned and the
     visitor goes to Support WhatsApp.
 - The lead's phone is the **WhatsApp number**. A different call number is written to the notes (or, for a known
   lead, the INBOUND entry), and either number finds a known lead.
-- The visitor is sent to `wa.me/<owner's phone>` with "I watched the free trading classes on Forex Growth Hub…" ready
-  to send. The SYSTEM timeline entry has `data.landing: "growth-hub"`.
+- Inner Circle requests also save the email and the JetaFX client id on the lead (if it has none yet) and note the
+  request.
+- The visitor is sent to the owner's chat with a message ready to send: "I watched the free trading classes on Forex
+  Growth Hub…" (enquiry) or "I have created my JetaFX account (Client ID: …). Please add me to the Inner Circle."
+  The SYSTEM timeline entry has `data.landing: "growth-hub"` or `"growth-hub-inner-circle"`.
 
 ## Round-robin
 

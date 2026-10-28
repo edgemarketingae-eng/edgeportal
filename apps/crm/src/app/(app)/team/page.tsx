@@ -65,7 +65,11 @@ export default async function TeamPage() {
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
                     {s.email}
-                    {s.phone ? <div className="text-muted-foreground text-xs">{s.phone}</div> : null}
+                    {s.contactChannel === "TELEGRAM" ? (
+                      <div className="text-muted-foreground text-xs">Telegram {s.telegramUsername ? `@${s.telegramUsername}` : "(no username)"}</div>
+                    ) : s.phone ? (
+                      <div className="text-muted-foreground text-xs">{s.phone}</div>
+                    ) : null}
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">

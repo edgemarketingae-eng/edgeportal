@@ -60,11 +60,33 @@ describe("Forex Growth Hub form API", () => {
       .expect(200);
     expect(res.headers["access-control-allow-origin"]).toBe(SITE);
     expect(res.body).toMatchObject({ ok: true, contactName: "Sara Sales" });
-    expect(res.body.whatsappUrl).toMatch(/^https:\/\/wa\.me\/971500001111\?text=Hi%20Sara/);
+    expect(res.body.contactUrl).toMatch(/^https:\/\/wa\.me\/971500001111\?text=Hi%20Sara/);
     const lead = (await Lead.findOne({ phone: "+971551231234" }).lean())!;
     expect(String(lead.ownerId)).toBe(id);
     expect(lead.tags).toContain("growth-hub");
     expect(lead.utm?.source).toBe("ig");
+  });
+
+  it("sends an Inner Circle request to the owner's Telegram when that is their channel", async () => {
+    await createStaff(
+      {
+        name: "Tariq Tele",
+        email: `tariq-${Date.now()}@edge.test`,
+        roleKeys: ["sales_executive"],
+        telegramUsername: "@tariq_edge",
+        contactChannel: "TELEGRAM",
+        password: "StaffPass!2026",
+      },
+      { type: "SYSTEM" },
+    );
+    const res = await request(app)
+      .post(LEADS)
+      .set(visitor("203.0.113.15"))
+      .send({ intent: "inner-circle", name: "Jamal Trader", whatsapp: "+971551239000", email: "jamal@example.com", jetaFxClientId: "JX-1" })
+      .expect(200);
+    expect(res.body).toMatchObject({ ok: true, channel: "TELEGRAM", contactName: "Tariq Tele" });
+    expect(res.body.contactUrl).toMatch(/^https:\/\/t\.me\/tariq_edge\?text=.*Inner%20Circle/);
+    expect((await Lead.findOne({ phone: "+971551239000" }).lean())!).toMatchObject({ jetaFxClientId: "JX-1", email: "jamal@example.com" });
   });
 
   it("validates input, ignores bots and rate limits by visitor", async () => {
@@ -78,7 +100,7 @@ describe("Forex Growth Hub form API", () => {
       .set(visitor("203.0.113.12"))
       .send({ name: "Bot Name", whatsapp: "+971551231299", website: "spam.example" })
       .expect(200);
-    expect(bot.body).toEqual({ ok: true, whatsappUrl: null, contactName: null });
+    expect(bot.body).toEqual({ ok: true, contactUrl: null, channel: null, contactName: null });
     expect(await Lead.countDocuments({ phone: "+971551231299" })).toBe(0);
 
     let last = 200;

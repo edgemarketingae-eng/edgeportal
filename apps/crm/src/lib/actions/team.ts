@@ -10,6 +10,9 @@ function submitted(form: FormData, keys: string[], list: string) {
   return { ...values(form, keys), [list]: form.getAll(list).map(String).join(",") };
 }
 
+/** Where landing page leads chat with this person (the form's select). */
+const channel = (form: FormData) => (text(form, "contactChannel") === "TELEGRAM" ? "TELEGRAM" : "WHATSAPP");
+
 export async function createCrmStaffAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   let r: { tempPassword?: string };
   try {
@@ -20,12 +23,17 @@ export async function createCrmStaffAction(_prev: ActionState, form: FormData): 
         title: text(form, "title"),
         workspaceEmail: text(form, "workspaceEmail"),
         phone: text(form, "phone"),
+        telegramUsername: text(form, "telegramUsername"),
+        contactChannel: channel(form),
         roleKeys: form.getAll("roleKeys").map(String),
         projectIds: form.getAll("projectIds").map(String).filter(Boolean),
       } satisfies RouteBody<typeof crmRoutes.createStaff>,
     });
   } catch (e) {
-    return fail(e, { ...submitted(form, ["name", "email", "title", "workspaceEmail", "phone"], "roleKeys"), projectIds: form.getAll("projectIds").map(String).join(",") });
+    return fail(e, {
+      ...submitted(form, ["name", "email", "title", "workspaceEmail", "phone", "telegramUsername", "contactChannel"], "roleKeys"),
+      projectIds: form.getAll("projectIds").map(String).join(","),
+    });
   }
   refresh();
   return { ok: true, message: r.tempPassword ? `Account created. Temporary password ${r.tempPassword} was emailed.` : "Account created." };
@@ -35,10 +43,18 @@ export async function updateCrmStaffAction(_prev: ActionState, form: FormData): 
   try {
     await api(crmRoutes.updateStaff, {
       params: { id: text(form, "userId") },
-      body: { name: text(form, "name"), title: text(form, "title"), workspaceEmail: text(form, "workspaceEmail"), phone: text(form, "phone"), roleKeys: form.getAll("roleKeys").map(String) } satisfies RouteBody<typeof crmRoutes.updateStaff>,
+      body: {
+        name: text(form, "name"),
+        title: text(form, "title"),
+        workspaceEmail: text(form, "workspaceEmail"),
+        phone: text(form, "phone"),
+        telegramUsername: text(form, "telegramUsername"),
+        contactChannel: channel(form),
+        roleKeys: form.getAll("roleKeys").map(String),
+      } satisfies RouteBody<typeof crmRoutes.updateStaff>,
     });
   } catch (e) {
-    return fail(e, submitted(form, ["name", "title", "workspaceEmail", "phone"], "roleKeys"));
+    return fail(e, submitted(form, ["name", "title", "workspaceEmail", "phone", "telegramUsername", "contactChannel"], "roleKeys"));
   }
   refresh();
   return { ok: true, message: "Saved." };

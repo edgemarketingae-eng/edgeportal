@@ -11,6 +11,7 @@ import {
   getPublicFreeClass,
   listCrmUsers,
   listStaff,
+  normalizeTelegram,
   NotFoundError,
   salesExecutivesFor,
   setCrmStaffAvailable,
@@ -60,6 +61,44 @@ describe("staff phone", () => {
   });
 });
 
+describe("staff Telegram", () => {
+  it("normalises the username, needs one for the Telegram channel and keeps both when a form omits them", async () => {
+    expect(normalizeTelegram("@Edge_Sara")).toBe("Edge_Sara");
+    expect(normalizeTelegram("https://t.me/edge_sara/")).toBe("edge_sara");
+    expect(normalizeTelegram("  ")).toBeNull();
+    expect(() => normalizeTelegram("ab")).toThrow(ValidationError);
+    expect(() => normalizeTelegram("9lives_x")).toThrow(ValidationError);
+
+    await expect(
+      createStaff(
+        { name: "No Handle", email: `nh-${Date.now()}@edge.test`, roleKeys: ["sales_executive"], contactChannel: "TELEGRAM", password: "StaffPass!2026" },
+        { type: "SYSTEM" },
+      ),
+    ).rejects.toBeInstanceOf(ValidationError);
+
+    const { id } = await createStaff(
+      {
+        name: "Tele Gram",
+        email: `tg-${Date.now()}@edge.test`,
+        roleKeys: ["sales_executive"],
+        telegramUsername: "@tele_gram",
+        contactChannel: "TELEGRAM",
+        password: "StaffPass!2026",
+      },
+      { type: "SYSTEM" },
+    );
+    expect((await listStaff()).find((s) => s.id === id)).toMatchObject({ telegramUsername: "tele_gram", contactChannel: "TELEGRAM" });
+    const actor = { type: "USER" as const, id: await exec("Admin", undefined, "super_admin") };
+    await updateStaff(id, { name: "Tele Gram", roleKeys: ["sales_executive"] }, actor); // console form: no Telegram fields
+    expect((await StaffProfile.findById(id).lean())!).toMatchObject({ telegramUsername: "tele_gram", contactChannel: "TELEGRAM" });
+    await expect(updateStaff(id, { name: "Tele Gram", roleKeys: ["sales_executive"], telegramUsername: "" }, actor)).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+    await updateStaff(id, { name: "Tele Gram", roleKeys: ["sales_executive"], telegramUsername: "", contactChannel: "WHATSAPP" }, actor);
+    expect((await StaffProfile.findById(id).lean())!).toMatchObject({ telegramUsername: null, contactChannel: "WHATSAPP" });
+  });
+});
+
 describe("free class landing", () => {
   it("assigns the lead in General to the sales executive with a phone and the fewest open leads, whatever the round-robin setting", async () => {
     const busy = await exec("Busy Bee", "+971500000001");
@@ -74,8 +113,8 @@ describe("free class landing", () => {
     const r = await captureFreeClassLead({ name: "Ali Hassan", phone: "+971551112233", utm: { source: "meta", campaign: "free-class" } });
     expect(await ownerOf("+971551112233")).toBe(free);
     expect(r.contactName).toBe("Free Fatima");
-    expect(r.whatsappUrl).toMatch(/^https:\/\/wa\.me\/971500000002\?text=/);
-    expect(textOf(r.whatsappUrl!)).toBe(
+    expect(r.contactUrl).toMatch(/^https:\/\/wa\.me\/971500000002\?text=/);
+    expect(textOf(r.contactUrl!)).toBe(
       "Hi Free, I'm Ali Hassan. I'd like to join the free live trading class. Please send me the details.",
     );
 
@@ -112,7 +151,7 @@ describe("free class landing", () => {
     expect(await ownerOf("+971552223344")).toBe(a);
     expect(await Lead.countDocuments({ phone: "+971552223344" })).toBe(1);
     expect(await LeadActivity.countDocuments({ leadId: new Types.ObjectId(unowned), type: "ASSIGNED" })).toBe(1);
-    expect(textOf(r.whatsappUrl!)).toContain("free live trading class (Gold Basics Live)");
+    expect(textOf(r.contactUrl!)).toContain("free live trading class (Gold Basics Live)");
 
     const b = await exec("Aaron", "+971500000012"); // fewer leads now, but the lead keeps its owner
     const again = await captureFreeClassLead({ name: "Old Lead", phone: "+971552223344" });
@@ -124,7 +163,7 @@ describe("free class landing", () => {
   it("falls back to the academy support WhatsApp, or to no link, when no sales executive has a phone", async () => {
     await exec("Silent Sam");
     const none = await captureFreeClassLead({ name: "Nobody Home", phone: "+971553334455" });
-    expect(none).toEqual({ whatsappUrl: null, contactName: null });
+    expect(none).toEqual({ contactUrl: null, channel: null, contactName: null });
     expect(await ownerOf("+971553334455")).toBeNull();
 
     await setSetting("academy.profile", {
@@ -135,8 +174,8 @@ describe("free class landing", () => {
     });
     const support = await captureFreeClassLead({ name: "Later Lead", phone: "+971553334466" });
     expect(support.contactName).toBe("Edge Trading Academy");
-    expect(support.whatsappUrl).toMatch(/^https:\/\/wa\.me\/971507654321\?/);
-    expect(textOf(support.whatsappUrl!)).toMatch(/^Hi Edge Trading Academy, I'm Later Lead\./);
+    expect(support.contactUrl).toMatch(/^https:\/\/wa\.me\/971507654321\?/);
+    expect(textOf(support.contactUrl!)).toMatch(/^Hi Edge Trading Academy, I'm Later Lead\./);
   });
 
   it("rejects an invalid phone", async () => {
@@ -164,8 +203,8 @@ describe("Forex Growth Hub form", () => {
       utm: { source: "ig", medium: "social" },
     });
     expect(r.contactName).toBe("Hana Hub");
-    expect(r.whatsappUrl).toMatch(/^https:\/\/wa\.me\/971500000051\?text=/);
-    expect(textOf(r.whatsappUrl!)).toBe(
+    expect(r.contactUrl).toMatch(/^https:\/\/wa\.me\/971500000051\?text=/);
+    expect(textOf(r.contactUrl!)).toBe(
       "Hi Hana, I'm Ravi Kumar. I watched the free trading classes on Forex Growth Hub and I'd like to know about your courses. Please send me the details.",
     );
 
@@ -198,7 +237,7 @@ describe("Forex Growth Hub form", () => {
 
     // Their WhatsApp is a new number; the call number is the one the CRM knows.
     const byCall = await captureGrowthHubLead({ name: "Walk In", whatsapp: "+971551110099", phone: "+971551110010" });
-    expect(byCall.whatsappUrl).toMatch(/^https:\/\/wa\.me\/971500000061\?/);
+    expect(byCall.contactUrl).toMatch(/^https:\/\/wa\.me\/971500000061\?/);
     expect(await Lead.countDocuments({ phone: { $in: ["+971551110010", "+971551110099"] } })).toBe(1);
     expect(await ownerOf("+971551110010")).toBe(owner);
     const inbound = await LeadActivity.find({ leadId: new Types.ObjectId(known), type: "INBOUND" }).sort({ createdAt: 1 }).lean();
@@ -222,7 +261,7 @@ describe("Forex Growth Hub form", () => {
 
     const support = await captureGrowthHubLead({ name: "Back Again", whatsapp: "+971551110020" });
     expect(support.contactName).toBe("Edge Trading Academy");
-    expect(support.whatsappUrl).toMatch(/^https:\/\/wa\.me\/971507654321\?/);
+    expect(support.contactUrl).toMatch(/^https:\/\/wa\.me\/971507654321\?/);
     expect(await ownerOf("+971551110020")).toBe(away);
 
     const on = await exec("On Duty", "+971500000072");
@@ -255,11 +294,63 @@ describe("Forex Growth Hub form", () => {
     expect(String((await Lead.findOne({ phone: "+971551110031" }).lean())!.projectId)).toBe(String(g._id));
   });
 
+  it("sends visitors to an exec's Telegram when that is their channel, for new and known leads", async () => {
+    const tg = async (name: string, username: string) =>
+      (
+        await createStaff(
+          {
+            name,
+            email: `tg-${username}-${Date.now()}@edge.test`,
+            roleKeys: ["sales_executive"],
+            phone: "+971500000099", // has WhatsApp too, but chats on Telegram
+            telegramUsername: username,
+            contactChannel: "TELEGRAM",
+            password: "StaffPass!2026",
+          },
+          { type: "SYSTEM" },
+        )
+      ).id;
+    const tara = await tg("Tara Tele", "tara_edge");
+    const r = await captureGrowthHubLead({ name: "Tele Visitor", whatsapp: "+971551110050" });
+    expect(r).toMatchObject({ channel: "TELEGRAM", contactName: "Tara Tele" });
+    expect(r.contactUrl).toMatch(/^https:\/\/t\.me\/tara_edge\?text=/);
+    expect(textOf(r.contactUrl!)).toMatch(/^Hi Tara, I'm Tele Visitor\. I watched the free trading classes/);
+    const lead = (await Lead.findOne({ phone: "+971551110050" }).lean())!;
+    expect(String(lead.ownerId)).toBe(tara);
+    expect(await LeadActivity.countDocuments({ leadId: lead._id, type: "SYSTEM", "data.channel": "TELEGRAM", "data.telegram": "tara_edge" })).toBe(1);
+
+    // The owner moves to WhatsApp: the same visitor now goes to their WhatsApp.
+    const actor = { type: "USER" as const, id: await exec("Admin", undefined, "super_admin") };
+    await updateStaff(tara, { name: "Tara Tele", roleKeys: ["sales_executive"], contactChannel: "WHATSAPP" }, actor);
+    const again = await captureFreeClassLead({ name: "Tele Visitor", phone: "+971551110050" });
+    expect(again.channel).toBe("WHATSAPP");
+    expect(again.contactUrl).toMatch(/^https:\/\/wa\.me\/971500000099\?/);
+  });
+
+  it("logs an Inner Circle request with the JetaFX client id and sends the visitor to ask to be added", async () => {
+    const team = await exec("Ira Inner", "+971500000101");
+    const fcs = await Project.create({ name: "Free Course support", code: "FREE-COURSE-SUPPORT", memberIds: [new Types.ObjectId(team)] });
+    const r = await captureGrowthHubLead({
+      intent: "inner-circle",
+      name: "Jamal Trader",
+      whatsapp: "+971551110060",
+      email: "Jamal@Example.com",
+      jetaFxClientId: "JX-77881",
+    });
+    expect(textOf(r.contactUrl!)).toBe("Hi Ira, I'm Jamal Trader. I have created my JetaFX account (Client ID: JX-77881). Please add me to the Inner Circle.");
+    const lead = (await Lead.findOne({ phone: "+971551110060" }).lean())!;
+    expect(String(lead.projectId)).toBe(String(fcs._id));
+    expect(lead).toMatchObject({ email: "jamal@example.com", jetaFxClientId: "JX-77881", sourceDetail: "Forex Growth Hub · Inner Circle" });
+    expect(lead.tags).toEqual(expect.arrayContaining(["growth-hub", "inner-circle"]));
+    expect(lead.notes).toContain("Inner Circle request");
+    expect(await LeadActivity.countDocuments({ leadId: lead._id, type: "SYSTEM", "data.landing": "growth-hub-inner-circle" })).toBe(1);
+  });
+
   it("uses support WhatsApp when nobody on the project team can take it, and General when the project is not active", async () => {
     await exec("General Gina", "+971500000091");
     const fcs = await Project.create({ name: "Free Course support", code: "FREE-COURSE-SUPPORT", memberIds: [] });
     const none = await captureGrowthHubLead({ name: "Empty Team", whatsapp: "+971551110040" });
-    expect(none).toEqual({ whatsappUrl: null, contactName: null });
+    expect(none).toEqual({ contactUrl: null, channel: null, contactName: null });
     const lead = (await Lead.findOne({ phone: "+971551110040" }).lean())!;
     expect(String(lead.projectId)).toBe(String(fcs._id));
     expect(lead.ownerId).toBeNull();
@@ -304,13 +395,13 @@ describe("staff Off", () => {
     await setStaffAvailable(first, false, actor);
 
     // Nobody else is on: the owner stays, the visitor goes to support (none configured here).
-    expect(await captureFreeClassLead({ name: "Returning", phone: "+971554440010" })).toEqual({ whatsappUrl: null, contactName: null });
+    expect(await captureFreeClassLead({ name: "Returning", phone: "+971554440010" })).toEqual({ contactUrl: null, channel: null, contactName: null });
     expect(await ownerOf("+971554440010")).toBe(first);
 
     const second = await exec("Sana Second", "+971500000032");
     const r = await captureFreeClassLead({ name: "Returning", phone: "+971554440010" });
     expect(await ownerOf("+971554440010")).toBe(second);
-    expect(r.whatsappUrl).toMatch(/^https:\/\/wa\.me\/971500000032\?/);
+    expect(r.contactUrl).toMatch(/^https:\/\/wa\.me\/971500000032\?/);
     expect(await LeadActivity.countDocuments({ leadId: new Types.ObjectId(lead), type: "ASSIGNED", "data.to": second })).toBe(1);
 
     // Back on: new leads may go to them again.

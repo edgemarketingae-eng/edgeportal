@@ -1,3 +1,4 @@
+import { CONTACT_CHANNELS } from "@edge/domain/crm/enums";
 import { z } from "zod";
 import { zEmail, zOk } from "./common";
 import { route } from "./route";
@@ -9,6 +10,9 @@ export const StaffRow = z.object({
   title: z.string().nullable(),
   workspaceEmail: z.string().nullable(),
   phone: z.string().nullable(),
+  telegramUsername: z.string().nullable(),
+  /** Where landing page leads chat with this person. */
+  contactChannel: z.enum(CONTACT_CHANNELS),
   /** False while the person is marked Off (no automatic leads). */
   available: z.boolean(),
   roles: z.array(z.object({ key: z.string(), name: z.string() })),
@@ -39,6 +43,9 @@ export const StaffCreateInput = z.object({
   title: z.string().trim().optional(),
   workspaceEmail: optionalEmail,
   phone: z.string().trim().max(30).optional(),
+  /** Omitted keeps the saved value (forms that don't show it); an empty string clears it. */
+  telegramUsername: z.string().trim().max(60).optional(),
+  contactChannel: z.enum(CONTACT_CHANNELS).optional(),
   roleKeys: z.array(z.string()).min(1, "Choose at least one role"),
 });
 export const StaffUpdateInput = StaffCreateInput.omit({ email: true });

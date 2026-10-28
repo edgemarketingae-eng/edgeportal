@@ -19,6 +19,8 @@ export const LEAD_SOURCES = [
 ] as const;
 export const LEAD_TEMPERATURES = ["HOT", "WARM", "COLD"] as const;
 export const LEAD_CHANNELS = ["WHATSAPP", "CALL", "EMAIL", "SMS"] as const;
+/** Where a staff member chats with leads the landing pages send them (their WhatsApp number or Telegram username). */
+export const CONTACT_CHANNELS = ["WHATSAPP", "TELEGRAM"] as const;
 /** Activities staff log by hand. */
 export const LEAD_TOUCH_TYPES = ["NOTE", "CALL", "WHATSAPP", "EMAIL", "MEETING"] as const;
 /** Touches that count as contacting the lead (first-response SLA, auto NEW -> CONTACTED). */
@@ -74,6 +76,7 @@ export type OpenLeadStage = (typeof OPEN_LEAD_STAGES)[number];
 export type LeadSource = (typeof LEAD_SOURCES)[number];
 export type LeadTemperature = (typeof LEAD_TEMPERATURES)[number];
 export type LeadChannel = (typeof LEAD_CHANNELS)[number];
+export type ContactChannel = (typeof CONTACT_CHANNELS)[number];
 export type LeadTouchType = (typeof LEAD_TOUCH_TYPES)[number];
 export type LeadActivityType = (typeof LEAD_ACTIVITY_TYPES)[number];
 export type CallOutcome = (typeof CALL_OUTCOMES)[number];

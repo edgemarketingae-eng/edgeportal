@@ -3,6 +3,7 @@
 import { Button } from "@edge/ui/components/button";
 import { Checkbox } from "@edge/ui/components/checkbox";
 import { Label } from "@edge/ui/components/label";
+import { NativeSelect } from "@edge/ui/components/native-select";
 import { Field, FormError, FormMessage, type ActionState } from "@edge/ui/forms/field";
 import { useActionState, useEffect } from "react";
 import { toast } from "sonner";
@@ -12,6 +13,27 @@ export interface RoleOption {
   key: string;
   name: string;
   description: string | null;
+}
+
+/**
+ * Where landing page leads chat with this person, and the phone / Telegram username for it. Sales teams move a
+ * person to Telegram when their WhatsApp number is at risk of a ban from too many new chats.
+ */
+function ContactFields({ channel, phone, telegram }: { channel?: string; phone?: string; telegram?: string }) {
+  return (
+    <>
+      <div className="grid content-start gap-2">
+        <Label htmlFor="contactChannel">Chat with leads on</Label>
+        <NativeSelect id="contactChannel" name="contactChannel" defaultValue={channel || "WHATSAPP"}>
+          <option value="WHATSAPP">WhatsApp</option>
+          <option value="TELEGRAM">Telegram</option>
+        </NativeSelect>
+        <p className="text-muted-foreground text-xs">Landing page and Growth Hub visitors are sent to this app.</p>
+      </div>
+      <Field label="Phone (WhatsApp)" name="phone" type="tel" defaultValue={phone} hint="Needed when chatting on WhatsApp." />
+      <Field label="Telegram username" name="telegramUsername" defaultValue={telegram} placeholder="@username" hint="Needed when chatting on Telegram." />
+    </>
+  );
 }
 
 /** React resets a form after every action; remounting with the submitted values keeps them after an error. */
@@ -47,7 +69,7 @@ export function CreateCrmStaffForm({ roles, projects }: { roles: RoleOption[]; p
         <Field label="Login email" name="email" type="email" defaultValue={v?.email} required />
         <Field label="Job title" name="title" defaultValue={v?.title} />
         <Field label="Google Workspace email" name="workspaceEmail" type="email" defaultValue={v?.workspaceEmail} hint="Only needed for Meet consultations later." />
-        <Field label="Phone (WhatsApp)" name="phone" type="tel" defaultValue={v?.phone} hint="Sales executives need this to receive leads from the free class page." />
+        <ContactFields channel={v?.contactChannel} phone={v?.phone} telegram={v?.telegramUsername} />
       </div>
       <RoleChecks roles={roles} selected={list(v?.roleKeys)} />
       {projects.length ? (
@@ -72,7 +94,13 @@ export function CreateCrmStaffForm({ roles, projects }: { roles: RoleOption[]; p
   );
 }
 
-export function EditCrmStaffForm({ user, roles }: { user: { id: string; name: string; title: string; workspaceEmail: string; phone: string; roleKeys: string[] }; roles: RoleOption[] }) {
+export function EditCrmStaffForm({
+  user,
+  roles,
+}: {
+  user: { id: string; name: string; title: string; workspaceEmail: string; phone: string; telegramUsername: string; contactChannel: string; roleKeys: string[] };
+  roles: RoleOption[];
+}) {
   const [state, action, pending] = useActionState(updateCrmStaffAction, {} as ActionState);
   useEffect(() => {
     if (state.ok) toast.success(state.message ?? "Saved");
@@ -86,7 +114,11 @@ export function EditCrmStaffForm({ user, roles }: { user: { id: string; name: st
         <Field label="Full name" name="name" defaultValue={v?.name ?? user.name} required />
         <Field label="Job title" name="title" defaultValue={v?.title ?? user.title} />
         <Field label="Google Workspace email" name="workspaceEmail" type="email" defaultValue={v?.workspaceEmail ?? user.workspaceEmail} />
-        <Field label="Phone (WhatsApp)" name="phone" type="tel" defaultValue={v?.phone ?? user.phone} hint="Sales executives need this to receive leads from the free class page." />
+        <ContactFields
+          channel={v?.contactChannel ?? user.contactChannel}
+          phone={v?.phone ?? user.phone}
+          telegram={v?.telegramUsername ?? user.telegramUsername}
+        />
       </div>
       <RoleChecks roles={roles} selected={v ? list(v.roleKeys) : user.roleKeys} />
       <Button className="w-fit" disabled={pending}>

@@ -26,11 +26,11 @@ test("1. a visitor joins the free class and is sent to the sales executive's Wha
   await expect(page.getByText(/New free classes run regularly/)).toBeVisible();
   // await expect(page.getByRole("link", { name: "Student login" })).toHaveAttribute("href", "/login");
 
-  await page.getByRole("button", { name: "Join free class" }).first().click();
+  await page.getByRole("button", { name: "Contact support" }).first().click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Full name").fill(visitor.name);
   await dialog.getByLabel("WhatsApp number").fill(visitor.phone);
-  await dialog.getByRole("button", { name: "Join free class" }).click();
+  await dialog.getByRole("button", { name: "Contact support" }).click();
 
   await expect(page.getByRole("heading", { name: "WhatsApp" })).toBeVisible();
   const url = new URL(whatsapp);

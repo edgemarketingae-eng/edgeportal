@@ -1,8 +1,16 @@
 import { AuthUser, Lead, Role, StaffProfile, Types, type ProjectDoc } from "@edge/db";
-import { OPEN_LEAD_STAGES } from "@edge/domain/crm/enums";
+import { OPEN_LEAD_STAGES, type ContactChannel } from "@edge/domain/crm/enums";
 
 /** The role whose holders receive round-robin leads. */
 const SALES_EXECUTIVE = "sales_executive";
+
+/** Staff who can be chatted with on their current channel: a phone for WhatsApp, a username for Telegram. */
+const HAS_CONTACT = {
+  $or: [
+    { contactChannel: "TELEGRAM" as const, telegramUsername: { $nin: [null, ""] } },
+    { contactChannel: { $ne: "TELEGRAM" as const }, phone: { $nin: [null, ""] } },
+  ],
+};
 
 /**
  * Active people with the sales executive role on a project's team. The default (General) project is open to
@@ -10,7 +18,7 @@ const SALES_EXECUTIVE = "sales_executive";
  */
 export async function salesExecutivesFor(
   project: Pick<ProjectDoc, "_id" | "isDefault" | "managerIds" | "memberIds">,
-  opts: { withPhone?: boolean } = {},
+  opts: { withContact?: boolean } = {},
 ): Promise<{ id: string; name: string }[]> {
   const role = await Role.findOne({ key: SALES_EXECUTIVE }, { _id: 1 }).lean();
   if (!role) return [];
@@ -21,7 +29,7 @@ export async function salesExecutivesFor(
       roleIds: role._id,
       available: { $ne: false },
       ...(team ? { _id: { $in: team } } : {}),
-      ...(opts.withPhone ? { phone: { $nin: [null, ""] } } : {}),
+      ...(opts.withContact ? HAS_CONTACT : {}),
     },
     { _id: 1 },
   ).lean();
@@ -35,12 +43,12 @@ export async function salesExecutivesFor(
 /**
  * Hands out a project's sales executives one lead at a time, always to whoever holds the fewest open leads in
  * that project, counting what this batch has already handed out. A batch spreads evenly and stays fair with the
- * existing load. `next()` is null when the project has no sales executives. `withPhone` limits it to people
- * with a saved phone (leads that are handed straight to a WhatsApp chat).
+ * existing load. `next()` is null when the project has no sales executives. `withContact` limits it to people
+ * who can be chatted with on their channel (leads that are handed straight to a WhatsApp or Telegram chat).
  */
 export async function roundRobinPicker(
   project: Pick<ProjectDoc, "_id" | "isDefault" | "managerIds" | "memberIds">,
-  opts: { withPhone?: boolean } = {},
+  opts: { withContact?: boolean } = {},
 ) {
   const execs = await salesExecutivesFor(project, opts);
   const counts = execs.length
@@ -69,14 +77,21 @@ export async function roundRobinPicker(
   };
 }
 
-/** Can a lead be handed straight to this person's WhatsApp: an active account, not Off, with a phone. */
-export async function reachableExec(userId: string | Types.ObjectId | null | undefined) {
+/**
+ * Can a lead be handed straight to this person's chat: an active account, not Off, with a phone (WhatsApp) or
+ * a username (Telegram) for their current channel. `handle` is that phone or username.
+ */
+export async function reachableExec(
+  userId: string | Types.ObjectId | null | undefined,
+): Promise<{ id: string; name: string; channel: ContactChannel; handle: string } | null> {
   if (!userId) return null;
   const _id = new Types.ObjectId(String(userId));
   const [profile, user] = await Promise.all([
-    StaffProfile.findById(_id, { phone: 1, available: 1 }).lean(),
+    StaffProfile.findById(_id, { phone: 1, telegramUsername: 1, contactChannel: 1, available: 1 }).lean(),
     AuthUser.findById(_id, { name: 1, disabledAt: 1 }).lean(),
   ]);
-  if (!profile?.phone || profile.available === false || !user || user.disabledAt) return null;
-  return { id: String(_id), name: user.name, phone: profile.phone };
+  if (!profile || profile.available === false || !user || user.disabledAt) return null;
+  const channel: ContactChannel = profile.contactChannel === "TELEGRAM" ? "TELEGRAM" : "WHATSAPP";
+  const handle = channel === "TELEGRAM" ? profile.telegramUsername : profile.phone;
+  return handle ? { id: String(_id), name: user.name, channel, handle } : null;
 }

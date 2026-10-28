@@ -52,7 +52,8 @@ export function JoinButton({ children, className, tone = "ink", ...props }: Comp
 
 function JoinForm() {
   const [state, action, pending] = useActionState(joinFreeClassAction, {} as JoinState);
-  const url = state.ok ? state.whatsappUrl : null;
+  const url = state.ok ? state.contactUrl : null;
+  const telegram = state.channel === "TELEGRAM";
   useEffect(() => {
     if (url) window.location.href = url;
   }, [url]);
@@ -67,18 +68,24 @@ function JoinForm() {
         {url ? (
           <>
             <DialogDescription className="text-edge-ink/70 text-[15px]">
-              Opening WhatsApp so you can say hi to {state.contactName ?? "our team"}. Send the message and you&apos;ll get the class link
-              and timing.
+              Opening {telegram ? "Telegram" : "WhatsApp"} so you can say hi to {state.contactName ?? "our team"}. Send the message and
+              they&apos;ll help you from there.
             </DialogDescription>
-            <Button asChild className="mt-2 h-14 w-full rounded-2xl bg-[#25D366] text-base font-bold text-white hover:bg-[#1ebe5b]">
+            <Button
+              asChild
+              className={cn(
+                "mt-2 h-14 w-full rounded-2xl text-base font-bold text-white",
+                telegram ? "bg-[#229ED9] hover:bg-[#1c8cc2]" : "bg-[#25D366] hover:bg-[#1ebe5b]",
+              )}
+            >
               <a href={url}>
-                <MessageCircle className="size-5" /> Open WhatsApp
+                <MessageCircle className="size-5" /> Open {telegram ? "Telegram" : "WhatsApp"}
               </a>
             </Button>
           </>
         ) : (
           <DialogDescription className="text-edge-ink/70 text-[15px]">
-            Thanks! Our team will contact you on WhatsApp shortly.
+            Thanks! Our team will contact you shortly.
           </DialogDescription>
         )}
       </div>
@@ -98,7 +105,7 @@ function JoinForm() {
         </span>
         <DialogTitle className={tw(display, "text-3xl")}>Save Your Seat</DialogTitle>
         <DialogDescription className="text-edge-ink/70 text-[15px]">
-          Next, you&apos;ll chat with your mentor on WhatsApp and get the class link.
+          Next, you&apos;ll chat with your mentor and get the class link.
         </DialogDescription>
       </DialogHeader>
       <FormError state={state} />
@@ -111,7 +118,7 @@ function JoinForm() {
         </label>
       </div>
       <Button disabled={pending} className={cn("mt-1 h-14 rounded-2xl text-sm font-extrabold tracking-[0.08em] uppercase", TONES.ink)}>
-        {pending ? "Saving your seat…" : "Join free class"}
+        {pending ? "Sending…" : "Contact support"}
         {pending ? null : <ArrowRight className="size-4" />}
       </Button>
       <p className="text-edge-ink/55 flex items-center justify-center gap-1.5 text-center text-xs">
@@ -138,7 +145,7 @@ export function StickyJoin() {
       )}
     >
       <JoinButton className="w-full" tabIndex={shown ? 0 : -1}>
-        Join free class
+        Contact support
       </JoinButton>
     </div>
   );

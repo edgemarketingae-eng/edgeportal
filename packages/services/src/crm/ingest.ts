@@ -140,8 +140,8 @@ async function intakeProject(code?: string): Promise<ProjectDoc> {
 
 /**
  * Create the lead, or append an INBOUND entry to an existing live lead with the same phone/email.
- * `assignExecWithPhone` (landing pages) always round-robins an unowned lead to a sales executive
- * who has a phone, whatever the CRM's round-robin setting, because the visitor is sent to that person's WhatsApp.
+ * `assignReachableExec` (landing pages) always round-robins an unowned lead to a sales executive who can be chatted
+ * with on their channel, whatever the CRM's round-robin setting, because the visitor is sent to that person's chat.
  * `altPhone` is a second number of the visitor's (e.g. calls vs WhatsApp): an existing lead under it also matches.
  * `projectCode` puts a new lead in that project (and its team's round-robin); an existing lead stays where it is.
  */
@@ -149,7 +149,7 @@ export async function ingestInboundLead(
   source: string,
   p: InboundLeadPayload,
   eventId: Types.ObjectId | null,
-  opts: { assignExecWithPhone?: boolean; altPhone?: string | null; projectCode?: string } = {},
+  opts: { assignReachableExec?: boolean; altPhone?: string | null; projectCode?: string; jetaFxClientId?: string } = {},
 ): Promise<{ leadId: string; existing: boolean; ownerId: string | null }> {
   const email = normalizeEmail(p.email);
   const parsedPhone = p.phone?.trim() ? parsePhone(p.phone, p.country?.toUpperCase()) : null;
@@ -170,11 +170,11 @@ export async function ingestInboundLead(
   if (existing) {
     const at = now();
     let ownerId = existing.ownerId ? String(existing.ownerId) : null;
-    // The visitor is about to message the owner on WhatsApp: an owner who is Off (or unreachable) hands the lead on.
+    // The visitor is about to message the owner: an owner who is Off (or unreachable) hands the lead on.
     let reassignTo: string | null = null;
-    if (opts.assignExecWithPhone && !(await reachableExec(ownerId))) {
+    if (opts.assignReachableExec && !(await reachableExec(ownerId))) {
       const project = await Project.findById(existing.projectId).lean();
-      reassignTo = project ? (await roundRobinPicker(project, { withPhone: true })).next() : null;
+      reassignTo = project ? (await roundRobinPicker(project, { withContact: true })).next() : null;
       if (reassignTo) ownerId = reassignTo;
     }
     await withTx(async () => {
@@ -184,6 +184,7 @@ export async function ingestInboundLead(
         if (!existing.utm?.[k] && utm[k]) set[`utm.${k}`] = utm[k];
       if (!existing.email && email) set.email = email;
       if (!existing.phone && phone) set.phone = phone;
+      if (!existing.jetaFxClientId && opts.jetaFxClientId?.trim()) set.jetaFxClientId = opts.jetaFxClientId.trim();
       if (p.consent) Object.assign(set, { "consent.marketing": true, "consent.marketingAt": existing.consent?.marketingAt ?? at });
       if (p.whatsappConsent) set["consent.whatsapp"] = true;
       const tags = parseTags((p.tags ?? []).join(","));
@@ -214,8 +215,8 @@ export async function ingestInboundLead(
 
   const cfg = await getSetting("crm.config");
   const project = await intakeProject(opts.projectCode);
-  const ownerId = opts.assignExecWithPhone
-    ? ((await roundRobinPicker(project, { withPhone: true })).next() ?? "")
+  const ownerId = opts.assignReachableExec
+    ? ((await roundRobinPicker(project, { withContact: true })).next() ?? "")
     : cfg.roundRobin
       ? ((await roundRobinPicker(project)).next() ?? "")
       : "";
@@ -225,6 +226,7 @@ export async function ingestInboundLead(
       name: p.name,
       phone: phone ?? undefined,
       email: email ?? undefined,
+      jetaFxClientId: opts.jetaFxClientId?.trim() || undefined,
       country: parsedPhone?.country ?? (isCountryCode(p.country) ? p.country.toUpperCase() : undefined),
       source: "WEBSITE",
       sourceDetail: p.page?.trim() || p.course?.trim() || undefined,

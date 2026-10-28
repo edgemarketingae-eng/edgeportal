@@ -4,11 +4,11 @@ import { studentRoutes, type RouteBody } from "@edge/contracts";
 import { dialogError, text, values, type ActionState } from "@edge/web/actions";
 import { api } from "@edge/web/server";
 
-export type JoinState = ActionState & { whatsappUrl?: string | null; contactName?: string | null };
+export type JoinState = ActionState & { contactUrl?: string | null; channel?: "WHATSAPP" | "TELEGRAM" | null; contactName?: string | null };
 
 const UTM = ["source", "medium", "campaign", "content", "term"] as const;
 
-/** Free class landing form: creates the CRM lead and returns the assigned sales executive's WhatsApp link. */
+/** Landing form: creates the CRM lead and returns the assigned sales executive's chat link (WhatsApp or Telegram). */
 export async function joinFreeClassAction(_prev: JoinState, form: FormData): Promise<JoinState> {
   try {
     const r = await api(studentRoutes.freeClassLead, {
@@ -19,7 +19,7 @@ export async function joinFreeClassAction(_prev: JoinState, form: FormData): Pro
         utm: Object.fromEntries(UTM.map((k) => [k, text(form, `utm_${k}`).slice(0, 200) || undefined])),
       } satisfies RouteBody<typeof studentRoutes.freeClassLead>,
     });
-    return { ok: true, whatsappUrl: r.whatsappUrl, contactName: r.contactName };
+    return { ok: true, contactUrl: r.contactUrl, channel: r.channel, contactName: r.contactName };
   } catch (e) {
     return { ...dialogError(e), values: values(form, ["name", "phone"]) };
   }

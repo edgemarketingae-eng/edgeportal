@@ -22,7 +22,7 @@ export function studentRouter() {
   });
   register(r, studentRoutes.freeClassLead, leadLimiter, async (req) => {
     const { website, ...input } = req.valid.body;
-    if (website) return { ok: true as const, whatsappUrl: null, contactName: null };
+    if (website) return { ok: true as const, contactUrl: null, channel: null, contactName: null };
     return { ok: true as const, ...(await captureFreeClassLead(input)) };
   });
   register(r, studentRoutes.portal, async (req) => getStudentPortal(requireStudent(req).userId));

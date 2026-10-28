@@ -1,4 +1,5 @@
 import { Schema, model, type InferSchemaType, type Types } from "mongoose";
+import { CONTACT_CHANNELS } from "@edge/domain/crm/enums";
 import { ObjectId, partialUnique, timestamps } from "./shared";
 
 const roleSchema = new Schema(
@@ -19,8 +20,12 @@ const staffProfileSchema = new Schema(
     _id: { type: ObjectId, required: true },
     title: { type: String, default: null },
     workspaceEmail: { type: String, default: null },
-    /** Optional E.164 mobile; sales executives need it to receive free class leads on WhatsApp. */
+    /** Optional E.164 mobile; sales executives on WhatsApp need it to receive landing page leads. */
     phone: { type: String, default: null },
+    /** Telegram username without the @; sales executives on Telegram need it to receive landing page leads. */
+    telegramUsername: { type: String, default: null },
+    /** Where landing page visitors are sent to chat with this person. */
+    contactChannel: { type: String, enum: CONTACT_CHANNELS, default: "WHATSAPP" },
     /** Off = on leave / off shift: skipped by every automatic assignment, still visible everywhere else. */
     available: { type: Boolean, default: true },
     availabilityChangedAt: { type: Date, default: null },

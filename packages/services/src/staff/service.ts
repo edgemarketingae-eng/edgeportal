@@ -1,11 +1,12 @@
 import { randomBytes } from "node:crypto";
 import { AuthAccount, AuthSession, AuthUser, Role, StaffProfile, Types, withTx } from "@edge/db";
+import type { ContactChannel } from "@edge/domain/crm/enums";
 import type { Actor } from "@edge/domain/enums";
 import { isCrmRole, isPermission } from "@edge/domain/auth/permissions";
 import { hashPassword } from "better-auth/crypto";
 import { audit } from "../audit";
 import { env } from "../env";
-import { BusinessError, NotFoundError } from "../errors";
+import { BusinessError, NotFoundError, ValidationError } from "../errors";
 import { oid } from "../ids";
 import { queueEmail } from "../notifications/email";
 import { notifyUser } from "../notifications/in-app";
@@ -83,12 +84,32 @@ export async function createUserWithPassword(input: {
   return createUserWithPasswordHash({ ...input, passwordHash: await hashPassword(input.password) });
 }
 
+/** "@edge_sara", "t.me/edge_sara" or "edge_sara" → "edge_sara"; empty → null. Telegram: 5–32 letters, digits, _. */
+export function normalizeTelegram(input: string | null | undefined): string | null {
+  const v = (input ?? "").trim().replace(/^(https?:\/\/)?(www\.)?(t\.me|telegram\.me)\//i, "").replace(/^@/, "").replace(/\/+$/, "");
+  if (!v) return null;
+  if (!/^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(v))
+    throw new ValidationError({ telegramUsername: "Enter a Telegram username, e.g. @edge_sara (5–32 letters, numbers or _)" });
+  return v;
+}
+
+/** Telegram needs a username to chat on; WhatsApp works without a phone (that person just gets no landing leads). */
+function checkChannel(channel: ContactChannel, telegramUsername: string | null) {
+  if (channel === "TELEGRAM" && !telegramUsername)
+    throw new ValidationError({ telegramUsername: "Add a Telegram username to chat with leads on Telegram" });
+}
+
+type ContactInput = { phone?: string; telegramUsername?: string; contactChannel?: ContactChannel };
+
 export async function createStaff(
-  input: { name: string; email: string; roleKeys: string[]; title?: string; workspaceEmail?: string; phone?: string; password?: string },
+  input: { name: string; email: string; roleKeys: string[]; title?: string; workspaceEmail?: string; password?: string } & ContactInput,
   actor: Actor,
 ) {
   const email = input.email.trim().toLowerCase();
   const phone = normalizePhone(input.phone);
+  const telegramUsername = normalizeTelegram(input.telegramUsername);
+  const contactChannel = input.contactChannel ?? "WHATSAPP";
+  checkChannel(contactChannel, telegramUsername);
   if (await AuthUser.exists({ email })) throw new BusinessError("A user with this email already exists", { email: "Already in use" });
   if (!input.roleKeys.length) throw new BusinessError("Choose at least one role");
   const roles = await rolesByKeys(input.roleKeys);
@@ -105,6 +126,8 @@ export async function createStaff(
         title: input.title || null,
         workspaceEmail: input.workspaceEmail?.trim().toLowerCase() || null,
         phone,
+        telegramUsername,
+        contactChannel,
         roleIds: roles.map((r) => r._id),
         tempPasswordEnc,
       },
@@ -126,15 +149,20 @@ export async function createStaff(
 
 export async function updateStaff(
   userId: string,
-  input: { name: string; roleKeys: string[]; title?: string; workspaceEmail?: string; phone?: string },
+  input: { name: string; roleKeys: string[]; title?: string; workspaceEmail?: string } & ContactInput,
   actor: Actor & { type: "USER" },
 ) {
   const _id = oid(userId, "Staff member");
   const phone = normalizePhone(input.phone);
+  const telegram = normalizeTelegram(input.telegramUsername);
   if (!input.roleKeys.length) throw new BusinessError("Choose at least one role");
   const roles = await rolesByKeys(input.roleKeys);
   const staff = await StaffProfile.findById(_id).lean();
   if (!staff) throw new NotFoundError("Staff member");
+  // Omitted contact fields keep the saved values (the console's staff form doesn't show Telegram).
+  const telegramUsername = input.telegramUsername === undefined ? (staff.telegramUsername ?? null) : telegram;
+  const contactChannel = input.contactChannel ?? staff.contactChannel ?? "WHATSAPP";
+  checkChannel(contactChannel, telegramUsername);
   const current = await Role.find({ _id: { $in: staff.roleIds } }).lean();
   const hadSuper = current.some((r) => r.key === "super_admin");
   const willSuper = roles.some((r) => r.key === "super_admin");
@@ -151,6 +179,8 @@ export async function updateStaff(
           workspaceEmail: input.workspaceEmail?.trim().toLowerCase() || null,
           // Omitted keeps the saved number; an empty string clears it.
           ...(input.phone === undefined ? {} : { phone }),
+          telegramUsername,
+          contactChannel,
           roleIds: roles.map((r) => r._id),
         },
       },
@@ -160,8 +190,19 @@ export async function updateStaff(
       action: "staff.update",
       entityType: "User",
       entityId: userId,
-      before: { roles: current.map((r) => r.key), phone: staff.phone ?? null },
-      after: { roles: input.roleKeys, title: input.title, phone: input.phone === undefined ? (staff.phone ?? null) : phone },
+      before: {
+        roles: current.map((r) => r.key),
+        phone: staff.phone ?? null,
+        telegramUsername: staff.telegramUsername ?? null,
+        contactChannel: staff.contactChannel ?? "WHATSAPP",
+      },
+      after: {
+        roles: input.roleKeys,
+        title: input.title,
+        phone: input.phone === undefined ? (staff.phone ?? null) : phone,
+        telegramUsername,
+        contactChannel,
+      },
     });
   });
 }

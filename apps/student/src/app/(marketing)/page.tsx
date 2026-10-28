@@ -42,7 +42,7 @@ const TOPICS = [
 const AUDIENCE = ["Complete beginners", "People who lost money trading", "Busy professionals in the UAE", "Anyone curious about Gold"];
 
 const STEPS = [
-  { icon: MousePointerClick, title: "Tap “Join free class”", body: "Takes 10 seconds. No payment, no card." },
+  { icon: MousePointerClick, title: "Tap “Contact support”", body: "Takes 10 seconds. No payment, no card." },
   { icon: UserRound, title: "Enter name & WhatsApp", body: "So your mentor knows who you are." },
   { icon: MessageCircle, title: "Chat with your mentor", body: "Send the ready message on WhatsApp and get the class link." },
 ];
@@ -68,7 +68,7 @@ export default function LandingPage() {
             {/* <Link href="/login" className="text-edge-ink/70 hover:text-edge-ink text-sm font-semibold">
               Student login
             </Link> */}
-            <JoinButton className="hidden h-11 rounded-xl px-5 text-xs sm:inline-flex">Join now</JoinButton>
+            <JoinButton className="hidden h-11 rounded-xl px-5 text-xs sm:inline-flex">Contact support</JoinButton>
           </nav>
         </header>
 
@@ -93,7 +93,7 @@ export default function LandingPage() {
                 <When />
               </Suspense>
               <div className="mt-9 flex flex-wrap items-center gap-x-5 gap-y-3">
-                <JoinButton>Join free class</JoinButton>
+                <JoinButton>Contact support</JoinButton>
                 <ul className="text-edge-ink/70 grid gap-1 text-sm font-medium">
                   <li className="flex items-center gap-1.5">
                     <CircleCheck className="text-edge-emerald size-4" /> 100% free, no card
@@ -168,7 +168,7 @@ export default function LandingPage() {
                 ))}
               </ol>
               <div className="mt-12 flex justify-center">
-                <JoinButton>Join free class</JoinButton>
+                <JoinButton>Contact support</JoinButton>
               </div>
             </div>
           </section>
@@ -184,7 +184,7 @@ export default function LandingPage() {
               </h2>
               <p className="text-edge-mint/90 mx-auto mt-5 max-w-lg">Join the next live class. Your mentor sends everything on WhatsApp.</p>
               <div className="mt-9 flex justify-center">
-                <JoinButton tone="green">Join free class</JoinButton>
+                <JoinButton tone="green">Contact support</JoinButton>
               </div>
             </div>
           </section>

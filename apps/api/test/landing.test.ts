@@ -37,7 +37,7 @@ describe("free class landing API", () => {
       .send({ name: "Visitor One", phone: "+971551231234", utm: { source: "meta" } })
       .expect(200);
     expect(res.body).toMatchObject({ ok: true, contactName: "Sara Sales" });
-    expect(res.body.whatsappUrl).toMatch(/^https:\/\/wa\.me\/971500001111\?text=Hi%20Sara/);
+    expect(res.body.contactUrl).toMatch(/^https:\/\/wa\.me\/971500001111\?text=Hi%20Sara/);
     const lead = (await Lead.findOne({ phone: "+971551231234" }).lean())!;
     expect(String(lead.ownerId)).toBe(id);
     expect(lead.utm?.source).toBe("meta");
@@ -53,7 +53,7 @@ describe("free class landing API", () => {
       .set(visitor("203.0.113.2"))
       .send({ name: "Bot Name", phone: "+971551231299", website: "spam.example" })
       .expect(200);
-    expect(bot.body).toEqual({ ok: true, whatsappUrl: null, contactName: null });
+    expect(bot.body).toEqual({ ok: true, contactUrl: null, channel: null, contactName: null });
     expect(await Lead.countDocuments({ phone: "+971551231299" })).toBe(0);
 
     let last = 200;

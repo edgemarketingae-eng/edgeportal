@@ -16,7 +16,7 @@ export function publicRouter() {
   });
   register(r, publicRoutes.growthHubLead, leadLimiter, async (req) => {
     const { website, ...input } = req.valid.body;
-    if (website) return { ok: true as const, whatsappUrl: null, contactName: null };
+    if (website) return { ok: true as const, contactUrl: null, channel: null, contactName: null };
     return { ok: true as const, ...(await captureGrowthHubLead(input)) };
   });
   return r;
