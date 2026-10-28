@@ -1,4 +1,5 @@
 import { AuthUser, Batch, Course, Project, seedBaseData, StaffProfile } from "@edge/db";
+import { ensureDefaultProducts } from "./crm/products";
 import { createStaff } from "./staff/service";
 
 /**
@@ -7,13 +8,17 @@ import { createStaff } from "./staff/service";
  */
 export async function seed(opts: { production: boolean; adminEmail?: string; adminPassword?: string }) {
   await seedBaseData();
+  await ensureDefaultProducts();
   const prod = opts.production;
   const adminEmail = opts.adminEmail ?? (prod ? undefined : "admin@edgeacademy.local");
   const adminPassword = opts.adminPassword ?? (prod ? undefined : "ChangeMe!2026");
   if (adminEmail && adminPassword) {
     if (prod && adminPassword.length < 12) throw new Error("SEED_ADMIN_PASSWORD must be at least 12 characters in production");
     if (!(await AuthUser.exists({ email: adminEmail }))) {
-      await createStaff({ name: "Super Admin", email: adminEmail, roleKeys: ["super_admin"], password: adminPassword }, { type: "SYSTEM", id: "seed" });
+      await createStaff(
+        { name: "Super Admin", email: adminEmail, roleKeys: ["super_admin"], password: adminPassword },
+        { type: "SYSTEM", id: "seed" },
+      );
       if (prod) await AuthUser.updateOne({ email: adminEmail }, { $set: { mustChangePassword: true } });
     }
   } else if (!(await StaffProfile.exists({}))) {
@@ -22,7 +27,13 @@ export async function seed(opts: { production: boolean; adminEmail?: string; adm
   if (prod) return;
 
   const demo = [
-    { email: "mentor@edgeacademy.local", name: "Demo Mentor", roleKeys: ["mentor"], title: "Senior Mentor", workspaceEmail: "mentor@edgeacademy.ae" },
+    {
+      email: "mentor@edgeacademy.local",
+      name: "Demo Mentor",
+      roleKeys: ["mentor"],
+      title: "Senior Mentor",
+      workspaceEmail: "mentor@edgeacademy.ae",
+    },
     { email: "admissions@edgeacademy.local", name: "Admissions Desk", roleKeys: ["admissions"] },
     { email: "finance@edgeacademy.local", name: "Finance Desk", roleKeys: ["finance"] },
     { email: "crm-admin@edgeacademy.local", name: "CRM Admin", roleKeys: ["crm_admin"] },
@@ -30,14 +41,25 @@ export async function seed(opts: { production: boolean; adminEmail?: string; adm
     { email: "sales@edgeacademy.local", name: "Sales Desk", roleKeys: ["sales_executive"], phone: "+971500000001" },
   ];
   for (const d of demo) {
-    if (!(await AuthUser.exists({ email: d.email }))) await createStaff({ ...d, password: "ChangeMe!2026" }, { type: "SYSTEM", id: "seed" });
+    if (!(await AuthUser.exists({ email: d.email })))
+      await createStaff({ ...d, password: "ChangeMe!2026" }, { type: "SYSTEM", id: "seed" });
   }
   const course = await Course.findOneAndUpdate(
     { code: "FX-PRO" },
-    { $setOnInsert: { code: "FX-PRO", slug: "fx-pro", title: "Forex Pro Trader Program", description: "Price action, risk management and live market sessions." } },
+    {
+      $setOnInsert: {
+        code: "FX-PRO",
+        slug: "fx-pro",
+        title: "Forex Pro Trader Program",
+        description: "Price action, risk management and live market sessions.",
+      },
+    },
     { upsert: true, returnDocument: "after" },
   ).lean();
-  const [pm, sales] = await Promise.all([AuthUser.findOne({ email: "pm@edgeacademy.local" }).lean(), AuthUser.findOne({ email: "sales@edgeacademy.local" }).lean()]);
+  const [pm, sales] = await Promise.all([
+    AuthUser.findOne({ email: "pm@edgeacademy.local" }).lean(),
+    AuthUser.findOne({ email: "sales@edgeacademy.local" }).lean(),
+  ]);
   await Project.updateOne(
     { code: "FX-PRO-NOV26" },
     {

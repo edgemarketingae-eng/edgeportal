@@ -1,16 +1,78 @@
 import { RETIRED_SYSTEM_ROLES, SYSTEM_ROLES } from "@edge/domain/auth/permissions";
-import { Project } from "./models/crm";
+import { LEAD_LANGUAGES } from "@edge/domain/crm/enums";
+import { normalizeLanguage } from "@edge/domain/crm/machine";
+import { Lead, Project } from "./models/crm";
 import { FeeRate } from "./models/payments";
 import { Role, StaffProfile } from "./models/people";
 
 /** Gateway fee rates: public list prices until the client confirms its contracts (editable in Settings). */
 export const FEE_RATES = [
-  { key: "STRIPE_CARD_AE", gateway: "STRIPE", label: "Card (UAE)", description: "Visa / Mastercard via Stripe", pct: "0.029", fixedMinor: 100, countries: ["AE"], excludeCountries: [], sortOrder: 10 },
-  { key: "STRIPE_CARD_INTL", gateway: "STRIPE", label: "Card (international)", description: "Visa / Mastercard via Stripe", pct: "0.039", fixedMinor: 100, countries: [], excludeCountries: ["AE"], sortOrder: 11 },
-  { key: "NOMOD_CARD_AE", gateway: "NOMOD", label: "Card (Nomod)", description: "UAE cards via Nomod", pct: "0.0237", fixedMinor: 80, countries: ["AE"], excludeCountries: [], sortOrder: 20 },
-  { key: "TABBY_AE", gateway: "TABBY", label: "Tabby", description: "Split in 4 interest-free payments", pct: "0.0675", fixedMinor: 100, countries: ["AE"], excludeCountries: [], sortOrder: 30 },
-  { key: "TAMARA_AE", gateway: "TAMARA", label: "Tamara", description: "Split into interest-free payments", pct: "0.0675", fixedMinor: 100, countries: ["AE"], excludeCountries: [], sortOrder: 40 },
-  { key: "MANUAL", gateway: "MANUAL", label: "Bank transfer / cash", description: "Recorded by finance staff", pct: "0", fixedMinor: 0, countries: [], excludeCountries: [], sortOrder: 99 },
+  {
+    key: "STRIPE_CARD_AE",
+    gateway: "STRIPE",
+    label: "Card (UAE)",
+    description: "Visa / Mastercard via Stripe",
+    pct: "0.029",
+    fixedMinor: 100,
+    countries: ["AE"],
+    excludeCountries: [],
+    sortOrder: 10,
+  },
+  {
+    key: "STRIPE_CARD_INTL",
+    gateway: "STRIPE",
+    label: "Card (international)",
+    description: "Visa / Mastercard via Stripe",
+    pct: "0.039",
+    fixedMinor: 100,
+    countries: [],
+    excludeCountries: ["AE"],
+    sortOrder: 11,
+  },
+  {
+    key: "NOMOD_CARD_AE",
+    gateway: "NOMOD",
+    label: "Card (Nomod)",
+    description: "UAE cards via Nomod",
+    pct: "0.0237",
+    fixedMinor: 80,
+    countries: ["AE"],
+    excludeCountries: [],
+    sortOrder: 20,
+  },
+  {
+    key: "TABBY_AE",
+    gateway: "TABBY",
+    label: "Tabby",
+    description: "Split in 4 interest-free payments",
+    pct: "0.0675",
+    fixedMinor: 100,
+    countries: ["AE"],
+    excludeCountries: [],
+    sortOrder: 30,
+  },
+  {
+    key: "TAMARA_AE",
+    gateway: "TAMARA",
+    label: "Tamara",
+    description: "Split into interest-free payments",
+    pct: "0.0675",
+    fixedMinor: 100,
+    countries: ["AE"],
+    excludeCountries: [],
+    sortOrder: 40,
+  },
+  {
+    key: "MANUAL",
+    gateway: "MANUAL",
+    label: "Bank transfer / cash",
+    description: "Recorded by finance staff",
+    pct: "0",
+    fixedMinor: 0,
+    countries: [],
+    excludeCountries: [],
+    sortOrder: 99,
+  },
 ] as const;
 
 /** Idempotent: system roles are kept in sync; fee rates and the default CRM project are only inserted when missing. */
@@ -32,10 +94,33 @@ export async function seedBaseData() {
   }
   await Project.updateOne(
     { isDefault: true },
-    { $setOnInsert: { name: "General", code: "GENERAL", description: "Inbound and unassigned leads. Open to every CRM user.", status: "ACTIVE", isDefault: true, managerIds: [], memberIds: [] } },
+    {
+      $setOnInsert: {
+        name: "General",
+        code: "GENERAL",
+        description: "Inbound and unassigned leads. Open to every CRM user.",
+        status: "ACTIVE",
+        isDefault: true,
+        managerIds: [],
+        memberIds: [],
+      },
+    },
     { upsert: true },
   );
   for (const f of FEE_RATES) {
-    await FeeRate.updateOne({ key: f.key }, { $setOnInsert: { ...f, countries: [...f.countries], excludeCountries: [...f.excludeCountries] } }, { upsert: true });
+    await FeeRate.updateOne(
+      { key: f.key },
+      { $setOnInsert: { ...f, countries: [...f.countries], excludeCountries: [...f.excludeCountries] } },
+      { upsert: true },
+    );
+  }
+  await normalizeLeadLanguages();
+}
+
+/** Lead language used to be free text; map old values onto the dropdown codes (no-op once done). */
+async function normalizeLeadLanguages() {
+  const legacy = await Lead.collection.distinct("language", { language: { $type: "string", $nin: [...LEAD_LANGUAGES] } });
+  for (const old of legacy as string[]) {
+    await Lead.collection.updateMany({ language: old }, { $set: { language: normalizeLanguage(old) } });
   }
 }

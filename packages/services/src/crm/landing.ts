@@ -9,9 +9,15 @@ import { recordActivity } from "./common";
 import { ingestInboundLead } from "./ingest";
 import { reachableExec } from "./round-robin";
 
-/** Free live class landing page (student app home): the class it promotes and the lead it captures. */
+/**
+ * Public lead pages that send the visitor straight to a sales executive's WhatsApp: the free live class landing
+ * page (student app home) and the Forex Growth Hub form (growthhub.edgeacademy.ae, a separate static site).
+ */
 
 const SOURCE_DETAIL = "Free live class landing page";
+const GROWTH_HUB_DETAIL = "Forex Growth Hub";
+
+type Utm = { source?: string; medium?: string; campaign?: string; content?: string; term?: string };
 
 /** The class to show, or null when switched off. A date that has already ended is dropped, not the class. */
 export async function getPublicFreeClass(): Promise<FreeClassDto | null> {
@@ -22,8 +28,7 @@ export async function getPublicFreeClass(): Promise<FreeClassDto | null> {
 }
 
 /** wa.me link with the visitor's first message typed in; they press send, so the conversation is theirs. */
-export function freeClassWhatsappUrl(phone: string, greet: string, visitor: string, title?: string | null) {
-  const text = `Hi ${greet}, I'm ${visitor}. I'd like to join the free live trading class${title ? ` (${title})` : ""}. Please send me the details.`;
+function whatsappLink(phone: string, text: string) {
   return `https://wa.me/${whatsappDigits(phone)}?text=${encodeURIComponent(text)}`;
 }
 
@@ -39,19 +44,26 @@ async function contactFor(ownerId: string | null) {
 
 /**
  * Create (or refresh) the CRM lead in the General project, round-robin it to a sales executive who has a phone,
- * and return the WhatsApp link the visitor is sent to.
+ * note on the timeline where the visitor was sent, and return the WhatsApp link.
  */
-export async function captureFreeClassLead(input: {
+async function captureLandingLead(input: {
   name: string;
   phone: string;
-  utm?: { source?: string; medium?: string; campaign?: string; content?: string; term?: string };
+  /** A second number of the visitor's: an existing lead under either number is theirs. */
+  altPhone?: string | null;
+  message?: string;
+  page: string;
+  tags: string[];
+  /** Short id for the timeline entry (data.landing) and the page named in it. */
+  landing: { id: string; label: string };
+  utm?: Utm;
+  text: (greet: string, visitor: string) => string;
 }) {
-  const fc = await getSetting("marketing.freeClass");
   const out = await ingestInboundLead(
     "website",
-    { name: input.name, phone: input.phone, page: SOURCE_DETAIL, utm: input.utm, whatsappConsent: true, tags: ["free-live-class"] },
+    { name: input.name, phone: input.phone, message: input.message, page: input.page, utm: input.utm, whatsappConsent: true, tags: input.tags },
     null,
-    { assignExecWithPhone: true },
+    { assignExecWithPhone: true, altPhone: input.altPhone },
   );
   const contact = await contactFor(out.ownerId);
   if (contact)
@@ -60,12 +72,51 @@ export async function captureFreeClassLead(input: {
       "SYSTEM",
       { type: "WEBHOOK", id: "leads:website" },
       {
-        body: `Sent to ${contact.exec ? `${contact.name}'s` : "the academy support"} WhatsApp from the free class page. Expect their message.`,
-        data: { landing: "free-class", whatsapp: contact.phone },
+        body: `Sent to ${contact.exec ? `${contact.name}'s` : "the academy support"} WhatsApp from ${input.landing.label}. Expect their message.`,
+        data: { landing: input.landing.id, whatsapp: contact.phone },
       },
     );
   return {
-    whatsappUrl: contact ? freeClassWhatsappUrl(contact.phone, contact.greet, input.name.trim(), fc.enabled ? fc.title : null) : null,
+    whatsappUrl: contact ? whatsappLink(contact.phone, input.text(contact.greet, input.name.trim())) : null,
     contactName: contact?.name ?? null,
   };
+}
+
+/** Free live class landing page. */
+export async function captureFreeClassLead(input: { name: string; phone: string; utm?: Utm }) {
+  const fc = await getSetting("marketing.freeClass");
+  const title = fc.enabled ? fc.title : null;
+  return captureLandingLead({
+    name: input.name,
+    phone: input.phone,
+    page: SOURCE_DETAIL,
+    tags: ["free-live-class"],
+    landing: { id: "free-class", label: "the free class page" },
+    utm: input.utm,
+    text: (greet, visitor) =>
+      `Hi ${greet}, I'm ${visitor}. I'd like to join the free live trading class${title ? ` (${title})` : ""}. Please send me the details.`,
+  });
+}
+
+/**
+ * Forex Growth Hub form (people watching the recorded classes). The lead's phone is the WhatsApp number, which is
+ * where the conversation happens; a different call number is kept in the notes and also used to find a known lead.
+ */
+export async function captureGrowthHubLead(input: { name: string; whatsapp: string; phone?: string; page?: string; utm?: Utm }) {
+  const wa = parsePhone(input.whatsapp)?.e164 ?? null;
+  const call = input.phone?.trim() ? (parsePhone(input.phone)?.e164 ?? null) : null;
+  const otherCall = call && call !== wa ? call : null;
+  return captureLandingLead({
+    name: input.name,
+    phone: input.whatsapp,
+    altPhone: otherCall,
+    // Both numbers, so a known lead found under its call number still gets the WhatsApp one on its timeline.
+    message: otherCall ? `WhatsApp: ${wa}\nPhone (calls): ${otherCall}` : undefined,
+    page: GROWTH_HUB_DETAIL,
+    tags: ["growth-hub"],
+    landing: { id: "growth-hub", label: "Forex Growth Hub" },
+    utm: input.utm,
+    text: (greet, visitor) =>
+      `Hi ${greet}, I'm ${visitor}. I watched the free trading classes on Forex Growth Hub and I'd like to know about your courses. Please send me the details.`,
+  });
 }

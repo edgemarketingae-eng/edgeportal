@@ -15,6 +15,7 @@ import { queueEmail } from "../notifications/email";
 import { flushOutbox } from "../runtime";
 import { createUserWithPasswordHash, tempPassword } from "../staff/service";
 import { findAccountByContact, loadLead, lockLead, recomputeNextFollowUp, recordActivity } from "./common";
+import { recordStudentConversion } from "./products";
 import { assertLeadVisible, type CrmScope } from "./scope";
 
 const SET_PASSWORD_DAYS = 7;
@@ -47,7 +48,8 @@ export async function convertLeadToStudent(
 ) {
   const lead = await loadLead(leadId, o.scope);
   if (lead.mergedIntoId) throw new TransitionError("This lead was merged into another lead");
-  if (lead.stage === "CONVERTED" || lead.studentId) throw new TransitionError("This lead is already a student");
+  // A lead already converted to a product (e.g. Inner Circle) can still become a student.
+  if (lead.studentId) throw new TransitionError("This lead is already a student");
   if (!lead.phone) throw new BusinessError("Add a mobile number before converting", { phone: "Required" });
   if (!lead.email) throw new BusinessError("Add an email before converting", { email: "Required" });
   const account = await findAccountByContact({ phone: lead.phone, email: lead.email });
@@ -62,13 +64,14 @@ export async function convertLeadToStudent(
   const token = mintSetPasswordToken();
   const at = now();
   const result = await withTx(async () => {
-    const l = await lockLead(lead._id, { studentId: null, stage: { $ne: "CONVERTED" } });
+    const l = await lockLead(lead._id, { studentId: null });
     const userId = await createUserWithPasswordHash({ name: l.name, email: l.email!, passwordHash, emailVerified: false });
     await StudentProfile.create([
       {
         _id: userId,
         country: l.country ?? (l.phone ? parsePhone(l.phone)?.country : null) ?? HOME_COUNTRY,
         pendingPhone: l.phone,
+        jetaFxClientId: l.jetaFxClientId ?? null,
         marketingConsent: !!l.consent?.marketing,
         marketingConsentAt: l.consent?.marketingAt ?? null,
       },
@@ -99,8 +102,8 @@ export async function convertLeadToStudent(
           stageChangedAt: at,
           studentId: userId,
           enrollmentId,
-          convertedAt: at,
-          convertedById: oid(o.actor.id),
+          convertedAt: l.convertedAt ?? at,
+          convertedById: l.convertedById ?? oid(o.actor.id),
           lastActivityAt: at,
         },
       },
@@ -113,6 +116,7 @@ export async function convertLeadToStudent(
         emailSent: o.sendSetPassword !== false,
       },
     });
+    await recordStudentConversion(l._id, o.actor, at);
     await audit({
       actor: o.actor,
       action: "lead.convert",
@@ -176,13 +180,14 @@ export async function linkLeadToStudent(leadId: string, studentId: string, actor
             stageChangedAt: at,
             studentId: sid,
             enrollmentId: enrollment?._id ?? null,
-            convertedAt: at,
-            convertedById: oid(actor.id),
+            convertedAt: lead.convertedAt ?? at,
+            convertedById: lead.convertedById ?? oid(actor.id),
             lastActivityAt: at,
           },
         },
       );
       await recordActivity(lead._id, "LINKED", actor, { data: { studentId, name: user.name, via: "manual" } });
+      await recordStudentConversion(lead._id, actor, at);
       await audit({ actor, action: "lead.link", entityType: "Lead", entityId: leadId, after: { studentId } });
     });
   } catch (e) {

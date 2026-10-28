@@ -13,3 +13,6 @@ export * from "./import";
 export * from "./round-robin";
 export * from "./jobs";
 export * from "./settings";
+export * from "./products";
+export * from "./deposits";
+export * from "./leaderboard";

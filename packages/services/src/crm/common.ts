@@ -1,6 +1,7 @@
 import type { LeadActivityDto, LeadDto, LeadListItem, TaskDto } from "@edge/contracts";
 import {
   AuthUser,
+  CrmProduct,
   CrmTask,
   DbNotFoundError,
   Enrollment,
@@ -23,10 +24,12 @@ import {
   type FollowUpType,
   type LeadActivityType,
   type LeadChannel,
+  type LeaderboardPeriod,
   type LeadTouchType,
   type TaskPriority,
 } from "@edge/domain/crm/enums";
-import { fromDubaiLocal } from "@edge/domain/dates";
+import { normalizeLanguage } from "@edge/domain/crm/machine";
+import { dubaiDateString, fromDubaiLocal, startOfDubaiDay } from "@edge/domain/dates";
 import type { Actor } from "@edge/domain/enums";
 import { parsePhone } from "@edge/domain/phone";
 import { env } from "../env";
@@ -38,6 +41,30 @@ import { assertLeadVisible, type CrmScope } from "./scope";
 export const leadHref = (id: Types.ObjectId | string) => `${env.CRM_APP_URL}/leads/${id}`;
 export const taskHref = (id: Types.ObjectId | string) => `${env.CRM_APP_URL}/tasks/${id}`;
 export const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Dubai midnight of the first day of the month that contains `at`. */
+export function startOfDubaiMonth(at: Date) {
+  return startOfDubaiDay(new Date(`${dubaiDateString(at).slice(0, 7)}-01T00:00:00Z`));
+}
+
+/**
+ * A reporting period (Dubai calendar) as instants (`from`/`to`, for timestamps) and as date-only values
+ * (`fromDay`/`toDay`, UTC midnight, for fields such as a deposit date). Open ends are null.
+ */
+export function periodRange(period: LeaderboardPeriod, at: Date) {
+  if (period === "all") return { from: null, to: null, fromDay: null, toDay: null };
+  const [y, m] = dubaiDateString(at).split("-").map(Number) as [number, number];
+  const first = period === "year" ? 1 : period === "quarter" ? m - ((m - 1) % 3) : period === "lastMonth" ? m - 1 : m;
+  const fromDay = new Date(Date.UTC(y, first - 1, 1)); // month 0 rolls back to December
+  const toDay = period === "lastMonth" ? new Date(Date.UTC(y, m - 1, 1)) : null;
+  return { from: startOfDubaiDay(fromDay), to: toDay ? startOfDubaiDay(toDay) : null, fromDay, toDay };
+}
+
+/** `{ $gte, $lt }` for a range with optional ends; undefined when both are open. */
+export function between(from: Date | null, to: Date | null) {
+  if (!from && !to) return undefined;
+  return { ...(from ? { $gte: from } : {}), ...(to ? { $lt: to } : {}) };
+}
 
 /** Empty -> null; otherwise a valid E.164 number or a field error. */
 export function normalizePhone(input: string | null | undefined, country?: string | null, field = "phone"): string | null {
@@ -97,10 +124,14 @@ export async function lockLead(_id: Types.ObjectId, extra: Record<string, unknow
   }
 }
 
-/** Other live leads sharing this phone or email (across every project: duplicates are global). */
-export async function findDuplicateLeads(contact: { phone: string | null; email: string | null }, excludeId?: Types.ObjectId) {
+/** Other live leads sharing this phone (or second phone) or email (across every project: duplicates are global). */
+export async function findDuplicateLeads(
+  contact: { phone: string | null; email: string | null; altPhone?: string | null },
+  excludeId?: Types.ObjectId,
+) {
   const or: Record<string, unknown>[] = [];
   if (contact.phone) or.push({ phone: contact.phone });
+  if (contact.altPhone && contact.altPhone !== contact.phone) or.push({ phone: contact.altPhone });
   if (contact.email) or.push({ email: contact.email });
   if (!or.length) return [];
   return Lead.find({ mergedIntoId: null, $or: or, ...(excludeId ? { _id: { $ne: excludeId } } : {}) })
@@ -240,6 +271,8 @@ export interface LeadRefs {
   courses: Map<string, string>;
   batches: Map<string, string>;
   projects: Map<string, { name: string; code: string }>;
+  /** Product names by id (see productNames). */
+  products: Map<string, string>;
 }
 
 export function toLeadListItem(l: LeadDoc, refs: LeadRefs): LeadListItem {
@@ -265,13 +298,15 @@ export function toLeadListItem(l: LeadDoc, refs: LeadRefs): LeadListItem {
     createdAt: iso(l.createdAt)!,
     studentId: l.studentId ? String(l.studentId) : null,
     lostReason: l.lostReason ?? null,
+    language: normalizeLanguage(l.language),
+    jetaFxClientId: l.jetaFxClientId ?? null,
+    products: (l.productIds ?? []).map((id) => ({ id: String(id), name: refs.products.get(String(id)) ?? "Unknown product" })),
   };
 }
 
 export function toLeadDto(l: LeadDoc, refs: LeadRefs): LeadDto {
   return {
     ...toLeadListItem(l, refs),
-    language: l.language ?? null,
     preferredChannel: (l.preferredChannel as LeadDto["preferredChannel"]) ?? null,
     experienceLevel: (l.experienceLevel as LeadDto["experienceLevel"]) ?? null,
     courseInterestId: l.courseInterestId ? String(l.courseInterestId) : null,
@@ -287,6 +322,11 @@ export function toLeadDto(l: LeadDoc, refs: LeadRefs): LeadDto {
     notes: l.notes ?? null,
     score: l.score ?? 0,
     consent: { marketing: !!l.consent?.marketing, marketingAt: iso(l.consent?.marketingAt), whatsapp: !!l.consent?.whatsapp },
+    qualification: {
+      experience: l.qualification?.experience ?? null,
+      occupation: l.qualification?.occupation ?? null,
+      purpose: l.qualification?.purpose ?? null,
+    },
     lostNote: l.lostNote ?? null,
     stageChangedAt: iso(l.stageChangedAt),
     firstContactedAt: iso(l.firstContactedAt),
@@ -309,6 +349,12 @@ export function toActivityDto(a: LeadActivityDoc, names: Map<string, string>): L
     actorName: a.actorType === "USER" && a.actorId ? (names.get(a.actorId) ?? null) : null,
     createdAt: iso(a.createdAt)!,
   };
+}
+
+/** Every product's name by id (a handful of rows, so no id filter). */
+export async function productNames() {
+  const rows = await CrmProduct.find({}, { name: 1 }).lean();
+  return new Map(rows.map((p) => [String(p._id), p.name]));
 }
 
 /** Project names/codes for a set of ids. */

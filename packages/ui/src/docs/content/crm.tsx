@@ -1,4 +1,5 @@
 import {
+  Banknote,
   CheckSquare,
   FolderKanban,
   GraduationCap,
@@ -6,8 +7,10 @@ import {
   KeyRound,
   LayoutDashboard,
   MessageSquareText,
+  Package,
   Settings,
   Trash2,
+  Trophy,
   Upload,
   Users,
   UsersRound,
@@ -128,14 +131,16 @@ export const crmDocs: DocModule[] = [
                   "CRM admin",
                   <>
                     Everything in the CRM. Sees every project and every lead. Also adds and manages CRM staff, edits CRM roles, changes CRM
-                    settings, imports leads, merges duplicates and can delete leads. Must use two-factor sign-in.
+                    settings, imports leads, merges duplicates and can delete leads. The only CRM role that sets commission rates, verifies
+                    JetaFX deposits and sees everyone&apos;s commission. Must use two-factor sign-in.
                   </>,
                 ],
                 [
                   "CRM manager",
                   <>
                     Sees every project and every lead. Creates projects and picks their managers and team, assigns leads to anyone, converts
-                    leads, changes CRM settings, imports leads and merges duplicates. Does not manage staff accounts.
+                    leads, manages products, changes CRM settings, imports leads and merges duplicates. Does not manage staff accounts or
+                    commission.
                   </>,
                 ],
                 [
@@ -149,8 +154,9 @@ export const crmDocs: DocModule[] = [
                   "Sales executive",
                   <>
                     Works their own leads and follow-ups. Also sees the <b>unassigned</b> leads of their projects and of the General
-                    project, and can claim them. Can convert their leads into students. Receives round-robin leads in the projects they are
-                    on and in the General project.
+                    project, and can claim them. Can convert their leads into students, mark product conversions and log JetaFX deposits,
+                    which earn them commission once verified. Receives round-robin leads in the projects they are on and in the General
+                    project.
                   </>,
                 ],
               ]}
@@ -196,6 +202,10 @@ export const crmDocs: DocModule[] = [
               </>
               <>After every call or message, log it on the lead and schedule the next follow-up in the same step.</>
               <>Move leads forward through the stages, and convert them when they are ready to enroll.</>
+              <>
+                Mark each <b>conversion</b> (Inner Circle, the premium course, a club) and log every JetaFX <b>deposit</b> on the lead.
+                Check your place on the <To href="/leaderboard">Leaderboard</To>.
+              </>
             </Steps>
             <P>
               <b>Project manager</b>
@@ -610,11 +620,19 @@ export const crmDocs: DocModule[] = [
             <List>
               <>The buttons at the top for contacting, moving and converting the lead.</>
               <>
-                <Ui>Details</Ui>: stage, next follow-up, course and batch of interest, experience, preferred channel, consent, first and
-                last contact, tags and notes. Press <Ui>Edit</Ui> on the Details card to change them in a dialog, then <Ui>Save lead</Ui>.
+                <Ui>Details</Ui>: stage (with the products the lead converted to), next follow-up, course and batch of interest, experience,
+                preferred channel and language, JetaFX client ID, consent, first and last contact, tags and notes. Press <Ui>Edit</Ui> on
+                the Details card to change them in a dialog, then <Ui>Save lead</Ui>.
               </>
               <>
                 <Ui>Tasks</Ui>: this lead&apos;s open follow-ups.
+              </>
+              <>
+                <Ui>Conversions</Ui> and <Ui>Deposits</Ui>: the products the lead joined and their JetaFX deposits (see Products and
+                conversions, and Deposits and commission).
+              </>
+              <>
+                <Ui>Qualification</Ui>: the answers to the three questions you ask every lead.
               </>
               <>
                 <Ui>Activity</Ui>: the full history of the lead, newest first, and the box for logging what you did. The latest 50 entries
@@ -679,6 +697,32 @@ export const crmDocs: DocModule[] = [
             <P>
               To add a follow-up without logging anything, press <Ui>Follow-up</Ui> in the <Ui>Tasks</Ui> box. Each follow-up there has{" "}
               <Ui>Done</Ui>, <Ui>Reschedule</Ui> and <Ui>Cancel</Ui> buttons (see Tasks and follow-ups).
+            </P>
+          </>
+        ),
+      },
+      {
+        id: "qualification",
+        title: "Qualification questions",
+        body: (
+          <>
+            <P>
+              Ask every lead these three questions and write down what they say in the <Ui>Qualification</Ui> box on the lead page:
+            </P>
+            <List>
+              <>
+                <Ui>Trading experience and capital</Ui>: how long they have traded (demo or live) and how much they can start with.
+              </>
+              <>
+                <Ui>Job and salary or business, and any debts</Ui>: what they do, roughly what they earn, and any loans or debts.
+              </>
+              <>
+                <Ui>Purpose of learning trading</Ui>: a second income, a career, growing savings…
+              </>
+            </List>
+            <P>
+              Press <Ui>Save answers</Ui>. You can also fill them in on the <To href="/leads/new">full form</To> when you create the lead,
+              or in the <Ui>Edit</Ui> dialog.
             </P>
           </>
         ),
@@ -856,7 +900,231 @@ export const crmDocs: DocModule[] = [
               notification.
             </P>
             <P>Every payment the student makes is also added to the lead&apos;s timeline as Payment received.</P>
-            <Note kind="info">Converted is never set by hand. It only happens through converting, linking or this automatic linking.</Note>
+            <Note kind="info">
+              Converted is never set with the stage buttons. It happens when you mark a conversion to a product, convert or link the lead,
+              or through this automatic linking. Becoming a student also counts as converting to the premium course (see Products and
+              conversions).
+            </Note>
+          </>
+        ),
+      },
+    ],
+  },
+
+  // ---------------------------------------------------------------------------------------------
+  {
+    slug: "products",
+    title: "Products and conversions",
+    summary: "Marking a lead converted to Inner Circle, the premium course or a club, and managing the product list.",
+    icon: Package,
+    group: "Leads",
+    audience: ["crm.read"],
+    href: "/leads",
+    sections: [
+      {
+        id: "what",
+        title: "What counts as a conversion",
+        body: (
+          <>
+            <P>A lead converts when they join any of the academy&apos;s products. Each one is a conversion:</P>
+            <Terms
+              head={["Product", "When it counts"]}
+              rows={[
+                ["Inner Circle", "They opened an account with JetaFX, our affiliate broker, and deposited the minimum amount."],
+                ["Premium course", "They joined the premium course as a student. Recorded automatically when the lead becomes a student."],
+                ["Wealth Circle, F1 Club and other clubs", "They joined one of the premium online clubs."],
+              ]}
+            />
+            <P>
+              A lead can convert to several products, each once. Every conversion counts for the person who <b>owns the lead</b> at that
+              moment, even when someone else marks it, and shows on the <To href="/leaderboard">Leaderboard</To>.
+            </P>
+          </>
+        ),
+      },
+      {
+        id: "mark",
+        title: "Marking a conversion",
+        body: (
+          <>
+            <Steps>
+              <>Open the lead.</>
+              <>
+                In the <Ui>Conversions</Ui> box, press <Ui>Conversion</Ui>.
+              </>
+              <>Tick every product the lead has joined. Add a note if useful.</>
+              <>
+                Press <Ui>Mark converted</Ui>.
+              </>
+            </Steps>
+            <P>
+              The lead moves to <b>Converted</b>, the products appear next to its stage, and the conversion is added to the timeline.
+              Converted leads leave the default Open view of the leads list: use the <Ui>Converted</Ui> view or the <Ui>Converted to</Ui>{" "}
+              filter to find them again (for example to log a 2nd deposit).
+            </P>
+            <Note kind="info">
+              Converting a lead to a product doesn&apos;t create a student account. When they join the course, use{" "}
+              <Ui>Convert to student</Ui> as usual; that records the premium course conversion for you.
+            </Note>
+            <P>
+              A mistake? CRM managers and CRM admins see <Ui>Remove</Ui> next to each conversion. Removing a lead&apos;s only conversion
+              reopens it at the stage it had before (unless it is a student).
+            </P>
+          </>
+        ),
+      },
+      {
+        id: "manage",
+        title: "Managing products (CRM managers and admins)",
+        body: (
+          <>
+            <P>
+              <To href="/products">Products</To> lists every product with its conversions this month and in total.
+            </P>
+            <List>
+              <>
+                <Ui>New product</Ui> adds one (for example a new club). Give it a <Ui>Name</Ui>, an optional description and its{" "}
+                <Ui>Order in lists</Ui>.
+              </>
+              <>
+                <Ui>Edit</Ui> renames it or changes its <Ui>Status</Ui>. Archived products disappear from the conversion dialog but keep
+                their history. Products are never deleted.
+              </>
+              <>
+                <Ui>Student course</Ui>: tick it on the product that a lead becoming a student counts as (Premium course). Only one product
+                can have it; students who converted before are added to it automatically.
+              </>
+            </List>
+          </>
+        ),
+      },
+    ],
+  },
+
+  // ---------------------------------------------------------------------------------------------
+  {
+    slug: "deposits",
+    title: "Deposits and commission",
+    summary: "Logging a lead's JetaFX deposits, how they are verified and the commission you earn on them.",
+    icon: Banknote,
+    group: "Leads",
+    audience: ["crm.write", "crm.commission.manage"],
+    href: "/deposits",
+    sections: [
+      {
+        id: "log",
+        title: "Logging a deposit",
+        body: (
+          <>
+            <P>Whenever a lead deposits money in their JetaFX account, log it on the lead page:</P>
+            <Steps>
+              <>
+                In the <Ui>Deposits</Ui> box, press <Ui>Deposit</Ui>.
+              </>
+              <>
+                Choose <Ui>Which deposit</Ui>: <Ui>1st deposit</Ui>, <Ui>2nd deposit</Ui> or <Ui>Later deposit</Ui>. The next one is picked
+                for you.
+              </>
+              <>
+                Enter the <Ui>Amount (USD)</Ui> and the <Ui>Deposit date</Ui>. If the lead has no JetaFX client ID yet, enter it too; it is
+                saved on the lead.
+              </>
+              <>
+                Add the <Ui>Broker reference (optional)</Ui>, the JetaFX transaction ID, if you have it, and press <Ui>Log deposit</Ui>.
+              </>
+            </Steps>
+            <P>
+              The deposit is <b>Pending</b> until a CRM admin checks it against the JetaFX report. A lead has at most one 1st and one 2nd
+              deposit; log the rest as later deposits. Logged one by mistake? Press <Ui>Delete</Ui> while it is still pending.
+            </P>
+          </>
+        ),
+      },
+      {
+        id: "commission",
+        title: "How commission works",
+        body: (
+          <>
+            <List>
+              <>
+                Commission is a fixed percent of each <b>verified</b> deposit, with its own rate for 1st, 2nd and later deposits. CRM admins
+                set the rates in Settings.
+              </>
+              <>
+                It goes to the person who <b>owned the lead when the deposit was logged</b> (whoever logged it, if the lead was unassigned).
+                Reassigning the lead later doesn&apos;t move it.
+              </>
+              <>The rate is fixed when the deposit is verified. You get a notification with the amount.</>
+              <>A rejected deposit earns nothing; you are told why.</>
+            </List>
+            <P>
+              <To href="/deposits">Deposits</To> lists the deposits on your leads with their status and your commission. Your total is also
+              on the <To href="/leaderboard">Leaderboard</To>. Only you and the CRM admins see your commission.
+            </P>
+          </>
+        ),
+      },
+      {
+        id: "verify",
+        title: "Verifying deposits (CRM admins)",
+        body: (
+          <>
+            <Steps>
+              <>
+                Open <To href="/deposits">Deposits</To> and press <Ui>Waiting for verification</Ui> (or filter <Ui>Status</Ui> to Pending).
+              </>
+              <>Compare each one with the JetaFX report: client ID, amount and date.</>
+              <>
+                Press <Ui>Verify</Ui> and confirm. The commission is calculated with today&apos;s rate.
+              </>
+              <>
+                If it isn&apos;t in the report, press <Ui>Reject</Ui> and give a <Ui>Reason</Ui>. A verified deposit that the broker
+                reversed can be rejected too; its commission is removed.
+              </>
+            </Steps>
+            <P>
+              Each person&apos;s total commission is on their page under <To href="/team">Team</To>. Use the <Ui>Credited to</Ui> filter on
+              Deposits to see one person&apos;s deposits.
+            </P>
+          </>
+        ),
+      },
+    ],
+  },
+
+  // ---------------------------------------------------------------------------------------------
+  {
+    slug: "leaderboard",
+    title: "Leaderboard",
+    summary: "How sales executives are ranked: conversions, new leads, conversion rate and verified deposits.",
+    icon: Trophy,
+    group: "Leads",
+    audience: ["crm.read"],
+    href: "/leaderboard",
+    sections: [
+      {
+        id: "ranking",
+        title: "How the ranking works",
+        body: (
+          <>
+            <P>
+              <To href="/leaderboard">Leaderboard</To> ranks everyone with the Sales executive role (and anyone else with conversions) for
+              the chosen <Ui>Period</Ui>, across all projects or one <Ui>Project</Ui>.
+            </P>
+            <Terms
+              head={["Column", "What it counts"]}
+              rows={[
+                [<Ui key="a">Conversions</Ui>, "Product conversions credited to the person in the period. This decides the rank."],
+                ["Each product", "The same conversions, per product."],
+                [<Ui key="b">New leads</Ui>, "Leads they own that were created in the period."],
+                [<Ui key="c">Converted</Ui>, "How many of those new leads converted (to anything), and the percent."],
+                [<Ui key="d">Verified deposits</Ui>, "The JetaFX deposits on their leads verified in the period. Breaks ties."],
+              ]}
+            />
+            <P>
+              The cards at the top show your own conversions, verified deposits, commission and the deposits still waiting for verification.
+              CRM admins also see everyone&apos;s <Ui>Commission</Ui> column.
+            </P>
           </>
         ),
       },
@@ -1350,6 +1618,10 @@ export const crmDocs: DocModule[] = [
                 The <Ui>Projects</Ui> box lists their projects. To add them to a project, open the project and press <Ui>Add people</Ui> on
                 the <Ui>Team</Ui> card; to take them off, press <Ui>Remove</Ui> next to their name there.
               </>
+              <>
+                The <Ui>Commission</Ui> box (CRM admins only) shows the commission they have earned in total, this month and last month, the
+                deposits waiting for verification, their conversions and their latest deposits. <Ui>All their deposits</Ui> opens the list.
+              </>
             </List>
             <Note kind="warning">
               Before disabling someone who is leaving, reassign their open leads. Use the <Ui>Owner</Ui> filter on Leads to find them,
@@ -1495,7 +1767,8 @@ export const crmDocs: DocModule[] = [
   {
     slug: "settings",
     title: "CRM settings",
-    summary: "Pipeline rules (first response, cold leads, batch reminders, round-robin, lost reasons) and the website lead form.",
+    summary:
+      "Pipeline rules (first response, cold leads, batch reminders, round-robin, lost reasons), commission rates and the website lead form.",
     icon: Settings,
     group: "Admin",
     audience: ["crm.manage"],
@@ -1534,6 +1807,23 @@ export const crmDocs: DocModule[] = [
             <P>
               Press <Ui>Save CRM settings</Ui> when you are done.
             </P>
+          </>
+        ),
+      },
+      {
+        id: "commission",
+        title: "Commission rates (CRM admins)",
+        body: (
+          <>
+            <P>
+              The <Ui>Commission on JetaFX deposits</Ui> box sets the percent of each verified deposit that the lead&apos;s owner earns, by
+              which deposit it is: <Ui>1st deposit (%)</Ui>, <Ui>2nd deposit (%)</Ui> and <Ui>Later deposits (%)</Ui> (3rd onwards). Press{" "}
+              <Ui>Save commission rates</Ui>.
+            </P>
+            <Note kind="info">
+              A new rate applies to deposits verified from then on. Deposits that are already verified keep the rate they were verified
+              with.
+            </Note>
           </>
         ),
       },

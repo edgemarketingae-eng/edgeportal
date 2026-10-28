@@ -182,7 +182,7 @@ export function LeadControls({ lead, options, matchingStudent, duplicates, can }
           </div>
         </ActionDialog>
       ) : null}
-      {can.convert && open && !lead.studentId && !matchingStudent ? (
+      {can.convert && !lead.mergedIntoId && !lead.studentId && !matchingStudent ? (
         <ActionDialog
           action={convertAction}
           hidden={hid}
@@ -207,7 +207,7 @@ export function LeadControls({ lead, options, matchingStudent, duplicates, can }
           </label>
         </ActionDialog>
       ) : null}
-      {can.convert && open && !lead.studentId && matchingStudent ? (
+      {can.convert && !lead.mergedIntoId && !lead.studentId && matchingStudent ? (
         <ActionDialog
           action={linkStudentAction}
           hidden={{ ...hid, studentId: matchingStudent.id }}

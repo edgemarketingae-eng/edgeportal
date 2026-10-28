@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { csvToObjects, parseCsv } from "../src/csv";
 import { fromDubaiLocal, startOfDubaiDay, toDubaiLocal } from "../src/dates";
-import { canTransition, isStale, isUncontacted, nextStage, parseTags, stageIndex, whatsappDigits } from "../src/crm/machine";
+import {
+  canTransition,
+  isStale,
+  isUncontacted,
+  nextStage,
+  normalizeLanguage,
+  parseTags,
+  stageIndex,
+  whatsappDigits,
+} from "../src/crm/machine";
+import { commissionFor, fractionToPercent, percentToFraction, rateFor } from "../src/crm/commission";
 import { ALL_PERMISSIONS, CRM_PERMISSIONS, isCrmRole, isPermission, RETIRED_SYSTEM_ROLES, SYSTEM_ROLES } from "../src/auth/permissions";
 import { CLOSED_TASK_STATUSES, CRM_TASK_STATUSES, OPEN_TASK_STATUSES } from "../src/crm/enums";
 
@@ -59,9 +69,10 @@ describe("permissions and CRM roles", () => {
       "crm.staff.manage",
       "crm.roles.manage",
       "crm.leads.delete",
+      "crm.commission.manage",
     ])
       expect(isPermission(p)).toBe(true);
-    expect(CRM_PERMISSIONS.length).toBe(11);
+    expect(CRM_PERMISSIONS.length).toBe(12);
     expect(CRM_PERMISSIONS.every((p) => p.startsWith("crm."))).toBe(true);
     for (const r of SYSTEM_ROLES) for (const p of r.permissions) expect(ALL_PERMISSIONS).toContain(p);
   });
@@ -75,6 +86,10 @@ describe("permissions and CRM roles", () => {
     for (const key of ["super_admin", "admin", "crm_admin"]) expect(role(key).permissions, key).toContain("crm.leads.delete");
     for (const key of ["crm_manager", "project_manager", "sales_executive"])
       expect(role(key).permissions, key).not.toContain("crm.leads.delete");
+    // Commission (rates, verifying deposits, everyone's totals) likewise.
+    for (const key of ["super_admin", "admin", "crm_admin"]) expect(role(key).permissions, key).toContain("crm.commission.manage");
+    for (const key of ["crm_manager", "project_manager", "sales_executive"])
+      expect(role(key).permissions, key).not.toContain("crm.commission.manage");
     expect(role("project_manager").permissions).toContain("crm.assign");
     expect(role("project_manager").permissions).not.toContain("crm.all");
     expect(role("sales_executive").permissions).toEqual(expect.arrayContaining(["crm.access", "crm.read", "crm.write", "crm.convert"]));
@@ -118,5 +133,43 @@ describe("dubai local date helpers", () => {
     expect(toDubaiLocal(d)).toBe("2026-10-23T09:30");
     expect(fromDubaiLocal("nope")).toBeNull();
     expect(startOfDubaiDay(new Date("2026-10-23T05:30:00Z")).toISOString()).toBe("2026-10-22T20:00:00.000Z");
+  });
+});
+
+describe("lead language", () => {
+  it("maps free text onto the dropdown values", () => {
+    expect(normalizeLanguage("English")).toBe("ENGLISH");
+    expect(normalizeLanguage(" malayalam ")).toBe("MALAYALAM");
+    expect(normalizeLanguage("TAMIL")).toBe("TAMIL");
+    expect(normalizeLanguage("hindi")).toBe("HINDI");
+    expect(normalizeLanguage("Arabic")).toBe("OTHER");
+    expect(normalizeLanguage("")).toBeNull();
+    expect(normalizeLanguage(null)).toBeNull();
+  });
+});
+
+describe("commission", () => {
+  const rates = { firstPct: "0.1", secondPct: "0.05", laterPct: "0.025" };
+
+  it("picks the rate for the deposit sequence", () => {
+    expect(rateFor(rates, "FIRST")).toBe("0.1");
+    expect(rateFor(rates, "SECOND")).toBe("0.05");
+    expect(rateFor(rates, "LATER")).toBe("0.025");
+  });
+
+  it("rounds half up to a whole cent", () => {
+    expect(commissionFor(100_000, "0.1")).toBe(10_000);
+    expect(commissionFor(12_345, "0.025")).toBe(309); // 308.625
+    expect(commissionFor(10, "0.05")).toBe(1); // 0.5
+    expect(commissionFor(100_000, "0")).toBe(0);
+    expect(() => commissionFor(100, "1.5")).toThrow();
+    expect(() => commissionFor(-1, "0.1")).toThrow();
+  });
+
+  it("converts admin percentages to stored fractions and back", () => {
+    expect(percentToFraction(10)).toBe("0.100000");
+    expect(percentToFraction(2.5)).toBe("0.025000");
+    expect(fractionToPercent("0.025000")).toBe(2.5);
+    expect(fractionToPercent("0")).toBe(0);
   });
 });

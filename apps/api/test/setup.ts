@@ -11,6 +11,7 @@ Object.assign(process.env, {
   STUDENT_APP_URL: "http://student.localhost:3000",
   CONSOLE_APP_URL: "http://console.localhost:3001",
   CRM_APP_URL: "http://crm.localhost:3002",
+  PUBLIC_FORM_ORIGINS: "https://growthhub.example, http://localhost:8080/",
   OTP_MODE: "mock",
   EMAIL_MODE: "console",
   PAYMENTS_MODE: "mock",

@@ -4,6 +4,7 @@ import { freezeClock, setClock } from "@edge/domain/clock";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   captureFreeClassLead,
+  captureGrowthHubLead,
   createLead,
   createStaff,
   getDefaultProject,
@@ -149,6 +150,89 @@ describe("free class landing", () => {
     expect((await getPublicFreeClass())!.startsAt).toBe(fc.startsAt); // started an hour ago, still running
     await setSetting("marketing.freeClass", { ...fc, startsAt: "2026-10-06T03:00:00.000Z" });
     expect(await getPublicFreeClass()).toMatchObject({ title: "Live Class", startsAt: null });
+  });
+});
+
+describe("Forex Growth Hub form", () => {
+  it("creates the lead under the WhatsApp number, keeps a different call number and links to the exec's WhatsApp", async () => {
+    const e = await exec("Hana Hub", "+971500000051");
+    const r = await captureGrowthHubLead({
+      name: "Ravi Kumar",
+      whatsapp: "+971 551110001",
+      phone: "+91 9876543210",
+      page: "https://growthhub.edgeacademy.ae/",
+      utm: { source: "ig", medium: "social" },
+    });
+    expect(r.contactName).toBe("Hana Hub");
+    expect(r.whatsappUrl).toMatch(/^https:\/\/wa\.me\/971500000051\?text=/);
+    expect(textOf(r.whatsappUrl!)).toBe(
+      "Hi Hana, I'm Ravi Kumar. I watched the free trading classes on Forex Growth Hub and I'd like to know about your courses. Please send me the details.",
+    );
+
+    const lead = (await Lead.findOne({ phone: "+971551110001" }).lean())!;
+    expect(String(lead.ownerId)).toBe(e);
+    expect(lead.source).toBe("WEBSITE");
+    expect(lead.sourceDetail).toBe("Forex Growth Hub");
+    expect(lead.tags).toContain("growth-hub");
+    expect(lead.notes).toBe("WhatsApp: +971551110001\nPhone (calls): +919876543210");
+    expect(lead.utm).toMatchObject({ source: "ig", medium: "social" });
+    expect(lead.consent?.whatsapp).toBe(true);
+    expect(await LeadActivity.countDocuments({ leadId: lead._id, type: "SYSTEM", "data.landing": "growth-hub" })).toBe(1);
+
+    // The same number for both: nothing extra in the notes.
+    await captureGrowthHubLead({ name: "Same Number", whatsapp: "+971551110002", phone: "+971 55 111 0002" });
+    expect((await Lead.findOne({ phone: "+971551110002" }).lean())!.notes).toBeNull();
+  });
+
+  it("sends a known lead to its own owner, found under the WhatsApp number or the call number", async () => {
+    const owner = await exec("Zara Owner", "+971500000061");
+    await exec("Adam Idle", "+971500000062"); // fewer leads, but never takes a known lead from its owner
+    const g = String((await getDefaultProject())._id);
+    const known = await createLead(
+      { projectId: g, name: "Walk In", phone: "+971551110010", source: "WALK_IN", ownerId: owner },
+      { type: "SYSTEM" },
+    );
+
+    const byWa = await captureGrowthHubLead({ name: "Walk In", whatsapp: "+971551110010" });
+    expect(byWa.contactName).toBe("Zara Owner");
+
+    // Their WhatsApp is a new number; the call number is the one the CRM knows.
+    const byCall = await captureGrowthHubLead({ name: "Walk In", whatsapp: "+971551110099", phone: "+971551110010" });
+    expect(byCall.whatsappUrl).toMatch(/^https:\/\/wa\.me\/971500000061\?/);
+    expect(await Lead.countDocuments({ phone: { $in: ["+971551110010", "+971551110099"] } })).toBe(1);
+    expect(await ownerOf("+971551110010")).toBe(owner);
+    const inbound = await LeadActivity.find({ leadId: new Types.ObjectId(known), type: "INBOUND" }).sort({ createdAt: 1 }).lean();
+    expect(inbound).toHaveLength(2);
+    expect(inbound[1]!.body).toContain("WhatsApp: +971551110099");
+    expect((await Lead.findById(known).lean())!.tags).toContain("growth-hub");
+  });
+
+  it("hands a known lead from an Off owner to an available exec, and uses support WhatsApp when there is none", async () => {
+    const actor = { type: "USER" as const, id: await exec("Boss", undefined, "crm_admin") };
+    const away = await exec("Away Owner", "+971500000071");
+    const g = String((await getDefaultProject())._id);
+    await createLead({ projectId: g, name: "Back Again", phone: "+971551110020", source: "WEBSITE", ownerId: away }, { type: "SYSTEM" });
+    await setStaffAvailable(away, false, actor);
+    await setSetting("academy.profile", {
+      name: "Edge Trading Academy",
+      supportEmail: "support@edgeacademy.ae",
+      supportWhatsapp: "050 765 4321",
+      website: "https://edgeacademy.ae",
+    });
+
+    const support = await captureGrowthHubLead({ name: "Back Again", whatsapp: "+971551110020" });
+    expect(support.contactName).toBe("Edge Trading Academy");
+    expect(support.whatsappUrl).toMatch(/^https:\/\/wa\.me\/971507654321\?/);
+    expect(await ownerOf("+971551110020")).toBe(away);
+
+    const on = await exec("On Duty", "+971500000072");
+    const r = await captureGrowthHubLead({ name: "Back Again", whatsapp: "+971551110020" });
+    expect(r.contactName).toBe("On Duty");
+    expect(await ownerOf("+971551110020")).toBe(on);
+  });
+
+  it("rejects an invalid WhatsApp number", async () => {
+    await expect(captureGrowthHubLead({ name: "Bad Number", whatsapp: "12345" })).rejects.toMatchObject({ status: 422 });
   });
 });
 

@@ -1,4 +1,4 @@
-import { OPEN_LEAD_STAGES, type LeadStage, type OpenLeadStage } from "./enums";
+import { LEAD_LANGUAGES, OPEN_LEAD_STAGES, type LeadLanguage, type LeadStage, type OpenLeadStage } from "./enums";
 
 /**
  * Pure lead pipeline rules. No I/O: the service layer loads the lead, calls these and
@@ -10,7 +10,7 @@ export function isOpenStage(stage: string): stage is OpenLeadStage {
 
 /**
  * Open stages may move forwards or backwards (sales reality), to LOST, and a LOST lead may be
- * reopened. CONVERTED is terminal and is only reached through convert / link (never by hand).
+ * reopened. CONVERTED is terminal and is only reached through a product conversion or convert / link (never by hand).
  */
 export function canTransition(from: LeadStage, to: LeadStage): boolean {
   if (from === to) return false;
@@ -47,10 +47,24 @@ export function isStale(lead: { stage: string; lastActivityAt: Date | null; crea
 /** Split a comma/newline separated tag string into unique, trimmed, lower-case tags. */
 export function parseTags(input: string | null | undefined): string[] {
   if (!input) return [];
-  return [...new Set(input.split(/[,\n]/).map((t) => t.trim().toLowerCase()).filter(Boolean))].slice(0, 30);
+  return [
+    ...new Set(
+      input
+        .split(/[,\n]/)
+        .map((t) => t.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  ].slice(0, 30);
 }
 
 /** Digits-only phone for wa.me links (WhatsApp wants no "+"). */
 export function whatsappDigits(phone: string) {
   return phone.replace(/\D/g, "");
+}
+
+/** A language code from free text ("english", " Malayalam"); blank is null, any other language is OTHER. */
+export function normalizeLanguage(input: string | null | undefined): LeadLanguage | null {
+  const v = input?.trim().toUpperCase();
+  if (!v) return null;
+  return (LEAD_LANGUAGES as readonly string[]).includes(v) ? (v as LeadLanguage) : "OTHER";
 }

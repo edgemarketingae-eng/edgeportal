@@ -28,6 +28,26 @@ export const sameAppOrigin: RequestHandler = (req, _res, next) => {
   next();
 };
 
+/**
+ * CORS for /api/public: the academy's own static sites (allowlisted origins) call these straight from the browser.
+ * Any other browser origin is refused; requests without an Origin (servers, curl) pass, the rate limit still applies.
+ */
+export function publicCors(origins: readonly string[]): RequestHandler {
+  return (req, res, next) => {
+    const origin = req.header("origin");
+    if (origin) {
+      if (!origins.includes(origin)) return next(new ApiError(403, "FORBIDDEN", "Origin not allowed"));
+      res.vary("Origin");
+      res.setHeader("Access-Control-Allow-Origin", origin);
+    }
+    if (req.method !== "OPTIONS") return next();
+    res.setHeader("Access-Control-Allow-Methods", "POST");
+    res.setHeader("Access-Control-Allow-Headers", "content-type");
+    res.setHeader("Access-Control-Max-Age", "600");
+    res.status(204).end();
+  };
+}
+
 /** Resolve the Better Auth session (without refreshing it) and the viewer. */
 export function loadViewerMiddleware(auth: Auth): RequestHandler {
   return async (req, _res, next) => {

@@ -14,17 +14,22 @@ import {
   convertLeadToStudent,
   createCrmStaff,
   createLead,
+  createProduct,
   createProject,
   createTask,
+  deleteDeposit,
   deleteLead,
   dueTaskCount,
   getBoard,
+  getCommissionSettings,
   getCrmDashboard,
   getCrmOptions,
   getCrmSettings,
   getCrmStaff,
   getLeadDetail,
+  getLeaderboard,
   getProject,
+  getStaffCommission,
   getTaskDetail,
   handleLeadWebhook,
   importLeads,
@@ -32,18 +37,25 @@ import {
   linkLeadToStudent,
   listCrmRoles,
   listCrmStaff,
+  listDeposits,
   listLeads,
+  listProducts,
   listProjects,
   listTasks,
   loadCrmScope,
+  logDeposit,
+  markConversions,
   mergeLeads,
   moveLeadToProject,
   moveTask,
   previewImport,
+  rejectDeposit,
+  removeConversion,
   removeProjectMember,
   resendWelcome,
   resetCrmStaffPassword,
   rescheduleTask,
+  saveCommissionSettings,
   saveCrmRole,
   saveCrmSettings,
   setCrmStaffAvailable,
@@ -52,8 +64,10 @@ import {
   setStage,
   updateCrmStaff,
   updateLead,
+  updateProduct,
   updateProject,
   updateTask,
+  verifyDeposit,
 } from "@edge/services";
 import { fromNodeHeaders } from "better-auth/node";
 import express, { Router, type Request } from "express";
@@ -177,6 +191,51 @@ export function crmRouter() {
     return ok("Leads merged.");
   });
 
+  // Product conversions, broker deposits and the leaderboard
+  register(r, crmRoutes.markConversions, async (req) => {
+    const { actor, scope } = await crm(req, "crm.write");
+    const n = await markConversions(req.valid.params.id, req.valid.body, actor, scope);
+    return ok(n > 1 ? `Marked ${n} conversions.` : "Conversion marked.");
+  });
+  register(r, crmRoutes.removeConversion, async (req) => {
+    const { actor, scope } = await crm(req, "crm.manage");
+    await removeConversion(req.valid.params.id, actor, scope);
+    return ok("Conversion removed.");
+  });
+  register(r, crmRoutes.logDeposit, async (req) => {
+    const { actor, scope } = await crm(req, "crm.write");
+    return { id: await logDeposit(req.valid.params.id, req.valid.body, actor, scope) };
+  });
+  register(r, crmRoutes.deposits, async (req) => listDeposits(req.valid.query, (await crm(req, "crm.read")).scope));
+  register(r, crmRoutes.verifyDeposit, async (req) => {
+    const { actor, scope } = await crm(req, "crm.commission.manage");
+    await verifyDeposit(req.valid.params.id, actor, scope);
+    return ok("Deposit verified. Commission recorded.");
+  });
+  register(r, crmRoutes.rejectDeposit, async (req) => {
+    const { actor, scope } = await crm(req, "crm.commission.manage");
+    await rejectDeposit(req.valid.params.id, req.valid.body.reason, actor, scope);
+    return ok("Deposit rejected.");
+  });
+  register(r, crmRoutes.deleteDeposit, async (req) => {
+    const { actor, scope } = await crm(req, "crm.write");
+    await deleteDeposit(req.valid.params.id, actor, scope);
+    return ok("Deposit deleted.");
+  });
+  register(r, crmRoutes.leaderboard, async (req) => getLeaderboard(req.valid.query, (await crm(req, "crm.read")).scope));
+
+  // Products (what a lead can convert to)
+  register(r, crmRoutes.products, async (req) => listProducts((await crm(req, "crm.manage")).scope));
+  register(r, crmRoutes.createProduct, async (req) => {
+    const { actor, scope } = await crm(req, "crm.manage");
+    return { id: await createProduct(req.valid.body, actor, scope) };
+  });
+  register(r, crmRoutes.updateProduct, async (req) => {
+    const { actor, scope } = await crm(req, "crm.manage");
+    await updateProduct(req.valid.params.id, req.valid.body, actor, scope);
+    return ok("Product saved.");
+  });
+
   // Tasks and board
   register(r, crmRoutes.board, async (req) => getBoard((await crm(req, "crm.read")).scope, req.valid.query));
   register(r, crmRoutes.tasks, async (req) => listTasks((await crm(req, "crm.read")).scope, req.valid.query));
@@ -267,6 +326,9 @@ export function crmRouter() {
     const { actor } = await crm(req, "crm.staff.manage");
     return { ok: true as const, tempPassword: await resetCrmStaffPassword(req.valid.params.id, actor) };
   });
+  register(r, crmRoutes.staffCommission, async (req) =>
+    getStaffCommission(req.valid.params.id, (await crm(req, "crm.commission.manage")).scope),
+  );
   register(r, crmRoutes.roles, async (req) => (await crm(req, "crm.staff.manage"), listCrmRoles()));
   register(r, crmRoutes.saveRole, async (req) => ({ id: await saveCrmRole(req.valid.body, (await crm(req, "crm.roles.manage")).actor) }));
 
@@ -275,6 +337,11 @@ export function crmRouter() {
   register(r, crmRoutes.saveSettings, async (req) => {
     await saveCrmSettings(req.valid.body, (await crm(req, "crm.manage")).actor);
     return ok("CRM settings saved.");
+  });
+  register(r, crmRoutes.commissionSettings, async (req) => (await crm(req, "crm.commission.manage"), getCommissionSettings()));
+  register(r, crmRoutes.saveCommissionSettings, async (req) => {
+    await saveCommissionSettings(req.valid.body, (await crm(req, "crm.commission.manage")).actor);
+    return ok("Commission rates saved. They apply to deposits verified from now on.");
   });
   register(
     r,

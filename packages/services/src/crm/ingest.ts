@@ -2,7 +2,7 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { Course, Lead, LeadInboundEvent, Project, Types, withTx, type LeadInboundEventDoc } from "@edge/db";
 import { now } from "@edge/domain/clock";
 import { INBOUND_SOURCES } from "@edge/domain/crm/enums";
-import { parseTags } from "@edge/domain/crm/machine";
+import { normalizeLanguage, parseTags } from "@edge/domain/crm/machine";
 import { isCountryCode } from "@edge/domain/countries";
 import { parsePhone } from "@edge/domain/phone";
 import { ApiError } from "@edge/contracts";
@@ -130,14 +130,15 @@ async function matchCourse(text?: string) {
 
 /**
  * Create the lead, or append an INBOUND entry to an existing live lead with the same phone/email.
- * `assignExecWithPhone` (free class landing page) always round-robins an unowned lead to a sales executive
+ * `assignExecWithPhone` (landing pages) always round-robins an unowned lead to a sales executive
  * who has a phone, whatever the CRM's round-robin setting, because the visitor is sent to that person's WhatsApp.
+ * `altPhone` is a second number of the visitor's (e.g. calls vs WhatsApp): an existing lead under it also matches.
  */
 export async function ingestInboundLead(
   source: string,
   p: InboundLeadPayload,
   eventId: Types.ObjectId | null,
-  opts: { assignExecWithPhone?: boolean } = {},
+  opts: { assignExecWithPhone?: boolean; altPhone?: string | null } = {},
 ): Promise<{ leadId: string; existing: boolean; ownerId: string | null }> {
   const email = normalizeEmail(p.email);
   const parsedPhone = p.phone?.trim() ? parsePhone(p.phone, p.country?.toUpperCase()) : null;
@@ -153,7 +154,8 @@ export async function ingestInboundLead(
   const notes = [p.message?.trim(), p.phone && !phone ? `Phone as typed: ${p.phone}` : null].filter(Boolean).join("\n");
   const actor = { type: "WEBHOOK" as const, id: `leads:${source}` };
 
-  const [existing] = await findDuplicateLeads({ phone, email });
+  const altPhone = opts.altPhone?.trim() ? (parsePhone(opts.altPhone, p.country?.toUpperCase())?.e164 ?? null) : null;
+  const [existing] = await findDuplicateLeads({ phone, email, altPhone });
   if (existing) {
     const at = now();
     let ownerId = existing.ownerId ? String(existing.ownerId) : null;
@@ -216,7 +218,7 @@ export async function ingestInboundLead(
       source: "WEBSITE",
       sourceDetail: p.page?.trim() || p.course?.trim() || undefined,
       courseInterestId: (await matchCourse(p.course)) ?? undefined,
-      language: p.language,
+      language: normalizeLanguage(p.language) ?? undefined,
       tags: (p.tags ?? []).join(","),
       notes: notes || undefined,
       marketingConsent: !!p.consent,

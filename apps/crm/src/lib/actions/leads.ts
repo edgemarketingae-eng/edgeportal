@@ -22,6 +22,10 @@ const LEAD_FIELDS = [
   "temperature",
   "preferredChannel",
   "language",
+  "jetaFxClientId",
+  "qualificationExperience",
+  "qualificationOccupation",
+  "qualificationPurpose",
   "tags",
   "notes",
   "marketingConsent",
@@ -34,6 +38,14 @@ const ACTIVITY_FIELDS = ["type", "body", "outcome", "direction", "nextFollowUpAt
 
 type LeadBody = RouteBody<typeof crmRoutes.create>;
 type LeadFiltersBody = NonNullable<RouteBody<typeof crmRoutes.bulkDelete>["filters"]>;
+
+function qualificationBody(form: FormData): LeadBody["qualification"] {
+  return {
+    experience: text(form, "qualificationExperience"),
+    occupation: text(form, "qualificationOccupation"),
+    purpose: text(form, "qualificationPurpose"),
+  };
+}
 
 function leadBody(form: FormData): LeadBody {
   return {
@@ -49,7 +61,9 @@ function leadBody(form: FormData): LeadBody {
     experienceLevel: text(form, "experienceLevel") as LeadBody["experienceLevel"],
     temperature: text(form, "temperature") as LeadBody["temperature"],
     preferredChannel: text(form, "preferredChannel") as LeadBody["preferredChannel"],
-    language: text(form, "language"),
+    language: text(form, "language") as LeadBody["language"],
+    jetaFxClientId: text(form, "jetaFxClientId"),
+    qualification: qualificationBody(form),
     tags: text(form, "tags"),
     notes: text(form, "notes"),
     marketingConsent: checked(form, "marketingConsent"),
@@ -75,6 +89,11 @@ export async function saveLeadAction(_prev: ActionState, form: FormData): Promis
   if (created) redirect(`/leads/${created.id}?created=1`);
   refresh();
   return { ok: true, message: "Lead saved." };
+}
+
+/** The Qualification card on the lead page: only the three answers. */
+export async function saveQualificationAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  return run(() => api(crmRoutes.update, { params: { id: text(form, "id") }, body: { qualification: qualificationBody(form) } }));
 }
 
 export async function quickAddLeadAction(_prev: ActionState, form: FormData): Promise<ActionState> {

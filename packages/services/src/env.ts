@@ -20,6 +20,11 @@ const schema = z
     CONSOLE_APP_URL: z.url().default("http://console.localhost:3001"),
     CRM_APP_URL: z.url().default("http://crm.localhost:3002"),
     API_PUBLIC_URL: z.url().default("http://localhost:4000"),
+    /** Comma-separated site origins allowed to call /api/public/* from the browser (e.g. the Forex Growth Hub). */
+    PUBLIC_FORM_ORIGINS: z
+      .string()
+      .default("")
+      .transform((s) => s.split(",").map((o) => o.trim().replace(/\/+$/, "")).filter(Boolean)),
     TZ_DEFAULT: z.string().default("Asia/Dubai"),
     ALLOW_MOCK_IN_PRODUCTION: z.stringbool().default(false),
     REQUIRE_ADMIN_2FA: z.stringbool().optional(),

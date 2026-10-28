@@ -1,15 +1,17 @@
 import "./http/context";
 import { pingDb } from "@edge/db";
+import { env } from "@edge/services";
 import { toNodeHandler } from "better-auth/node";
 import express from "express";
 import helmet from "helmet";
 import { pinoHttp } from "pino-http";
 import type { Auth } from "./auth";
 import { errorHandler } from "./http/errors";
-import { internalOnly, loadViewerMiddleware, requestContext } from "./http/middleware";
+import { internalOnly, loadViewerMiddleware, publicCors, requestContext } from "./http/middleware";
 import { authRouter } from "./routes/auth";
 import { adminRouter } from "./routes/admin";
 import { devRouter } from "./routes/dev";
+import { publicRouter } from "./routes/public";
 import { studentRouter } from "./routes/student";
 import { meRouter } from "./routes/me";
 import { checkoutReturnRouter, paymentsRouter, webhookRouter } from "./routes/payments";
@@ -49,6 +51,9 @@ export function createApp({ auth, logger = true, extraRoutes }: AppOptions) {
   app.use(express.json({ limit: "1mb" }));
   // Browser-facing auth policy endpoints (through the apps' rewrites).
   app.use(authRouter(auth));
+  // Browser-facing forms on the academy's other sites (Forex Growth Hub), straight to the public API host.
+  app.use("/api/public", publicCors(env.PUBLIC_FORM_ORIGINS));
+  app.use(publicRouter());
   // Everything else under /api/v1 is internal: Next.js servers only, with the forwarded session cookie.
   app.use("/api/v1", internalOnly, loadViewerMiddleware(auth));
   app.use(meRouter());

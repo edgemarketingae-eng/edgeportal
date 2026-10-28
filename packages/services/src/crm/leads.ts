@@ -7,6 +7,8 @@ import {
   isDuplicateKey,
   Lead,
   LeadActivity,
+  LeadConversion,
+  LeadDeposit,
   LeadInboundEvent,
   Project,
   TaskComment,
@@ -17,7 +19,13 @@ import {
 } from "@edge/db";
 import { now } from "@edge/domain/clock";
 import { OPEN_LEAD_STAGES, OPEN_TASK_STATUSES, ROUND_ROBIN, type LeadStage } from "@edge/domain/crm/enums";
-import { LEAD_SOURCE_LABELS, LEAD_STAGE_LABELS, LEAD_TEMPERATURE_LABELS } from "@edge/domain/crm/labels";
+import {
+  LANGUAGE_LABELS,
+  LEAD_SOURCE_LABELS,
+  LEAD_STAGE_LABELS,
+  LEAD_TEMPERATURE_LABELS,
+  type QualificationKey,
+} from "@edge/domain/crm/labels";
 import { canTransition, parseTags, stageIndex } from "@edge/domain/crm/machine";
 import { toCsv } from "@edge/domain/csv";
 import { dubaiDateString, formatDate, formatDateTime, startOfDubaiDay } from "@edge/domain/dates";
@@ -25,6 +33,8 @@ import type { Actor } from "@edge/domain/enums";
 import { parsePhone } from "@edge/domain/phone";
 import { audit } from "../audit";
 import { EXPORT_CAP, facetPage } from "../paging";
+import { depositsForLead } from "./deposits";
+import { activeProducts, moveConversions, recordStudentConversion, toConversionDtos } from "./products";
 import { roundRobinPicker } from "./round-robin";
 import { getCurrentEnrollment } from "../enrollment/service";
 import { BusinessError, ForbiddenError, NotFoundError, TransitionError, ValidationError } from "../errors";
@@ -46,8 +56,10 @@ import {
   normalizeEmail,
   normalizePhone,
   optId,
+  productNames,
   projectRefs,
   recomputeNextFollowUp,
+  startOfDubaiMonth,
   recordActivity,
   toActivityDto,
   toLeadDto,
@@ -93,10 +105,7 @@ async function validBatch(id?: string | null) {
   return _id;
 }
 
-/** Dubai midnight of the first day of the month that contains `at`. */
-export function startOfDubaiMonth(at: Date) {
-  return startOfDubaiDay(new Date(`${dubaiDateString(at).slice(0, 7)}-01T00:00:00Z`));
-}
+export { startOfDubaiMonth } from "./common";
 
 /** The project a new lead goes into: the given one (must be in scope and not archived), else the default project. */
 async function resolveProject(projectId: string | undefined, scope?: CrmScope): Promise<ProjectDoc> {
@@ -159,7 +168,8 @@ export async function createLead(input: LeadInput, actor: Actor, scope?: CrmScop
           phone,
           email,
           country,
-          language: input.language?.trim() || null,
+          language: input.language || null,
+          jetaFxClientId: input.jetaFxClientId?.trim() || null,
           preferredChannel: input.preferredChannel || null,
           source: input.source,
           sourceDetail: input.sourceDetail?.trim() || null,
@@ -173,6 +183,11 @@ export async function createLead(input: LeadInput, actor: Actor, scope?: CrmScop
           courseInterestId: courseInterestId ?? project.courseId ?? null,
           batchInterestId: batchInterestId ?? project.batchId ?? null,
           experienceLevel: input.experienceLevel || null,
+          qualification: {
+            experience: input.qualification?.experience?.trim() || null,
+            occupation: input.qualification?.occupation?.trim() || null,
+            purpose: input.qualification?.purpose?.trim() || null,
+          },
           temperature: input.temperature || "WARM",
           tags: parseTags(input.tags),
           notes: input.notes?.trim() || null,
@@ -199,9 +214,10 @@ export async function createLead(input: LeadInput, actor: Actor, scope?: CrmScop
           projectName: project.name,
         },
       });
-      if (account)
+      if (account) {
         await recordActivity(lead!._id, "LINKED", actor, { data: { studentId: String(account.id), name: account.name, via: "create" } });
-      else if (dueAt)
+        await recordStudentConversion(lead!._id, actor, at);
+      } else if (dueAt)
         await createTaskInTx(
           { projectId: project._id, leadId: lead!._id, defaultAssigneeId: ownerId },
           { title: "First follow-up", type: channelToTaskType(input.preferredChannel), dueAt },
@@ -284,7 +300,12 @@ export async function updateLead(id: string, input: LeadUpdateInput, actor: Acto
   if (input.experienceLevel !== undefined) change("experienceLevel", input.experienceLevel || null, lead.experienceLevel);
   if (input.temperature) change("temperature", input.temperature, lead.temperature);
   if (input.preferredChannel !== undefined) change("preferredChannel", input.preferredChannel || null, lead.preferredChannel);
-  if (input.language !== undefined) change("language", input.language.trim() || null, lead.language);
+  if (input.language !== undefined) change("language", input.language || null, lead.language);
+  if (input.jetaFxClientId !== undefined) change("jetaFxClientId", input.jetaFxClientId.trim() || null, lead.jetaFxClientId);
+  for (const k of ["experience", "occupation", "purpose"] as const satisfies QualificationKey[]) {
+    const v = input.qualification?.[k];
+    if (v !== undefined) change(`qualification.${k}`, v.trim() || null, lead.qualification?.[k]);
+  }
   if (input.tags !== undefined) change("tags", parseTags(input.tags), lead.tags ?? []);
   if (input.notes !== undefined) change("notes", input.notes.trim() || null, lead.notes);
   if (input.marketingConsent !== undefined && input.marketingConsent !== !!lead.consent?.marketing) {
@@ -320,7 +341,7 @@ export async function setStage(
     if (!canTransition(from, input.stage)) {
       throw new TransitionError(
         input.stage === "CONVERTED" || from === "CONVERTED"
-          ? "Converted leads are managed through “Convert to student” and “Link to student”"
+          ? "Converted leads are managed through “Mark conversion”, “Convert to student” and “Link to student”"
           : `Cannot move a ${LEAD_STAGE_LABELS[from]} lead to ${LEAD_STAGE_LABELS[input.stage]}`,
       );
     }
@@ -439,6 +460,7 @@ const FILL_FIELDS = [
   "phone",
   "email",
   "language",
+  "jetaFxClientId",
   "preferredChannel",
   "sourceDetail",
   "courseInterestId",
@@ -447,6 +469,7 @@ const FILL_FIELDS = [
   "ownerId",
   "lostReason",
   "inboundEventId",
+  "convertedById",
 ] as const;
 
 /** Merge `fromId` into `intoId`: the survivor keeps its values (and project) and gains anything it was missing, plus all activities and tasks. */
@@ -475,6 +498,8 @@ export async function mergeLeads(intoId: string, fromId: string, actor: Actor & 
     };
     for (const k of ["source", "medium", "campaign", "content", "term"] as const)
       if (!into.utm?.[k] && from.utm?.[k]) set[`utm.${k}`] = from.utm[k];
+    for (const k of ["experience", "occupation", "purpose"] as const)
+      if (!into.qualification?.[k] && from.qualification?.[k]) set[`qualification.${k}`] = from.qualification[k];
     const minDate = (a?: Date | null, b?: Date | null) => (a && b ? (a < b ? a : b) : (a ?? b ?? null));
     const maxDate = (a?: Date | null, b?: Date | null) => (a && b ? (a > b ? a : b) : (a ?? b ?? null));
     set.firstContactedAt = minDate(into.firstContactedAt, from.firstContactedAt);
@@ -494,9 +519,19 @@ export async function mergeLeads(intoId: string, fromId: string, actor: Actor & 
         stageChangedAt: at,
       });
     }
+    const productIds = await moveConversions(fromOid, intoOid, into.projectId);
+    if (productIds.length) {
+      set.productIds = productIds;
+      set.convertedAt = minDate(into.convertedAt, from.convertedAt) ?? at;
+      if (into.stage !== "CONVERTED") Object.assign(set, { stage: "CONVERTED", stageChangedAt: at });
+    }
+    await LeadDeposit.updateMany({ leadId: fromOid }, { $set: { leadId: intoOid } });
     await LeadActivity.updateMany({ leadId: fromOid }, { $set: { leadId: intoOid } });
     await CrmTask.updateMany({ leadId: fromOid }, { $set: { leadId: intoOid, projectId: into.projectId } });
-    await Lead.updateOne({ _id: fromOid }, { $set: { mergedIntoId: intoOid, studentId: null, nextFollowUpAt: null, lastActivityAt: at } });
+    await Lead.updateOne(
+      { _id: fromOid },
+      { $set: { mergedIntoId: intoOid, studentId: null, productIds: [], nextFollowUpAt: null, lastActivityAt: at } },
+    );
     await Lead.updateOne({ _id: intoOid }, { $set: set });
     await recomputeNextFollowUp(intoOid);
     await recordActivity(intoOid, "MERGED", actor, {
@@ -508,7 +543,8 @@ export async function mergeLeads(intoId: string, fromId: string, actor: Actor & 
 
 /**
  * Permanently delete a lead with its activities, tasks (and their comments) and any leads that were merged into it.
- * Leads linked to a student account are refused: the student record still points at them.
+ * Leads linked to a student account are refused: the student record still points at them. So are leads with
+ * broker deposits (commission history); their product conversions go with them.
  * Website events are kept (they stop a retried webhook from re-creating the lead) but lose the link.
  */
 export async function deleteLead(id: string, actor: Actor & { type: "USER" }, scope: CrmScope) {
@@ -520,6 +556,8 @@ export async function deleteLead(id: string, actor: Actor & { type: "USER" }, sc
     if (lead.studentId) throw new BusinessError("This lead is linked to a student account, so it can't be deleted.");
     const merged = await Lead.find({ mergedIntoId: _id }, { _id: 1 }).lean();
     const leadIds = [_id, ...merged.map((m) => m._id)];
+    if (await LeadDeposit.exists({ leadId: { $in: leadIds } }))
+      throw new BusinessError("This lead has broker deposits logged (commission history), so it can't be deleted.");
     const tasks = await CrmTask.find({ leadId: { $in: leadIds } }, { _id: 1 }).lean();
     const taskIds = tasks.map((t) => t._id);
     const [activities] = await Promise.all([
@@ -527,6 +565,7 @@ export async function deleteLead(id: string, actor: Actor & { type: "USER" }, sc
       TaskComment.deleteMany({ taskId: { $in: taskIds } }),
     ]);
     await CrmTask.deleteMany({ _id: { $in: taskIds } });
+    await LeadConversion.deleteMany({ leadId: { $in: leadIds } });
     await LeadInboundEvent.updateMany({ leadId: { $in: leadIds } }, { $set: { leadId: null } });
     await Lead.deleteMany({ _id: { $in: leadIds } });
     await audit({
@@ -547,7 +586,7 @@ export async function deleteLead(id: string, actor: Actor & { type: "USER" }, sc
   });
 }
 
-/** Deletes what it can; leads linked to a student or out of scope are skipped and counted. */
+/** Deletes what it can; leads linked to a student, with deposits, or out of scope are skipped and counted. */
 export async function bulkDeleteLeads(target: BulkTarget, actor: Actor & { type: "USER" }, scope: CrmScope) {
   let deleted = 0;
   let skipped = 0;
@@ -565,13 +604,14 @@ export async function bulkDeleteLeads(target: BulkTarget, actor: Actor & { type:
 
 /** Dropdown data for the viewer: projects they can work in, the assignable team per project, catalogue, lost reasons. */
 export async function getCrmOptions(scope: CrmScope): Promise<CrmOptions> {
-  const [projects, courses, batches, cfg] = await Promise.all([
+  const [projects, courses, batches, cfg, products] = await Promise.all([
     projectsFor(scope),
     Course.find({ isActive: true }).sort({ title: 1 }).lean(),
     Batch.find({ status: { $ne: "ARCHIVED" } })
       .sort({ startDate: -1 })
       .lean(),
     getSetting("crm.config"),
+    activeProducts(),
   ]);
   const active = projects.filter((p) => p.status !== "ARCHIVED");
   const everyone = scope.all ? await listCrmUsers() : null;
@@ -591,6 +631,7 @@ export async function getCrmOptions(scope: CrmScope): Promise<CrmOptions> {
     courses: courses.map((c) => ({ id: String(c._id), title: c.title })),
     batches: batches.map((b) => ({ id: String(b._id), label: `${b.name} (${b.code})`, courseId: String(b.courseId) })),
     lostReasons: cfg.lostReasons,
+    products,
   };
 }
 
@@ -611,14 +652,17 @@ export function leadMatch(filters: LeadFilters, scope: CrmScope): Record<string,
   if (q) {
     const rx = new RegExp(escapeRegex(q), "i");
     const digits = q.replace(/\D/g, "").replace(/^0+/, "");
-    const or: Record<string, unknown>[] = [{ name: rx }, { email: rx }, { tags: rx }, { sourceDetail: rx }];
+    const or: Record<string, unknown>[] = [{ name: rx }, { email: rx }, { tags: rx }, { sourceDetail: rx }, { jetaFxClientId: rx }];
     if (digits.length >= 3) or.push({ phone: new RegExp(escapeRegex(digits)) });
     and.push({ $or: or });
   }
   const project = optId(filters.project);
   if (project) and.push({ projectId: project });
+  const product = optId(filters.product);
+  if (product) and.push({ productIds: product });
   if (filters.stage) and.push({ stage: filters.stage });
-  else if (filters.view !== "all") and.push({ stage: { $in: [...OPEN_LEAD_STAGES] } });
+  // A product filter means converted leads, so it never hides them.
+  else if (filters.view !== "all" && !product) and.push({ stage: { $in: [...OPEN_LEAD_STAGES] } });
   if (filters.source) and.push({ source: filters.source });
   if (filters.temperature) and.push({ temperature: filters.temperature });
   const course = optId(filters.course);
@@ -669,12 +713,14 @@ export async function listLeads(filters: LeadFilters, scope: CrmScope, opts?: { 
     ],
     opts,
   );
+  const products = await productNames();
   const rows = out.rows.map((r) => {
     const refs: LeadRefs = {
       owners: new Map(r.ownerId && r.o?.[0] ? [[String(r.ownerId), r.o[0].name]] : []),
       courses: new Map(r.courseInterestId && r.c?.[0] ? [[String(r.courseInterestId), r.c[0].title]] : []),
       batches: new Map(r.batchInterestId && r.b?.[0] ? [[String(r.batchInterestId), r.b[0].name]] : []),
       projects: new Map(r.p?.[0] ? [[String(r.projectId), { name: r.p[0].name, code: r.p[0].code }]] : []),
+      products,
     };
     return toLeadListItem(r, refs);
   });
@@ -717,6 +763,9 @@ export async function leadsCsv(filters: LeadFilters, scope: CrmScope) {
       "Created",
       "Lost reason",
       "Student ID",
+      "Language",
+      "JetaFX client ID",
+      "Products",
     ],
     rows.map((l) => [
       l.name,
@@ -737,6 +786,9 @@ export async function leadsCsv(filters: LeadFilters, scope: CrmScope) {
       formatDate(l.createdAt),
       l.lostReason,
       l.studentId,
+      l.language ? LANGUAGE_LABELS[l.language] : null,
+      l.jetaFxClientId,
+      l.products.map((p) => p.name).join(", "),
     ]),
   );
 }
@@ -745,7 +797,21 @@ export async function leadsCsv(filters: LeadFilters, scope: CrmScope) {
 export async function getLeadDetail(id: string, scope: CrmScope, activityLimit = 50): Promise<LeadDetail> {
   const lead = await loadLead(id, scope);
   const limit = Math.min(1000, Math.max(1, activityLimit));
-  const [activities, activityTotal, openTasks, doneTasks, dups, options, account, course, batch, projects] = await Promise.all([
+  const [
+    activities,
+    activityTotal,
+    openTasks,
+    doneTasks,
+    dups,
+    options,
+    account,
+    course,
+    batch,
+    projects,
+    products,
+    conversions,
+    deposits,
+  ] = await Promise.all([
     LeadActivity.find({ leadId: lead._id }).sort({ createdAt: -1, _id: -1 }).limit(limit).lean(),
     LeadActivity.countDocuments({ leadId: lead._id }),
     CrmTask.find({ leadId: lead._id, status: { $in: [...OPEN_TASK_STATUSES] } })
@@ -761,6 +827,9 @@ export async function getLeadDetail(id: string, scope: CrmScope, activityLimit =
     lead.courseInterestId ? Course.findById(lead.courseInterestId, { title: 1 }).lean() : null,
     lead.batchInterestId ? Batch.findById(lead.batchInterestId, { name: 1 }).lean() : null,
     projectRefs([lead.projectId]),
+    productNames(),
+    LeadConversion.find({ leadId: lead._id }).sort({ convertedAt: 1, _id: 1 }).lean(),
+    depositsForLead(lead._id, scope),
   ]);
   const names = await userNames([lead.ownerId, ...activities.map((a) => a.actorId)]);
   const refs: LeadRefs = {
@@ -768,6 +837,7 @@ export async function getLeadDetail(id: string, scope: CrmScope, activityLimit =
     courses: new Map(course ? [[String(course._id), course.title]] : []),
     batches: new Map(batch ? [[String(batch._id), batch.name]] : []),
     projects,
+    products,
   };
   let student: LeadDetail["student"] = null;
   if (lead.studentId) {
@@ -790,6 +860,8 @@ export async function getLeadDetail(id: string, scope: CrmScope, activityLimit =
     activities: activities.map((a) => toActivityDto(a, names)),
     activityTotal,
     tasks: await tasksToDtos([...openTasks, ...doneTasks]),
+    conversions: await toConversionDtos(conversions),
+    deposits,
     student,
     matchingStudent: account?.kind === "student" ? { id: String(account.id), name: account.name, email: account.email } : null,
     duplicates: visibleDups.map((d) => ({
@@ -804,6 +876,8 @@ export async function getLeadDetail(id: string, scope: CrmScope, activityLimit =
       assign: canAssignIn(scope, lead.projectId),
       claim: canClaim(lead, scope),
       moveProject: has(scope, "crm.projects.manage") || (managesProject(scope, lead.projectId) && scope.managed.length > 0),
+      removeConversion: has(scope, "crm.manage"),
+      reviewDeposits: has(scope, "crm.commission.manage"),
     },
     options,
   };

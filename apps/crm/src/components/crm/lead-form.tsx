@@ -1,8 +1,15 @@
 "use client";
 
 import type { CrmOptions } from "@edge/contracts";
-import { EXPERIENCE_LEVELS, LEAD_CHANNELS, LEAD_SOURCES, LEAD_TEMPERATURES } from "@edge/domain/crm/enums";
-import { EXPERIENCE_LABELS, LEAD_CHANNEL_LABELS, LEAD_SOURCE_LABELS, LEAD_TEMPERATURE_LABELS } from "@edge/domain/crm/labels";
+import { EXPERIENCE_LEVELS, LEAD_CHANNELS, LEAD_LANGUAGES, LEAD_SOURCES, LEAD_TEMPERATURES } from "@edge/domain/crm/enums";
+import {
+  EXPERIENCE_LABELS,
+  LANGUAGE_LABELS,
+  LEAD_CHANNEL_LABELS,
+  LEAD_SOURCE_LABELS,
+  LEAD_TEMPERATURE_LABELS,
+  QUALIFICATION_QUESTIONS,
+} from "@edge/domain/crm/labels";
 import { dialogLayout } from "@edge/ui/blocks/action-dialog";
 import { Button } from "@edge/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@edge/ui/components/card";
@@ -32,6 +39,10 @@ export interface LeadFormValues {
   temperature: string;
   preferredChannel: string;
   language: string;
+  jetaFxClientId: string;
+  qualificationExperience: string;
+  qualificationOccupation: string;
+  qualificationPurpose: string;
   tags: string;
   notes: string;
   marketingConsent: boolean;
@@ -54,6 +65,10 @@ export const EMPTY_LEAD: LeadFormValues = {
   temperature: "WARM",
   preferredChannel: "WHATSAPP",
   language: "",
+  jetaFxClientId: "",
+  qualificationExperience: "",
+  qualificationOccupation: "",
+  qualificationPurpose: "",
   tags: "",
   notes: "",
   marketingConsent: false,
@@ -112,6 +127,21 @@ function Section({ title, dialog, className, children }: { title: string; dialog
 
 /** Two fields side by side once their section is wide enough (a container query, so it works in the page and the dialog). */
 const pair = "grid items-start gap-4 @sm:grid-cols-2";
+
+/** Form field names of the three qualification answers, with an example answer each. */
+export const QUALIFICATION_FIELDS = [
+  {
+    name: "qualificationExperience",
+    label: QUALIFICATION_QUESTIONS.experience,
+    placeholder: "e.g. 1 year on demo, trades gold. Can start with $1,000",
+  },
+  { name: "qualificationOccupation", label: QUALIFICATION_QUESTIONS.occupation, placeholder: "e.g. Salaried, AED 8,000 a month. Car loan" },
+  {
+    name: "qualificationPurpose",
+    label: QUALIFICATION_QUESTIONS.purpose,
+    placeholder: "e.g. A second income, wants to trade full time later",
+  },
+] as const;
 
 export function LeadForm({
   values,
@@ -178,7 +208,17 @@ export function LeadForm({
                 </Select>
               </div>
             </div>
-            <Field label="Language" name="language" defaultValue={v.language} error={fe.language} placeholder="English, Arabic, Hindi…" />
+            <div className="grid content-start gap-2">
+              <Label htmlFor="language">Language</Label>
+              <Select id="language" name="language" value={v.language} error={fe.language}>
+                <option value="">Not set</option>
+                {LEAD_LANGUAGES.map((l) => (
+                  <option key={l} value={l}>
+                    {LANGUAGE_LABELS[l]}
+                  </option>
+                ))}
+              </Select>
+            </div>
             <div className="grid gap-2">
               <label className="flex items-center gap-2 text-sm">
                 <Checkbox name="whatsappConsent" defaultChecked={v.whatsappConsent} /> OK to message on WhatsApp
@@ -294,6 +334,13 @@ export function LeadForm({
                 </Select>
               </div>
             ) : null}
+            <Field
+              label="JetaFX client ID"
+              name="jetaFxClientId"
+              defaultValue={v.jetaFxClientId}
+              error={fe.jetaFxClientId}
+              hint="Their client ID at JetaFX, our affiliate broker"
+            />
             <Field label="Tags" name="tags" defaultValue={v.tags} error={fe.tags} hint="Comma separated, e.g. webinar-oct, vip" />
             {creating ? (
               <Field
@@ -304,6 +351,17 @@ export function LeadForm({
                 error={fe.nextFollowUpAt}
               />
             ) : null}
+          </Section>
+          <Section title="Qualification" dialog={dialog} className="@3xl:col-span-2">
+            <div className="grid items-start gap-4 @3xl:grid-cols-3">
+              {QUALIFICATION_FIELDS.map((q) => (
+                <div key={q.name} className="grid content-start gap-2">
+                  <Label htmlFor={q.name}>{q.label}</Label>
+                  <Textarea id={q.name} name={q.name} rows={3} defaultValue={v[q.name]} placeholder={q.placeholder} />
+                </div>
+              ))}
+            </div>
+            {fe.qualification ? <p className="text-destructive text-xs">{fe.qualification}</p> : null}
           </Section>
         </div>
       </div>

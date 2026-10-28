@@ -1,7 +1,20 @@
 import { crmRoutes } from "@edge/contracts";
 import { AppShell, ShellSkeleton, type AreaLink, type NavItem } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
-import { Bell, CheckSquare, FolderKanban, LayoutDashboard, LifeBuoy, Settings, Upload, Users, UsersRound } from "lucide-react";
+import {
+  Banknote,
+  Bell,
+  CheckSquare,
+  FolderKanban,
+  LayoutDashboard,
+  LifeBuoy,
+  Package,
+  Settings,
+  Trophy,
+  Upload,
+  Users,
+  UsersRound,
+} from "lucide-react";
 import { Suspense } from "react";
 import { can, CONSOLE_URL, load, requireCrm } from "@/lib/load";
 import { MENU_LINKS } from "@/lib/nav";
@@ -22,6 +35,9 @@ async function CrmShell({ children }: { children: React.ReactNode }) {
     { href: "/leads", label: "Leads", icon: <Users />, show: can(v, "crm.read") },
     { href: "/tasks", label: "Tasks", icon: <CheckSquare />, badge: due, show: can(v, "crm.read") },
     { href: "/projects", label: "Projects", icon: <FolderKanban />, show: can(v, "crm.read") },
+    { href: "/leaderboard", label: "Leaderboard", icon: <Trophy />, show: can(v, "crm.read") },
+    { href: "/deposits", label: "Deposits", icon: <Banknote />, show: can(v, "crm.write") || can(v, "crm.commission.manage") },
+    { href: "/products", label: "Products", icon: <Package />, show: can(v, "crm.manage") },
     { href: "/team", label: "Team", icon: <UsersRound />, show: can(v, "crm.staff.manage") },
     { href: "/import", label: "Import", icon: <Upload />, show: can(v, "crm.manage") },
     { href: "/settings", label: "Settings", icon: <Settings />, show: can(v, "crm.manage") },

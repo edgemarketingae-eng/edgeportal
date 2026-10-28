@@ -57,6 +57,16 @@ export const FreeClassLeadInput = z.object({
   utm: z.object({ source: utmField, medium: utmField, campaign: utmField, content: utmField, term: utmField }).optional(),
 });
 
+/** Forex Growth Hub hero form (a static site on another domain). */
+export const GrowthHubLeadInput = FreeClassLeadInput.omit({ phone: true }).extend({
+  whatsapp: z.string().trim().min(6, "Enter your WhatsApp number").max(30),
+  /** Call number, when it is not the WhatsApp one. */
+  phone: z.string().trim().max(30).optional(),
+  page: z.string().trim().max(500).optional(),
+});
+
+const LandingLeadResult = z.object({ ok: z.literal(true), whatsappUrl: z.string().nullable(), contactName: z.string().nullable() });
+
 export const studentRoutes = {
   portal: route({ method: "GET", path: "/api/v1/student/portal", response: PortalDto }),
   /** No session needed (sign-up page): the batch new students are assigned to. */
@@ -68,7 +78,13 @@ export const studentRoutes = {
     method: "POST",
     path: "/api/v1/public/free-class/leads",
     body: FreeClassLeadInput,
-    response: z.object({ ok: z.literal(true), whatsappUrl: z.string().nullable(), contactName: z.string().nullable() }),
+    response: LandingLeadResult,
   }),
   updateProfile: route({ method: "POST", path: "/api/v1/student/profile", body: ProfileInput, response: zOk }),
+};
+
+/** Browser-facing routes on the public API host (api.edgeacademy.ae/api/public/...), for the academy's other sites. */
+export const publicRoutes = {
+  /** CORS: PUBLIC_FORM_ORIGINS only. Creates the CRM lead and returns the owner's WhatsApp link. */
+  growthHubLead: route({ method: "POST", path: "/api/public/growth-hub/leads", body: GrowthHubLeadInput, response: LandingLeadResult }),
 };

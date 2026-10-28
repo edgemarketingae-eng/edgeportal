@@ -160,7 +160,14 @@ describe("leads", () => {
     const detail = await getLeadDetail(id, await exec.scope());
     expect(detail.duplicates.map((d) => d.id)).toContain(dup);
     expect(detail.lead.project.code).toBe("GENERAL");
-    expect(detail.can).toEqual({ delete: false, assign: false, claim: false, moveProject: false });
+    expect(detail.can).toEqual({
+      delete: false,
+      assign: false,
+      claim: false,
+      moveProject: false,
+      removeConversion: false,
+      reviewDeposits: false,
+    });
   });
 
   it("logs touches, auto-advances NEW to CONTACTED, schedules and completes follow-ups", async () => {

@@ -9,18 +9,19 @@ estimated. It shares the API, the database and the staff accounts with the admin
 
 Access is decided by permission keys on roles, exactly as in the admin console. Every CRM key starts with `crm.`:
 
-| Permission            | Lets a staff member                                                                                      |
-| --------------------- | -------------------------------------------------------------------------------------------------------- |
-| `crm.access`          | sign in to the CRM app                                                                                   |
-| `crm.read`            | see leads, tasks and projects in scope                                                                   |
-| `crm.write`           | create and edit leads, log activities, create and complete tasks, claim unassigned leads in scope        |
-| `crm.assign`          | assign leads and tasks to other people inside the projects they manage                                   |
-| `crm.convert`         | create the student account for a lead, link a lead to an existing student, resend the set-password email |
-| `crm.all`             | see every project and every lead                                                                         |
-| `crm.projects.manage` | create, edit and archive projects; choose project managers and members                                   |
-| `crm.manage`          | CRM settings, CSV import, merging duplicates                                                             |
-| `crm.staff.manage`    | create and disable CRM staff, reset their passwords, give them CRM roles                                 |
-| `crm.roles.manage`    | create and edit CRM roles                                                                                |
+| Permission              | Lets a staff member                                                                                      |
+| ----------------------- | -------------------------------------------------------------------------------------------------------- |
+| `crm.access`            | sign in to the CRM app                                                                                   |
+| `crm.read`              | see leads, tasks and projects in scope                                                                   |
+| `crm.write`             | create and edit leads, log activities, create and complete tasks, claim unassigned leads in scope        |
+| `crm.assign`            | assign leads and tasks to other people inside the projects they manage                                   |
+| `crm.convert`           | create the student account for a lead, link a lead to an existing student, resend the set-password email |
+| `crm.all`               | see every project and every lead                                                                         |
+| `crm.projects.manage`   | create, edit and archive projects; choose project managers and members                                   |
+| `crm.manage`            | CRM settings, CSV import, merging duplicates                                                             |
+| `crm.staff.manage`      | create and disable CRM staff, reset their passwords, give them CRM roles                                 |
+| `crm.roles.manage`      | create and edit CRM roles                                                                                |
+| `crm.commission.manage` | set commission rates, verify or reject broker deposits, see everyone's commission                        |
 
 System roles, re-applied by `migrate` on every deploy (clone a role under Team → Roles for a variant):
 
@@ -30,6 +31,10 @@ System roles, re-applied by `migrate` on every deploy (clone a role under Team �
 | **CRM manager** (`crm_manager`)         | access, read, write, assign, convert, all, projects.manage, manage | creates projects and hands them to project managers |
 | **Project manager** (`project_manager`) | access, read, write, assign, convert                               | runs the projects assigned to them                  |
 | **Sales executive** (`sales_executive`) | access, read, write, convert                                       | works their own leads and the project pool          |
+
+`crm.write` also covers marking product conversions and logging broker deposits; removing a conversion and managing
+products need `crm.manage`. `crm.commission.manage` is held by CRM admins (every `crm.*` key), Admin and Super admin,
+not by CRM managers.
 
 **Admin** and **Super admin** hold every key, so console admins can open the CRM at any time. The old **Sales** role
 is retired: `migrate` moves its members to **Sales executive** and deletes it.
@@ -73,8 +78,10 @@ the owner only if they are on the new team.
 `NEW → CONTACTED → QUALIFIED → CONSULTATION → NEGOTIATION → CONVERTED | LOST`
 
 - Open stages can move forwards or backwards; `LOST` needs a reason (list editable in Settings) and can be reopened.
-- `CONVERTED` is never set by hand: it is reached by **Convert to student**, **Link to student**, or automatically when a
-  matching person signs up or pays on the student portal.
+- `CONVERTED` is never set with the stage buttons: it is reached by **Mark conversion** (any product, see below),
+  **Convert to student**, **Link to student**, or automatically when a matching person signs up or pays on the student
+  portal. `convertedAt` is the first conversion; later ones keep it. A lead already converted to a product can still be
+  converted to (or linked to) a student.
 - Logging a call, WhatsApp, email or meeting on a `NEW` lead moves it to `CONTACTED` and stamps the first-response time.
 - Temperature (Hot / Warm / Cold) is set by staff; the daily stale sweep turns leads Cold after `staleAfterDays` without activity.
 
@@ -85,7 +92,10 @@ the owner only if they are on the new team.
    (same mobile or email on a live lead) are refused unless "Create even if a lead with this contact already exists" is ticked; a contact that already has a
    student account is created already linked.
 2. **Work**: the lead page has WhatsApp (`wa.me` with a greeting), call and email buttons; log what happened in the
-   composer and schedule the next follow-up in the same step. Follow-ups are tasks on the board (below).
+   composer and schedule the next follow-up in the same step. Follow-ups are tasks on the board (below). The
+   **Qualification** card holds the free-text answers to the three sales questions (trading experience and capital;
+   job and salary or business, plus debts; purpose of learning trading). Language is a dropdown (Malayalam, Tamil,
+   English, Hindi, Other) and every lead has a **JetaFX client ID** (the affiliate broker), searchable from the list.
 3. **Convert**: creates the portal account with the lead's name, email and mobile, optionally enrolls them in a batch,
    and emails a 7-day set-password link. The mobile stays "pending" until the student verifies it at first sign-in
    (press _Resend code_ on the verification page). Without a batch the student joins the current batch after verification.
@@ -93,6 +103,53 @@ the owner only if they are on the new team.
    win rate, median first response, per-project progress against targets, per-person workload, and leads / contacted /
    converted / **paid** per source. The project page shows the same for one project and its team. Students show
    their lead origin on the student page in the admin console, with a link into the CRM.
+
+## Products and conversions
+
+A **product** is something a lead can convert to: Inner Circle (opened a JetaFX account and deposited the minimum),
+the premium course (became a student) and the premium online clubs (Wealth Circle, F1 Club…). `migrate` inserts these
+four once; CRM managers and admins add, rename and archive them under **Products** (`/products`, `crm.manage`).
+Products are never deleted.
+
+- Staff mark one or more conversions on the lead page (**Conversions → Conversion**). The CRM records no rules about
+  the product (minimum deposit etc.); marking it is the sales team's call. Each product converts once per lead.
+- The first conversion moves the lead to `CONVERTED`. Each conversion is credited to the **lead owner at that moment**
+  (the person marking it when the lead is unassigned) and the owner is notified if someone else marked it.
+- One product can be the **student course**: every path that makes a lead a student (convert, link, auto-link on
+  sign-up or payment, a lead created for an existing student) records a conversion to it. Flagging a product as the
+  student course backfills leads that are already students.
+- Removing a conversion needs `crm.manage`. Removing the lead's last one (when it isn't a student) reopens the lead at
+  the stage it had before.
+- Converted leads drop out of the default Open view; the **Converted to** filter on Leads lists one product's leads.
+
+## Deposits and commission
+
+Sales log each deposit a lead makes at JetaFX on the lead page (**Deposits → Deposit**): 1st, 2nd or later deposit,
+amount in **USD**, date (not in the future), optional broker reference. The JetaFX client ID is required; when the lead
+has none, the dialog asks for it and saves it on the lead. A lead has at most one 1st and one 2nd deposit that isn't
+rejected.
+
+- A new deposit is **Pending** and earns nothing. Commission managers are notified and verify it against the JetaFX
+  report on **Deposits** (`/deposits`), or reject it with a reason (a verified deposit the broker reversed can be
+  rejected too, which removes its commission). Pending deposits can be deleted by whoever logged them, the person
+  credited, or a commission manager.
+- Commission = the rate for the deposit's sequence (Settings, **Commission on JetaFX deposits**: 1st / 2nd / later, in
+  percent) × the amount, rounded half up to a cent. The rate is copied onto the deposit when it is verified, so later
+  rate changes only affect deposits verified afterwards.
+- The commission goes to the **lead owner when the deposit was logged** (the logger when unassigned); reassigning the
+  lead later doesn't move it.
+- Commission is private: the API returns it only to commission managers and to the person credited. Executives see
+  their own on Deposits and the Leaderboard; CRM admins see everyone's on the Leaderboard and each person's total on
+  their Team page.
+- Leads with deposits can't be deleted (commission history). Merging moves deposits and conversions to the survivor.
+
+## Leaderboard
+
+`/leaderboard` (everyone with `crm.read`) ranks every active sales executive, plus anyone else credited with a
+conversion, for a period (this month by default, last month, this quarter, this year, all time; Dubai calendar) and
+optionally one project. Rank = product conversions credited in the period, ties broken by verified deposit volume
+(deposit date in the period). It also shows conversions per product, new leads owned (created in the period), how many
+of those converted, and, for commission managers only, commission. The cards on top show the viewer's own figures.
 
 ## Tasks and the board
 
@@ -139,7 +196,8 @@ Body (JSON):
 }
 ```
 
-`name` plus `phone` and/or `email` are required. `id` is the sender's own id for the submission; repeats with the same
+`name` plus `phone` and/or `email` are required. `language` is free text, matched to Malayalam, Tamil, English or
+Hindi (anything else is stored as Other). `id` is the sender's own id for the submission; repeats with the same
 `id` (or identical body) are ignored. A second enquiry from a known mobile/email is added to the existing lead's timeline
 (and reopens it if it was lost) instead of creating a duplicate. `utm_source`/`utm_medium`/... flat keys are also accepted.
 
@@ -176,6 +234,29 @@ on the public API host; rate limited to 10 per 10 minutes per visitor IP; a hidd
   WhatsApp from console Settings is used; with neither, the visitor just sees a thank-you.
 - The class title, Dubai date/time and platform come from console Settings → Free live class.
 
+## Forex Growth Hub form
+
+The Forex Growth Hub (`growthhub.edgeacademy.ae`, a static site with the recorded free classes) has a contact form in
+its hero. The browser posts straight to `POST https://api.edgeacademy.ae/api/public/growth-hub/leads`. There is no
+secret, because the page is public. Instead:
+
+- Only the site origins in `PUBLIC_FORM_ORIGINS` (comma-separated) are allowed. Any other browser origin gets `403`,
+  and the CORS preflight is answered for the listed ones only.
+- It is rate limited to 10 per 10 minutes per visitor IP, and a hidden honeypot field (`website`) drops bots.
+
+Body (JSON): `name`, `whatsapp` (required), `phone` (the call number, optional), `page`, `utm{}`.
+Response: `{ ok, whatsappUrl, contactName }`, the same as the landing page.
+
+- The lead takes the same path as the free class landing page above:
+  - source WEBSITE, detail "Forex Growth Hub", tag `growth-hub`, WhatsApp consent;
+  - a new lead is round-robined in General among sales executives with a phone;
+  - a known lead keeps its owner, and an owner who is Off hands it on;
+  - with no eligible owner the visitor goes to Support WhatsApp.
+- The lead's phone is the **WhatsApp number**. A different call number is written to the notes (or, for a known
+  lead, the INBOUND entry), and either number finds a known lead.
+- The visitor is sent to `wa.me/<owner's phone>` with "I watched the free trading classes on Forex Growth Hub…" ready
+  to send. The SYSTEM timeline entry has `data.landing: "growth-hub"`.
+
 ## Round-robin
 
 One rule everywhere (`packages/services/src/crm/round-robin.ts`): leads are handed out one at a time, each to whoever
@@ -195,7 +276,7 @@ landing leads (always, limited to sales executives with a phone).
 
 `/import` (needs `crm.manage`). First row = column names (case-insensitive). Recognised columns: `name`,
 `phone` / `mobile` / `whatsapp`, `email`, `country`, `notes` / `message`, `tags`, `source detail` / `campaign`,
-`language`. Up to 2,000 rows per file. Choose the project and the owner for the whole file: unassigned, one person
+`language` (Malayalam, Tamil, English or Hindi; anything else becomes Other), `jetafx` / `jetafx id` / `client id`. Up to 2,000 rows per file. Choose the project and the owner for the whole file: unassigned, one person
 from its team, or round-robin to its sales executives. Numbers without a +code are read with the row's own `country`
 (must be a valid 2-letter code) or else the chosen _Country for numbers without a +code_ (default United Arab
 Emirates; "None" marks such numbers invalid). Local numbers are never silently assumed to be UAE. Rows whose mobile
@@ -216,13 +297,18 @@ Run any of them by hand in development: `curl -X POST localhost:4000/api/dev/job
 ## Settings (`/settings`)
 
 First-response SLA (hours), stale-after days, batch urgency days (0 = off), round-robin assignment, lost reasons.
-The webhook URL, whether the secret is configured and the default project are shown there too.
+The webhook URL, whether the secret is configured and the default project are shown there too. Commission managers also
+see the commission rates per deposit (setting `crm.commission`, stored as fractions).
 
 ## Data
 
-`crmProjects`, `leads` (one `projectId` each), `leadActivities` (append-only timeline), `crmTasks`,
-`crmTaskComments`, `leadInboundEvents` (intake inbox). Every mutation is in the audit log (`lead.*`, `task.*`,
-`project.*`, `crm.settings.update`, `staff.*`, `role.*`). Leads keep no unique index on phone or email on purpose:
+`crmProjects`, `leads` (one `projectId` each; `productIds` mirrors the lead's conversions), `leadActivities`
+(append-only timeline), `crmTasks`, `crmTaskComments`, `leadInboundEvents` (intake inbox), `crmProducts`,
+`leadConversions` (one per lead and product, with the credited person), `leadDeposits` (amounts in cents, status,
+commission rate and amount fixed at verification). Lead language used to be free text; `migrate` maps old values onto
+the dropdown codes. Every mutation is in the audit log (`lead.*` including
+`lead.conversion.*` and `lead.deposit.*`, `task.*`, `project.*`, `product.*`, `crm.settings.update`,
+`crm.commission.update`, `staff.*`, `role.*`). Leads keep no unique index on phone or email on purpose:
 duplicates are a real state, flagged on entry and resolved with **Merge duplicate**.
 
 ## Rolling out the CRM host (production)

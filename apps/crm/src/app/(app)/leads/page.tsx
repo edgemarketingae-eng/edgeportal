@@ -46,6 +46,7 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
     owner: one("owner"),
     temperature: pick("temperature", LEAD_TEMPERATURES),
     batch: one("batch"),
+    product: one("product"),
     due: pick("due", ["overdue", "today", "week", "none"] as const),
     created: pick("created", ["today", "week", "month"] as const),
     view: pick("view", ["open", "all"] as const),
@@ -127,11 +128,20 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
           );
         })}
       </div>
-      <FilterBar q={f.q} placeholder="Search name, email, mobile, tag…">
+      <FilterBar q={f.q} placeholder="Search name, email, mobile, tag, JetaFX ID…">
         {f.view ? <input type="hidden" name="view" value={f.view} /> : null}
         <FilterSelect name="project" label="Project" value={f.project} options={options.projects.map((p) => [p.id, p.name])} />
         <FilterSelect name="stage" label="Stage" value={f.stage} options={LEAD_STAGES.map((s) => [s, LEAD_STAGE_LABELS[s]])} />
         <FilterSelect name="source" label="Source" value={f.source} options={LEAD_SOURCES.map((s) => [s, LEAD_SOURCE_LABELS[s]])} />
+        {options.products.length ? (
+          <FilterSelect
+            name="product"
+            label="Converted to"
+            allLabel="Converted to: any"
+            value={f.product}
+            options={options.products.map((p) => [p.id, p.name])}
+          />
+        ) : null}
         <FilterSelect
           name="owner"
           label="Owner"

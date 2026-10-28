@@ -1,20 +1,25 @@
 import {
   ACTIVITY_DIRECTIONS,
   CALL_OUTCOMES,
+  CONVERSION_SOURCES,
   CRM_TASK_STATUSES,
+  DEPOSIT_SEQUENCES,
+  DEPOSIT_STATUSES,
   EXPERIENCE_LEVELS,
   FOLLOWUP_TYPES,
   LEAD_ACTIVITY_TYPES,
   LEAD_CHANNELS,
+  LEAD_LANGUAGES,
   LEAD_SOURCES,
   LEAD_STAGES,
   LEAD_TEMPERATURES,
+  PRODUCT_STATUSES,
   PROJECT_STATUSES,
   TASK_PRIORITIES,
 } from "@edge/domain/crm/enums";
 import { ACTOR_TYPES } from "@edge/domain/enums";
 import { Schema, model, type InferSchemaType, type Types } from "mongoose";
-import { ObjectId, partialUnique, timestamps } from "./shared";
+import { money, ObjectId, partialUnique, timestamps } from "./shared";
 
 const utmSchema = new Schema(
   {
@@ -29,6 +34,12 @@ const utmSchema = new Schema(
 
 const consentSchema = new Schema(
   { marketing: { type: Boolean, default: false }, marketingAt: { type: Date, default: null }, whatsapp: { type: Boolean, default: false } },
+  { _id: false },
+);
+
+/** Free-text answers to the three questions sales asks every lead. */
+const qualificationSchema = new Schema(
+  { experience: { type: String, default: null }, occupation: { type: String, default: null }, purpose: { type: String, default: null } },
   { _id: false },
 );
 
@@ -73,7 +84,9 @@ const leadSchema = new Schema(
     phone: { type: String, default: null }, // E.164
     email: { type: String, default: null }, // lower-case
     country: { type: String, default: null },
-    language: { type: String, default: null },
+    language: { type: String, enum: [...LEAD_LANGUAGES, null], default: null },
+    /** The lead's client id at JetaFX, the academy's affiliate broker. */
+    jetaFxClientId: { type: String, default: null },
     preferredChannel: { type: String, enum: [...LEAD_CHANNELS, null], default: null },
     source: { type: String, enum: LEAD_SOURCES, required: true },
     sourceDetail: { type: String, default: null },
@@ -87,6 +100,7 @@ const leadSchema = new Schema(
     courseInterestId: { type: ObjectId, default: null },
     batchInterestId: { type: ObjectId, default: null },
     experienceLevel: { type: String, enum: [...EXPERIENCE_LEVELS, null], default: null },
+    qualification: { type: qualificationSchema, default: () => ({}) },
     temperature: { type: String, enum: LEAD_TEMPERATURES, default: "WARM", required: true },
     score: { type: Number, default: 0 },
     tags: { type: [String], default: [] },
@@ -100,6 +114,8 @@ const leadSchema = new Schema(
     enrollmentId: { type: ObjectId, default: null },
     convertedAt: { type: Date, default: null },
     convertedById: { type: ObjectId, default: null },
+    /** Products the lead converted to (mirror of leadConversions, for filters and chips). */
+    productIds: { type: [ObjectId], default: [] },
     mergedIntoId: { type: ObjectId, default: null },
     inboundEventId: { type: ObjectId, default: null },
     createdById: { type: ObjectId, default: null },
@@ -118,6 +134,8 @@ leadSchema.index({ source: 1, createdAt: -1 });
 leadSchema.index({ batchInterestId: 1, stage: 1 });
 leadSchema.index({ tags: 1 });
 leadSchema.index({ createdAt: -1 });
+leadSchema.index({ jetaFxClientId: 1 });
+leadSchema.index({ productIds: 1 });
 
 /** Append-only timeline per lead (notes, calls, stage changes, system events). */
 const leadActivitySchema = new Schema(
@@ -190,12 +208,92 @@ const leadInboundEventSchema = new Schema(
 leadInboundEventSchema.index({ source: 1, externalEventId: 1 }, { unique: true });
 leadInboundEventSchema.index({ processedAt: 1, receivedAt: 1 });
 
+/**
+ * Something a lead can convert to: Inner Circle (broker account + deposit), the premium course,
+ * the online clubs. Managed by CRM admins; never deleted (conversions point at it), only archived.
+ * At most one product is the student course: becoming a student records a conversion to it.
+ */
+const crmProductSchema = new Schema(
+  {
+    name: { type: String, required: true },
+    code: { type: String, required: true },
+    description: { type: String, default: null },
+    status: { type: String, enum: PRODUCT_STATUSES, default: "ACTIVE", required: true },
+    isStudentCourse: { type: Boolean, default: false },
+    sortOrder: { type: Number, default: 0 },
+    createdById: { type: ObjectId, default: null },
+  },
+  { ...timestamps, collection: "crmProducts" },
+);
+crmProductSchema.index({ code: 1 }, { unique: true });
+crmProductSchema.index({ status: 1, sortOrder: 1, name: 1 });
+crmProductSchema.index(
+  { isStudentCourse: 1 },
+  { unique: true, partialFilterExpression: { isStudentCourse: true }, name: "one_student_course" },
+);
+
+/**
+ * A lead converting to a product (at most once per product). Credit goes to the lead owner at the
+ * time (the person marking it when unassigned); `stageBefore` lets removing the last one reopen the lead.
+ */
+const leadConversionSchema = new Schema(
+  {
+    leadId: { type: ObjectId, required: true },
+    productId: { type: ObjectId, required: true },
+    projectId: { type: ObjectId, required: true },
+    creditedToId: { type: ObjectId, default: null },
+    convertedById: { type: ObjectId, default: null },
+    source: { type: String, enum: CONVERSION_SOURCES, default: "MANUAL", required: true },
+    stageBefore: { type: String, enum: [...LEAD_STAGES, null], default: null },
+    note: { type: String, default: null },
+    convertedAt: { type: Date, required: true },
+  },
+  { ...timestamps, collection: "leadConversions" },
+);
+leadConversionSchema.index({ leadId: 1, productId: 1 }, { unique: true });
+leadConversionSchema.index({ creditedToId: 1, convertedAt: -1 });
+leadConversionSchema.index({ productId: 1, convertedAt: -1 });
+leadConversionSchema.index({ convertedAt: -1 });
+
+/**
+ * A deposit the lead made at the affiliate broker, logged by sales and verified by a commission
+ * manager. Commission (rate snapshot + amount) is fixed when the deposit is verified.
+ */
+const leadDepositSchema = new Schema(
+  {
+    leadId: { type: ObjectId, required: true },
+    projectId: { type: ObjectId, required: true },
+    creditedToId: { type: ObjectId, required: true },
+    loggedById: { type: ObjectId, required: true },
+    sequence: { type: String, enum: DEPOSIT_SEQUENCES, required: true },
+    amountMinor: money(),
+    currency: { type: String, default: "USD", required: true },
+    depositedAt: { type: Date, required: true },
+    jetaFxClientId: { type: String, default: null },
+    reference: { type: String, default: null },
+    note: { type: String, default: null },
+    status: { type: String, enum: DEPOSIT_STATUSES, default: "PENDING", required: true },
+    reviewedById: { type: ObjectId, default: null },
+    reviewedAt: { type: Date, default: null },
+    rejectReason: { type: String, default: null },
+    commissionPct: { type: String, default: null },
+    commissionMinor: { ...money(false), default: null },
+  },
+  { ...timestamps, collection: "leadDeposits" },
+);
+leadDepositSchema.index({ leadId: 1, depositedAt: -1 });
+leadDepositSchema.index({ status: 1, createdAt: -1 });
+leadDepositSchema.index({ creditedToId: 1, status: 1, depositedAt: -1 });
+
 export const Project = model("Project", projectSchema);
 export const Lead = model("Lead", leadSchema);
 export const LeadActivity = model("LeadActivity", leadActivitySchema);
 export const CrmTask = model("CrmTask", crmTaskSchema);
 export const TaskComment = model("TaskComment", taskCommentSchema);
 export const LeadInboundEvent = model("LeadInboundEvent", leadInboundEventSchema);
+export const CrmProduct = model("CrmProduct", crmProductSchema);
+export const LeadConversion = model("LeadConversion", leadConversionSchema);
+export const LeadDeposit = model("LeadDeposit", leadDepositSchema);
 
 export type ProjectDoc = InferSchemaType<typeof projectSchema> & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date };
 export type LeadDoc = InferSchemaType<typeof leadSchema> & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date };
@@ -203,3 +301,6 @@ export type LeadActivityDoc = InferSchemaType<typeof leadActivitySchema> & { _id
 export type CrmTaskDoc = InferSchemaType<typeof crmTaskSchema> & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date };
 export type TaskCommentDoc = InferSchemaType<typeof taskCommentSchema> & { _id: Types.ObjectId; createdAt: Date };
 export type LeadInboundEventDoc = InferSchemaType<typeof leadInboundEventSchema> & { _id: Types.ObjectId };
+export type CrmProductDoc = InferSchemaType<typeof crmProductSchema> & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date };
+export type LeadConversionDoc = InferSchemaType<typeof leadConversionSchema> & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date };
+export type LeadDepositDoc = InferSchemaType<typeof leadDepositSchema> & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date };

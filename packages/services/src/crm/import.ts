@@ -1,6 +1,7 @@
 import type { ImportPreviewDto } from "@edge/contracts";
 import { AuthUser, Lead, Project, StudentProfile } from "@edge/db";
 import { ROUND_ROBIN, type LeadSource } from "@edge/domain/crm/enums";
+import { normalizeLanguage } from "@edge/domain/crm/machine";
 import { csvToObjects } from "@edge/domain/csv";
 import type { Actor } from "@edge/domain/enums";
 import { isCountryCode } from "@edge/domain/countries";
@@ -15,7 +16,10 @@ import type { CrmScope } from "./scope";
 const MAX_ROWS = 2000;
 
 /** Accepted column names (case-insensitive) for each lead field. */
-const COLUMNS: Record<"name" | "phone" | "email" | "country" | "notes" | "tags" | "sourceDetail" | "language", string[]> = {
+const COLUMNS: Record<
+  "name" | "phone" | "email" | "country" | "notes" | "tags" | "sourceDetail" | "language" | "jetaFxClientId",
+  string[]
+> = {
   name: ["name", "full name", "fullname", "lead", "student", "contact"],
   phone: ["phone", "mobile", "mobile number", "phone number", "whatsapp", "number", "tel"],
   email: ["email", "e-mail", "email address", "mail"],
@@ -24,6 +28,7 @@ const COLUMNS: Record<"name" | "phone" | "email" | "country" | "notes" | "tags" 
   tags: ["tags", "tag", "labels"],
   sourceDetail: ["source detail", "source", "campaign", "ad", "channel"],
   language: ["language", "lang"],
+  jetaFxClientId: ["jetafx", "jetafx id", "jetafx client id", "client id"],
 };
 
 function pick(obj: Record<string, string>, field: keyof typeof COLUMNS) {
@@ -41,6 +46,7 @@ interface ParsedRow {
   tags: string;
   sourceDetail: string;
   language: string;
+  jetaFxClientId: string;
   error: string | null;
 }
 
@@ -72,6 +78,7 @@ function parseRows(csv: string, defaultCountry?: string | null): ParsedRow[] {
       tags: pick(obj, "tags"),
       sourceDetail: pick(obj, "sourceDetail"),
       language: pick(obj, "language"),
+      jetaFxClientId: pick(obj, "jetaFxClientId").trim().slice(0, 40),
       error,
     };
   });
@@ -166,7 +173,8 @@ export async function importLeads(
           sourceDetail: r.sourceDetail || undefined,
           notes: r.notes || undefined,
           tags: r.tags || undefined,
-          language: r.language || undefined,
+          language: normalizeLanguage(r.language) ?? undefined,
+          jetaFxClientId: r.jetaFxClientId || undefined,
           ownerId: picker ? (picker.next() ?? "") : (o.ownerId ?? ""),
         },
         actor,

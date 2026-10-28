@@ -5,8 +5,8 @@ import { OPEN_LEAD_STAGES, OPEN_TASK_STATUSES } from "@edge/domain/crm/enums";
 import { startOfDubaiDay } from "@edge/domain/dates";
 import { NotFoundError } from "../errors";
 import { getSetting } from "../settings";
-import { optId, tasksToDtos, userNames } from "./common";
-import { startOfDubaiMonth } from "./leads";
+import { optId, startOfDubaiMonth, tasksToDtos, userNames } from "./common";
+import { activeProducts } from "./products";
 import { projectStats } from "./projects";
 import { inProject, leadScopeFilter, projectsFor, taskScopeFilter, type CrmScope } from "./scope";
 
@@ -33,23 +33,56 @@ export async function getCrmDashboard(scope: CrmScope, f: { project?: string } =
   const d30 = new Date(at.getTime() - 30 * 86_400_000);
   const open = { $in: [...OPEN_TASK_STATUSES] };
 
-  const [byStage, newToday, newWeek, uncontacted, convertedMonth, lostMonth, converted90, lost90, responses, bySource, overdueTasks, dueToday, myTasks, perOwner, overduePerAssignee, visibleProjects] = await Promise.all([
+  const [
+    byStage,
+    newToday,
+    newWeek,
+    uncontacted,
+    convertedMonth,
+    lostMonth,
+    converted90,
+    lost90,
+    responses,
+    bySource,
+    overdueTasks,
+    dueToday,
+    myTasks,
+    perOwner,
+    overduePerAssignee,
+    visibleProjects,
+    productsMonth,
+    products,
+  ] = await Promise.all([
     Lead.aggregate<{ _id: string; n: number }>([{ $match: base }, { $group: { _id: "$stage", n: { $sum: 1 } } }]),
     Lead.countDocuments({ ...base, createdAt: { $gte: todayStart } }),
     Lead.countDocuments({ ...base, createdAt: { $gte: weekAgo } }),
-    Lead.countDocuments({ ...base, stage: "NEW", firstContactedAt: null, createdAt: { $lt: new Date(at.getTime() - cfg.followUpSlaHours * 3_600_000) } }),
+    Lead.countDocuments({
+      ...base,
+      stage: "NEW",
+      firstContactedAt: null,
+      createdAt: { $lt: new Date(at.getTime() - cfg.followUpSlaHours * 3_600_000) },
+    }),
     Lead.countDocuments({ ...base, convertedAt: { $gte: monthStart } }),
     Lead.countDocuments({ ...base, stage: "LOST", stageChangedAt: { $gte: monthStart } }),
     Lead.countDocuments({ ...base, convertedAt: { $gte: d90 } }),
     Lead.countDocuments({ ...base, stage: "LOST", stageChangedAt: { $gte: d90 } }),
-    Lead.find({ ...base, firstContactedAt: { $gte: d30 } }, { firstContactedAt: 1, createdAt: 1 }).limit(2000).lean(),
+    Lead.find({ ...base, firstContactedAt: { $gte: d30 } }, { firstContactedAt: 1, createdAt: 1 })
+      .limit(2000)
+      .lean(),
     Lead.aggregate<{ _id: string; leads: number; contacted: number; converted: number; paid: number }>([
       { $match: base },
       {
         $lookup: {
           from: "enrollments",
           let: { sid: "$studentId" },
-          pipeline: [{ $match: { $expr: { $and: [{ $eq: ["$studentId", "$$sid"] }, { $eq: ["$isCurrent", true] }, { $ne: ["$paymentState", "UNPAID"] }] } } }, { $project: { _id: 1 } }],
+          pipeline: [
+            {
+              $match: {
+                $expr: { $and: [{ $eq: ["$studentId", "$$sid"] }, { $eq: ["$isCurrent", true] }, { $ne: ["$paymentState", "UNPAID"] }] },
+              },
+            },
+            { $project: { _id: 1 } },
+          ],
           as: "paidEnrollment",
         },
       },
@@ -58,7 +91,7 @@ export async function getCrmDashboard(scope: CrmScope, f: { project?: string } =
           _id: "$source",
           leads: { $sum: 1 },
           contacted: { $sum: { $cond: [{ $ne: ["$firstContactedAt", null] }, 1, 0] } },
-          converted: { $sum: { $cond: [{ $ne: ["$studentId", null] }, 1, 0] } },
+          converted: { $sum: { $cond: [{ $ne: [{ $ifNull: ["$convertedAt", null] }, null] }, 1, 0] } },
           paid: { $sum: { $cond: [{ $gt: [{ $size: "$paidEnrollment" }, 0] }, 1, 0] } },
         },
       },
@@ -66,25 +99,70 @@ export async function getCrmDashboard(scope: CrmScope, f: { project?: string } =
     ]),
     CrmTask.countDocuments({ ...taskBase, status: open, dueAt: { $lt: todayStart } }),
     CrmTask.countDocuments({ ...taskBase, status: open, dueAt: { $gte: todayStart, $lt: tomorrowStart } }),
-    CrmTask.find({ assigneeId: scope.me, status: open, dueAt: { $lt: tomorrowStart }, ...(project ? { projectId: project } : {}) }).sort({ dueAt: 1 }).limit(10).lean(),
+    CrmTask.find({ assigneeId: scope.me, status: open, dueAt: { $lt: tomorrowStart }, ...(project ? { projectId: project } : {}) })
+      .sort({ dueAt: 1 })
+      .limit(10)
+      .lean(),
     Lead.aggregate<{ _id: Types.ObjectId; open: number; convertedMonth: number }>([
       { $match: { ...base, ownerId: { $ne: null } } },
-      { $group: { _id: "$ownerId", open: { $sum: { $cond: [{ $in: ["$stage", [...OPEN_LEAD_STAGES]] }, 1, 0] } }, convertedMonth: { $sum: { $cond: [{ $gte: ["$convertedAt", monthStart] }, 1, 0] } } } },
+      {
+        $group: {
+          _id: "$ownerId",
+          open: { $sum: { $cond: [{ $in: ["$stage", [...OPEN_LEAD_STAGES]] }, 1, 0] } },
+          convertedMonth: { $sum: { $cond: [{ $gte: ["$convertedAt", monthStart] }, 1, 0] } },
+        },
+      },
     ]),
-    CrmTask.aggregate<{ _id: Types.ObjectId; n: number }>([{ $match: { ...taskBase, status: open, dueAt: { $lt: todayStart }, assigneeId: { $ne: null } } }, { $group: { _id: "$assigneeId", n: { $sum: 1 } } }]),
+    CrmTask.aggregate<{ _id: Types.ObjectId; n: number }>([
+      { $match: { ...taskBase, status: open, dueAt: { $lt: todayStart }, assigneeId: { $ne: null } } },
+      { $group: { _id: "$assigneeId", n: { $sum: 1 } } },
+    ]),
     projectsFor(scope),
+    Lead.aggregate<{ _id: Types.ObjectId; n: number }>([
+      { $match: { ...base, convertedAt: { $ne: null } } },
+      {
+        $lookup: {
+          from: "leadConversions",
+          let: { lid: "$_id" },
+          pipeline: [
+            { $match: { $expr: { $and: [{ $eq: ["$leadId", "$$lid"] }, { $gte: ["$convertedAt", monthStart] }] } } },
+            { $project: { productId: 1 } },
+          ],
+          as: "c",
+        },
+      },
+      { $unwind: "$c" },
+      { $group: { _id: "$c.productId", n: { $sum: 1 } } },
+    ]),
+    activeProducts(),
   ]);
 
   const names = await userNames(perOwner.map((o) => o._id));
   const overdueMap = new Map(overduePerAssignee.map((o) => [String(o._id), o.n]));
   const owners = perOwner
-    .map((o) => ({ id: String(o._id), name: names.get(String(o._id)) ?? "Unknown", open: o.open, overdue: overdueMap.get(String(o._id)) ?? 0, convertedMonth: o.convertedMonth }))
+    .map((o) => ({
+      id: String(o._id),
+      name: names.get(String(o._id)) ?? "Unknown",
+      open: o.open,
+      overdue: overdueMap.get(String(o._id)) ?? 0,
+      convertedMonth: o.convertedMonth,
+    }))
     .sort((a, b) => b.convertedMonth - a.convertedMonth || b.open - a.open);
 
   const activeProjects = visibleProjects.filter((p) => p.status === "ACTIVE" && (!project || p._id.equals(project)));
-  const stats = await projectStats(activeProjects.map((p) => p._id), at);
+  const stats = await projectStats(
+    activeProjects.map((p) => p._id),
+    at,
+  );
   const projects = activeProjects
-    .map((p) => ({ id: String(p._id), name: p.name, open: stats.open.get(String(p._id)) ?? 0, convertedMonth: stats.converted.get(String(p._id)) ?? 0, overdue: stats.overdue.get(String(p._id)) ?? 0, targetConversions: p.targetConversions ?? null }))
+    .map((p) => ({
+      id: String(p._id),
+      name: p.name,
+      open: stats.open.get(String(p._id)) ?? 0,
+      convertedMonth: stats.converted.get(String(p._id)) ?? 0,
+      overdue: stats.overdue.get(String(p._id)) ?? 0,
+      targetConversions: p.targetConversions ?? null,
+    }))
     .sort((a, b) => b.open - a.open);
 
   const stageCounts = Object.fromEntries(byStage.map((s) => [s._id, s.n]));
@@ -108,6 +186,7 @@ export async function getCrmDashboard(scope: CrmScope, f: { project?: string } =
     bySource: bySource.map((s) => ({ source: s._id, leads: s.leads, contacted: s.contacted, converted: s.converted, paid: s.paid })),
     projects,
     owners,
+    byProduct: products.map((p) => ({ ...p, month: productsMonth.find((x) => String(x._id) === p.id)?.n ?? 0 })),
     myTasks: await tasksToDtos(myTasks as never),
   };
 }

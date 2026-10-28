@@ -18,7 +18,13 @@ export const SETTINGS = {
       taxZeroRatedId: z.number().int().nullable(),
       journalIds: z.record(z.string(), z.number().int()),
     }),
-    default: { courseProductId: null, feeProductId: null, taxStandardId: null, taxZeroRatedId: null, journalIds: {} as Record<string, number> },
+    default: {
+      courseProductId: null,
+      feeProductId: null,
+      taxStandardId: null,
+      taxZeroRatedId: null,
+      journalIds: {} as Record<string, number>,
+    },
   },
   "crm.config": {
     schema: z.object({
@@ -36,9 +42,19 @@ export const SETTINGS = {
       lostReasons: ["Budget", "Timing", "Not interested", "Unreachable", "Chose another academy", "Duplicate"],
     },
   },
+  /** Commission on verified broker deposits, per deposit sequence, as fractions ("0.1" = 10%). */
+  "crm.commission": {
+    schema: z.object({ firstPct: z.string(), secondPct: z.string(), laterPct: z.string() }),
+    default: { firstPct: "0", secondPct: "0", laterPct: "0" },
+  },
   "academy.profile": {
     schema: z.object({ name: z.string(), supportEmail: z.string(), supportWhatsapp: z.string(), website: z.string() }),
-    default: { name: "Edge Trading Academy", supportEmail: "support@edgeacademy.ae", supportWhatsapp: "", website: "https://edgeacademy.ae" },
+    default: {
+      name: "Edge Trading Academy",
+      supportEmail: "support@edgeacademy.ae",
+      supportWhatsapp: "",
+      website: "https://edgeacademy.ae",
+    },
   },
   /** The free live class promoted on the student app's landing page. */
   "marketing.freeClass": {

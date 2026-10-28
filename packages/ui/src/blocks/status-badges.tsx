@@ -1,4 +1,4 @@
-import { LEAD_STAGE_LABELS, LEAD_TEMPERATURE_LABELS } from "@edge/domain/crm/labels";
+import { DEPOSIT_STATUS_LABELS, LEAD_STAGE_LABELS, LEAD_TEMPERATURE_LABELS } from "@edge/domain/crm/labels";
 import { Badge } from "../components/badge";
 
 const ENROLLMENT: Record<string, { label: string; className: string }> = {
@@ -71,6 +71,29 @@ export function TemperatureBadge({ temperature }: { temperature: string }) {
   return (
     <Badge variant="outline" className={TEMPERATURE[temperature] ?? ""}>
       {(LEAD_TEMPERATURE_LABELS as Record<string, string>)[temperature] ?? temperature}
+    </Badge>
+  );
+}
+
+const DEPOSIT: Record<string, string> = {
+  PENDING: "bg-amber-50 text-amber-800 border-amber-300",
+  VERIFIED: "bg-edge-green/20 text-edge-emerald border-edge-green/40",
+  REJECTED: "bg-destructive/10 text-destructive border-destructive/30",
+};
+
+export function DepositStatusBadge({ status }: { status: string }) {
+  return (
+    <Badge variant="outline" className={DEPOSIT[status] ?? ""}>
+      {(DEPOSIT_STATUS_LABELS as Record<string, string>)[status] ?? status}
+    </Badge>
+  );
+}
+
+/** A product the lead converted to (Inner Circle, a club…). */
+export function ProductBadge({ name }: { name: string }) {
+  return (
+    <Badge variant="outline" className="border-edge-green/40 text-edge-emerald">
+      {name}
     </Badge>
   );
 }

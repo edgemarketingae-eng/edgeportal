@@ -245,6 +245,26 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
             </Table>
           </Card>
 
+          {d.byProduct.length ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Conversions by product</CardTitle>
+                <CardDescription>This month: Inner Circle, the premium course, the clubs</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-2 text-sm">
+                {d.byProduct.map((p) => (
+                  <Link key={p.id} href={`/leads?product=${p.id}${q}`} className="flex items-center justify-between gap-3 hover:underline">
+                    <span>{p.name}</span>
+                    <span className="font-semibold tabular-nums">{p.month}</span>
+                  </Link>
+                ))}
+                <Link href="/leaderboard" className="text-edge-emerald mt-2 inline-block text-sm font-semibold hover:underline">
+                  Open the leaderboard
+                </Link>
+              </CardContent>
+            </Card>
+          ) : null}
+
           {d.owners.length ? (
             <Card className="p-0 lg:col-span-2">
               <CardHeader className="px-6 pt-6">

@@ -1,14 +1,27 @@
 import { countryName } from "@edge/domain/countries";
 import { crmRoutes } from "@edge/contracts";
+import { fractionToPercent } from "@edge/domain/crm/commission";
+import type { DepositSequence } from "@edge/domain/crm/enums";
 import {
+  DEPOSIT_SEQUENCE_LABELS,
   EXPERIENCE_LABELS,
   FOLLOWUP_TYPE_LABELS,
+  LANGUAGE_LABELS,
   LEAD_CHANNEL_LABELS,
   LEAD_SOURCE_LABELS,
+  QUALIFICATION_QUESTIONS,
   TASK_STATUS_LABELS,
 } from "@edge/domain/crm/labels";
 import { formatDate, formatDateTime } from "@edge/domain/dates";
-import { EnrollmentBadge, LeadStageBadge, PaymentStateBadge, TemperatureBadge } from "@edge/ui/blocks/status-badges";
+import { formatMoney } from "@edge/domain/money";
+import {
+  DepositStatusBadge,
+  EnrollmentBadge,
+  LeadStageBadge,
+  PaymentStateBadge,
+  ProductBadge,
+  TemperatureBadge,
+} from "@edge/ui/blocks/status-badges";
 import { Badge } from "@edge/ui/components/badge";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@edge/ui/components/card";
 import { PageHeader } from "@edge/ui/shell/app-shell";
@@ -18,9 +31,12 @@ import { Button } from "@edge/ui/components/button";
 import Link from "next/link";
 import { ActivityComposer } from "@/components/crm/activity-composer";
 import { describeActivity } from "@/components/crm/activity-text";
+import { MarkConversionDialog, RemoveConversionDialog } from "@/components/crm/conversion-actions";
+import { DeleteDepositButton, LogDepositDialog, RejectDepositDialog, VerifyDepositDialog } from "@/components/crm/deposit-actions";
 import { FollowUpDue, TimeAgo } from "@/components/crm/due";
 import { LeadControls } from "@/components/crm/lead-controls";
 import { EditLeadDialog } from "@/components/crm/edit-lead-dialog";
+import { QualificationForm } from "@/components/crm/qualification-form";
 import { AddTaskDialog, CancelTaskButton, CompleteTaskDialog, RescheduleTaskDialog } from "@/components/crm/task-actions";
 import { can, CONSOLE_URL, load, requireCrm } from "@/lib/load";
 
@@ -47,6 +63,8 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
     student,
     matchingStudent,
     duplicates,
+    conversions,
+    deposits,
     can: leadCan,
     options,
   } = await load(() => api(crmRoutes.lead, { params: { id }, query: { activity: activityWindow } }));
@@ -54,6 +72,17 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
   const isAdmin = can(v, "admin.access");
   const open = tasks.filter((t) => t.status === "TODO" || t.status === "IN_PROGRESS" || t.status === "WAITING");
   const closed = tasks.filter((t) => !open.includes(t));
+  const editable = canWrite && !l.mergedIntoId;
+  const converted = new Set(conversions.map((c) => c.product.id));
+  const markable = options.products.filter((p) => !converted.has(p.id));
+  const live = deposits.filter((d) => d.status !== "REJECTED");
+  const nextSequence: DepositSequence = !live.some((d) => d.sequence === "FIRST")
+    ? "FIRST"
+    : !live.some((d) => d.sequence === "SECOND")
+      ? "SECOND"
+      : "LATER";
+  const verifiedMinor = deposits.filter((d) => d.status === "VERIFIED").reduce((n, d) => n + d.amountMinor, 0);
+  const answered = Object.values(l.qualification).some(Boolean);
   const utm = [l.utm.source, l.utm.medium, l.utm.campaign, l.utm.content, l.utm.term].filter(Boolean).join(" / ");
 
   return (
@@ -134,6 +163,10 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
                     temperature: l.temperature,
                     preferredChannel: l.preferredChannel ?? "",
                     language: l.language ?? "",
+                    jetaFxClientId: l.jetaFxClientId ?? "",
+                    qualificationExperience: l.qualification.experience ?? "",
+                    qualificationOccupation: l.qualification.occupation ?? "",
+                    qualificationPurpose: l.qualification.purpose ?? "",
                     tags: l.tags.join(", "),
                     notes: l.notes ?? "",
                     marketingConsent: l.consent.marketing,
@@ -154,6 +187,9 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
                 <span className="flex flex-wrap gap-1.5">
                   <LeadStageBadge stage={l.stage} />
                   {l.stage !== "CONVERTED" && l.stage !== "LOST" ? <TemperatureBadge temperature={l.temperature} /> : null}
+                  {l.products.map((p) => (
+                    <ProductBadge key={p.id} name={p.name} />
+                  ))}
                 </span>
                 {l.lostReason ? <span className="text-muted-foreground block text-xs">Reason: {l.lostReason}</span> : null}
               </Row>
@@ -177,9 +213,10 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
               </Row>
               <Row label="Preferred channel / language">
                 {l.preferredChannel ? LEAD_CHANNEL_LABELS[l.preferredChannel] : "–"}
-                {l.language ? ` · ${l.language}` : ""}
+                {l.language ? ` · ${LANGUAGE_LABELS[l.language]}` : ""}
                 {l.country ? ` · ${countryName(l.country)}` : ""}
               </Row>
+              <Row label="JetaFX client ID">{l.jetaFxClientId ?? <span className="text-muted-foreground font-normal">Not set</span>}</Row>
               <Row label="Consent">
                 {l.consent.whatsapp ? "WhatsApp OK" : "No WhatsApp consent"} ·{" "}
                 {l.consent.marketing ? `Marketing (${l.consent.marketingAt ? formatDate(l.consent.marketingAt) : "yes"})` : "No marketing"}
@@ -305,6 +342,92 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
             </CardContent>
           </Card>
 
+          {options.products.length || conversions.length ? (
+            <Card>
+              <CardHeader className="flex-row items-center justify-between">
+                <CardTitle>Conversions</CardTitle>
+                {editable && markable.length ? <MarkConversionDialog leadId={l.id} products={markable} /> : null}
+              </CardHeader>
+              <CardContent className="grid gap-2 text-sm">
+                {conversions.length === 0 ? <p className="text-muted-foreground">Not converted to any product yet.</p> : null}
+                {conversions.map((c) => (
+                  <div key={c.id} className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-medium">
+                        {c.product.name}
+                        {c.source === "STUDENT" ? <span className="text-muted-foreground font-normal"> · as a student</span> : null}
+                      </p>
+                      <p className="text-muted-foreground text-xs">
+                        {formatDate(c.convertedAt)} · counts for {c.creditedTo?.name ?? "nobody"}
+                        {c.convertedBy && c.convertedBy.id !== c.creditedTo?.id ? ` · marked by ${c.convertedBy.name}` : ""}
+                      </p>
+                      {c.note ? <p className="text-muted-foreground text-xs whitespace-pre-wrap">{c.note}</p> : null}
+                    </div>
+                    {leadCan.removeConversion ? <RemoveConversionDialog id={c.id} product={c.product.name} /> : null}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {editable || deposits.length ? (
+            <Card>
+              <CardHeader className="flex-row items-center justify-between">
+                <CardTitle>Deposits</CardTitle>
+                {editable ? <LogDepositDialog leadId={l.id} nextSequence={nextSequence} clientId={l.jetaFxClientId} /> : null}
+              </CardHeader>
+              <CardContent className="grid gap-3 text-sm">
+                {deposits.length === 0 ? <p className="text-muted-foreground">No JetaFX deposits logged.</p> : null}
+                {deposits.map((d) => (
+                  <div key={d.id} className="rounded-lg border p-3">
+                    <p className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-medium">
+                        {formatMoney(d.amountMinor, d.currency)}
+                        <span className="text-muted-foreground font-normal"> · {DEPOSIT_SEQUENCE_LABELS[d.sequence]}</span>
+                      </span>
+                      <DepositStatusBadge status={d.status} />
+                    </p>
+                    <p className="text-muted-foreground text-xs">
+                      {formatDate(d.depositedAt)} · counts for {d.creditedTo?.name ?? "Unknown"}
+                      {d.reference ? ` · ref ${d.reference}` : ""}
+                    </p>
+                    {d.commissionMinor != null ? (
+                      <p className="text-xs">
+                        Commission {formatMoney(d.commissionMinor, d.currency)}
+                        {d.commissionPct ? <span className="text-muted-foreground"> ({fractionToPercent(d.commissionPct)}%)</span> : null}
+                      </p>
+                    ) : null}
+                    {d.status === "REJECTED" && d.rejectReason ? (
+                      <p className="text-destructive text-xs">Rejected: {d.rejectReason}</p>
+                    ) : null}
+                    {d.note ? <p className="text-muted-foreground mt-1 text-xs whitespace-pre-wrap">{d.note}</p> : null}
+                    {(leadCan.reviewDeposits && d.status !== "REJECTED") || d.canDelete ? (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {leadCan.reviewDeposits && d.status === "PENDING" ? (
+                          <VerifyDepositDialog
+                            id={d.id}
+                            leadName={l.name}
+                            amountMinor={d.amountMinor}
+                            sequence={d.sequence}
+                            depositedAt={d.depositedAt}
+                            clientId={d.jetaFxClientId}
+                          />
+                        ) : null}
+                        {leadCan.reviewDeposits && d.status !== "REJECTED" ? (
+                          <RejectDepositDialog id={d.id} verified={d.status === "VERIFIED"} />
+                        ) : null}
+                        {d.canDelete ? <DeleteDepositButton id={d.id} /> : null}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+                {verifiedMinor ? (
+                  <p className="text-muted-foreground text-xs">Verified total: {formatMoney(verifiedMinor, "USD")}</p>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
+
           {duplicates.length ? (
             <Card className="border-amber-400/60">
               <CardHeader>
@@ -324,17 +447,50 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
 
       <Card className="mt-4">
         <CardHeader>
+          <CardTitle>Qualification</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {editable ? (
+            <QualificationForm leadId={l.id} answers={l.qualification} />
+          ) : answered ? (
+            <dl className="grid gap-4 text-sm md:grid-cols-3">
+              {(Object.keys(QUALIFICATION_QUESTIONS) as (keyof typeof QUALIFICATION_QUESTIONS)[]).map((k) => (
+                <div key={k}>
+                  <dt className="text-muted-foreground">{QUALIFICATION_QUESTIONS[k]}</dt>
+                  <dd className="whitespace-pre-wrap">{l.qualification[k] ?? "–"}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <p className="text-muted-foreground text-sm">Not asked yet.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
+        <CardHeader>
           <CardTitle>Activity</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-6">
-          {canWrite && !l.mergedIntoId ? <ActivityComposer leadId={l.id} /> : null}
+          {editable ? <ActivityComposer leadId={l.id} /> : null}
           {activities.length === 0 ? (
             <p className="text-muted-foreground text-sm">No activity yet.</p>
           ) : (
             <ol className="grid gap-3 border-l pl-4 text-sm">
               {activities.map((a) => {
                 const { title, detail } = describeActivity(a);
-                const touch = ["NOTE", "CALL", "WHATSAPP", "EMAIL", "MEETING", "INBOUND", "TASK_DONE"].includes(a.type);
+                const touch = [
+                  "NOTE",
+                  "CALL",
+                  "WHATSAPP",
+                  "EMAIL",
+                  "MEETING",
+                  "INBOUND",
+                  "TASK_DONE",
+                  "PRODUCT_CONVERTED",
+                  "DEPOSIT_LOGGED",
+                  "DEPOSIT_VERIFIED",
+                ].includes(a.type);
                 return (
                   <li key={a.id} className="relative">
                     <span

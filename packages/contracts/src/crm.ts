@@ -2,15 +2,21 @@ import { z } from "zod";
 import {
   ACTIVITY_DIRECTIONS,
   CALL_OUTCOMES,
+  CONVERSION_SOURCES,
   CRM_TASK_STATUSES,
+  DEPOSIT_SEQUENCES,
+  DEPOSIT_STATUSES,
   EXPERIENCE_LEVELS,
   FOLLOWUP_TYPES,
   LEAD_ACTIVITY_TYPES,
   LEAD_CHANNELS,
+  LEAD_LANGUAGES,
   LEAD_SOURCES,
   LEAD_STAGES,
   LEAD_TEMPERATURES,
   LEAD_TOUCH_TYPES,
+  LEADERBOARD_PERIODS,
+  PRODUCT_STATUSES,
   PROJECT_STATUSES,
   TASK_PRIORITIES,
 } from "@edge/domain/crm/enums";
@@ -45,6 +51,8 @@ export const LeadFilters = z.object({
   batch: z.string().optional(),
   course: z.string().optional(),
   tag: z.string().trim().optional(),
+  /** Leads converted to this product id. */
+  product: z.string().optional(),
   due: z.enum(["overdue", "today", "week", "none"]).optional(),
   created: z.enum(["today", "week", "month"]).optional(),
   /** Default "open" hides CONVERTED and LOST unless a stage filter is given. */
@@ -78,7 +86,15 @@ export const LeadFields = z.object({
   experienceLevel: optEnum(EXPERIENCE_LEVELS),
   temperature: optEnum(LEAD_TEMPERATURES),
   preferredChannel: optEnum(LEAD_CHANNELS),
-  language: z.string().trim().max(20).optional(),
+  language: optEnum(LEAD_LANGUAGES),
+  jetaFxClientId: z.string().trim().max(40).optional(),
+  qualification: z
+    .object({
+      experience: z.string().trim().max(1000).optional(),
+      occupation: z.string().trim().max(1000).optional(),
+      purpose: z.string().trim().max(1000).optional(),
+    })
+    .optional(),
   /** Comma separated. */
   tags: z.string().trim().max(500).optional(),
   notes: z.string().trim().max(5000).optional(),
@@ -165,6 +181,62 @@ export const CrmSettingsInput = z.object({
   lostReasons: z.string().max(2000),
 });
 
+export const ProductInput = z.object({
+  name: z.string().trim().min(2, "Enter a name").max(80),
+  description: z.string().trim().max(1000).optional(),
+  status: z.enum(PRODUCT_STATUSES).default("ACTIVE"),
+  /** Becoming a student counts as converting to this product (only one product can be it). */
+  isStudentCourse: z.boolean().optional(),
+  sortOrder: optInt,
+});
+export type ProductInput = z.input<typeof ProductInput>;
+
+export const ConversionInput = z.object({
+  productIds: z.array(z.string().min(1)).min(1, "Choose at least one product").max(20),
+  note: z.string().trim().max(1000).optional(),
+});
+
+/** An amount typed by a person ("1,500.50"): positive, at most two decimals. */
+const zAmount = z
+  .string()
+  .trim()
+  .min(1, "Enter the amount")
+  .refine(
+    (v) => /^\d{1,9}(\.\d{1,2})?$/.test(v.replace(/,/g, "")) && Number(v.replace(/,/g, "")) > 0,
+    "Enter an amount like 500 or 1250.50",
+  );
+
+export const DepositInput = z.object({
+  sequence: z.enum(DEPOSIT_SEQUENCES, { message: "Choose which deposit this is" }),
+  amount: zAmount,
+  depositedAt: z.iso.date({ message: "Choose the deposit date" }),
+  /** Required (and saved on the lead) when the lead has no JetaFX client id yet. */
+  jetaFxClientId: z.string().trim().max(40).optional(),
+  reference: z.string().trim().max(120).optional(),
+  note: z.string().trim().max(1000).optional(),
+});
+export type DepositInput = z.input<typeof DepositInput>;
+
+export const DepositFilters = z.object({
+  status: z.enum(DEPOSIT_STATUSES).optional(),
+  /** Credited staff user id (commission managers only). */
+  staff: z.string().optional(),
+  period: z.enum(LEADERBOARD_PERIODS).optional(),
+  ...zPage.shape,
+});
+export type DepositFilters = z.input<typeof DepositFilters>;
+
+export const CommissionSettingsInput = z.object({
+  firstPct: z.coerce.number({ message: "Enter a percentage" }).min(0).max(100),
+  secondPct: z.coerce.number({ message: "Enter a percentage" }).min(0).max(100),
+  laterPct: z.coerce.number({ message: "Enter a percentage" }).min(0).max(100),
+});
+
+export const LeaderboardQuery = z.object({
+  period: z.enum(LEADERBOARD_PERIODS).default("month"),
+  project: z.string().optional(),
+});
+
 export const CrmStaffCreateInput = StaffCreateInput.extend({ projectIds: z.array(z.string()).optional() });
 export const CrmRoleInput = z.object({
   id: z.string().optional(),
@@ -185,6 +257,7 @@ export const LeadOwnerRef = z.object({
   available: z.boolean().optional(),
 });
 export const ProjectRef = z.object({ id: z.string(), name: z.string(), code: z.string() });
+export const ProductRef = z.object({ id: z.string(), name: z.string() });
 
 export const LeadListItem = z.object({
   id: z.string(),
@@ -207,11 +280,13 @@ export const LeadListItem = z.object({
   createdAt: z.string(),
   studentId: nullable,
   lostReason: nullable,
+  language: z.enum(LEAD_LANGUAGES).nullable(),
+  jetaFxClientId: nullable,
+  products: z.array(ProductRef),
 });
 export type LeadListItem = z.infer<typeof LeadListItem>;
 
 export const LeadDto = LeadListItem.extend({
-  language: nullable,
   preferredChannel: z.enum(LEAD_CHANNELS).nullable(),
   experienceLevel: z.enum(EXPERIENCE_LEVELS).nullable(),
   courseInterestId: nullable,
@@ -221,6 +296,7 @@ export const LeadDto = LeadListItem.extend({
   notes: nullable,
   score: z.number(),
   consent: z.object({ marketing: z.boolean(), marketingAt: nullable, whatsapp: z.boolean() }),
+  qualification: z.object({ experience: nullable, occupation: nullable, purpose: nullable }),
   lostNote: nullable,
   stageChangedAt: nullable,
   firstContactedAt: nullable,
@@ -265,6 +341,120 @@ export const TaskDto = z.object({
   updatedAt: z.string(),
 });
 export type TaskDto = z.infer<typeof TaskDto>;
+
+export const ProductDto = z.object({
+  id: z.string(),
+  name: z.string(),
+  code: z.string(),
+  description: nullable,
+  status: z.enum(PRODUCT_STATUSES),
+  isStudentCourse: z.boolean(),
+  sortOrder: z.number(),
+  conversionsMonth: z.number(),
+  conversionsTotal: z.number(),
+  createdAt: z.string(),
+});
+export type ProductDto = z.infer<typeof ProductDto>;
+
+export const LeadConversionDto = z.object({
+  id: z.string(),
+  product: ProductRef,
+  creditedTo: LeadOwnerRef.nullable(),
+  convertedBy: LeadOwnerRef.nullable(),
+  source: z.enum(CONVERSION_SOURCES),
+  note: nullable,
+  convertedAt: z.string(),
+});
+export type LeadConversionDto = z.infer<typeof LeadConversionDto>;
+
+export const LeadDepositDto = z.object({
+  id: z.string(),
+  lead: z.object({ id: z.string(), name: z.string() }),
+  creditedTo: LeadOwnerRef.nullable(),
+  loggedBy: LeadOwnerRef.nullable(),
+  sequence: z.enum(DEPOSIT_SEQUENCES),
+  amountMinor: z.number(),
+  currency: z.string(),
+  /** YYYY-MM-DD */
+  depositedAt: z.string(),
+  jetaFxClientId: nullable,
+  reference: nullable,
+  note: nullable,
+  status: z.enum(DEPOSIT_STATUSES),
+  reviewedBy: LeadOwnerRef.nullable(),
+  reviewedAt: nullable,
+  rejectReason: nullable,
+  /** Only for commission managers and the credited person; null until verified. */
+  commissionPct: nullable,
+  commissionMinor: z.number().nullable(),
+  createdAt: z.string(),
+  /** The viewer may delete it (still pending, and they logged it, are credited, or manage commission). */
+  canDelete: z.boolean(),
+});
+export type LeadDepositDto = z.infer<typeof LeadDepositDto>;
+
+export const DepositSummary = z.object({
+  pendingCount: z.number(),
+  pendingMinor: z.number(),
+  verifiedCount: z.number(),
+  verifiedMinor: z.number(),
+  commissionMinor: z.number(),
+});
+export type DepositSummary = z.infer<typeof DepositSummary>;
+
+export const DepositList = paged(LeadDepositDto).extend({
+  summary: DepositSummary,
+  /** The viewer sees everyone's deposits and may verify them. */
+  manage: z.boolean(),
+  staff: z.array(LeadOwnerRef),
+});
+export type DepositList = z.infer<typeof DepositList>;
+
+export const CommissionSettingsDto = z.object({ firstPct: z.number(), secondPct: z.number(), laterPct: z.number() });
+export type CommissionSettingsDto = z.infer<typeof CommissionSettingsDto>;
+
+export const LeaderboardRow = z.object({
+  rank: z.number(),
+  id: z.string(),
+  name: z.string(),
+  conversions: z.number(),
+  /** Conversions per product id. */
+  byProduct: z.record(z.string(), z.number()),
+  newLeads: z.number(),
+  /** Of those new leads, how many converted (to anything). */
+  convertedLeads: z.number(),
+  conversionRate: z.number().nullable(),
+  depositsMinor: z.number(),
+  /** Only filled in for commission managers. */
+  commissionMinor: z.number().nullable(),
+  isMe: z.boolean(),
+});
+export type LeaderboardRow = z.infer<typeof LeaderboardRow>;
+
+export const LeaderboardDto = z.object({
+  period: z.enum(LEADERBOARD_PERIODS),
+  products: z.array(ProductRef),
+  rows: z.array(LeaderboardRow),
+  showCommission: z.boolean(),
+  /** The viewer's own figures for the period. */
+  me: z.object({
+    conversions: z.number(),
+    depositsMinor: z.number(),
+    commissionMinor: z.number(),
+    pendingCount: z.number(),
+    pendingMinor: z.number(),
+  }),
+});
+export type LeaderboardDto = z.infer<typeof LeaderboardDto>;
+
+export const StaffCommissionDto = z.object({
+  commission: z.object({ month: z.number(), lastMonth: z.number(), all: z.number() }),
+  deposits: z.object({ month: z.number(), all: z.number() }),
+  pending: z.object({ count: z.number(), minor: z.number() }),
+  conversions: z.object({ month: z.number(), all: z.number() }),
+  recent: z.array(LeadDepositDto),
+});
+export type StaffCommissionDto = z.infer<typeof StaffCommissionDto>;
 
 export const TaskCommentDto = z.object({ id: z.string(), body: z.string(), author: LeadOwnerRef.nullable(), createdAt: z.string() });
 export type TaskCommentDto = z.infer<typeof TaskCommentDto>;
@@ -346,6 +536,8 @@ export const CrmOptions = z.object({
   courses: z.array(z.object({ id: z.string(), title: z.string() })),
   batches: z.array(z.object({ id: z.string(), label: z.string(), courseId: z.string() })),
   lostReasons: z.array(z.string()),
+  /** Active products a lead can be converted to. */
+  products: z.array(ProductRef),
 });
 export type CrmOptions = z.infer<typeof CrmOptions>;
 
@@ -366,8 +558,17 @@ export const LeadDetail = z.object({
   /** An existing student with this phone or email that is not linked yet. */
   matchingStudent: z.object({ id: z.string(), name: z.string(), email: z.string() }).nullable(),
   duplicates: z.array(z.object({ id: z.string(), name: z.string(), phone: nullable, email: nullable, stage: z.enum(LEAD_STAGES) })),
+  conversions: z.array(LeadConversionDto),
+  deposits: z.array(LeadDepositDto),
   /** What the viewer may do with this lead. */
-  can: z.object({ delete: z.boolean(), assign: z.boolean(), claim: z.boolean(), moveProject: z.boolean() }),
+  can: z.object({
+    delete: z.boolean(),
+    assign: z.boolean(),
+    claim: z.boolean(),
+    moveProject: z.boolean(),
+    removeConversion: z.boolean(),
+    reviewDeposits: z.boolean(),
+  }),
   options: CrmOptions,
 });
 export type LeadDetail = z.infer<typeof LeadDetail>;
@@ -398,6 +599,8 @@ export const CrmDashboardDto = z.object({
     }),
   ),
   owners: z.array(z.object({ id: z.string(), name: z.string(), open: z.number(), overdue: z.number(), convertedMonth: z.number() })),
+  /** Product conversions this month (Dubai), per active product. */
+  byProduct: z.array(z.object({ id: z.string(), name: z.string(), month: z.number() })),
   myTasks: z.array(TaskDto),
 });
 export type CrmDashboardDto = z.infer<typeof CrmDashboardDto>;
@@ -529,6 +732,30 @@ export const crmRoutes = {
     body: z.object({ fromId: z.string().min(1) }),
     response: zOk,
   }),
+  markConversions: route({ method: "POST", path: `${base}/leads/:id/conversions`, params: idParam, body: ConversionInput, response: zOk }),
+  removeConversion: route({ method: "POST", path: `${base}/conversions/:id/delete`, params: idParam, response: zOk }),
+  logDeposit: route({
+    method: "POST",
+    path: `${base}/leads/:id/deposits`,
+    params: idParam,
+    body: DepositInput,
+    response: z.object({ id: z.string() }),
+  }),
+  deposits: route({ method: "GET", path: `${base}/deposits`, query: DepositFilters, response: DepositList }),
+  verifyDeposit: route({ method: "POST", path: `${base}/deposits/:id/verify`, params: idParam, response: zOk }),
+  rejectDeposit: route({
+    method: "POST",
+    path: `${base}/deposits/:id/reject`,
+    params: idParam,
+    body: z.object({ reason: z.string().trim().min(2, "Give a reason").max(300) }),
+    response: zOk,
+  }),
+  deleteDeposit: route({ method: "POST", path: `${base}/deposits/:id/delete`, params: idParam, response: zOk }),
+  leaderboard: route({ method: "GET", path: `${base}/leaderboard`, query: LeaderboardQuery, response: LeaderboardDto }),
+
+  products: route({ method: "GET", path: `${base}/products`, response: z.array(ProductDto) }),
+  createProduct: route({ method: "POST", path: `${base}/products`, body: ProductInput, response: z.object({ id: z.string() }) }),
+  updateProduct: route({ method: "POST", path: `${base}/products/:id`, params: idParam, body: ProductInput.partial(), response: zOk }),
 
   board: route({ method: "GET", path: `${base}/board`, query: taskFilters, response: BoardDto }),
   tasks: route({
@@ -609,11 +836,14 @@ export const crmRoutes = {
     params: idParam,
     response: z.object({ ok: z.literal(true), tempPassword: z.string() }),
   }),
+  staffCommission: route({ method: "GET", path: `${base}/team/:id/commission`, params: idParam, response: StaffCommissionDto }),
   roles: route({ method: "GET", path: `${base}/roles`, response: z.array(RoleDto) }),
   saveRole: route({ method: "POST", path: `${base}/roles`, body: CrmRoleInput, response: z.object({ id: z.string() }) }),
 
   settings: route({ method: "GET", path: `${base}/settings`, response: CrmSettingsDto }),
   saveSettings: route({ method: "POST", path: `${base}/settings`, body: CrmSettingsInput, response: zOk }),
+  commissionSettings: route({ method: "GET", path: `${base}/commission`, response: CommissionSettingsDto }),
+  saveCommissionSettings: route({ method: "POST", path: `${base}/commission`, body: CommissionSettingsInput, response: zOk }),
 
   importPreview: route({
     method: "POST",

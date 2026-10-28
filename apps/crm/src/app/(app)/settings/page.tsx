@@ -6,13 +6,17 @@ import { api } from "@edge/web/server";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CrmSettingsForm } from "@/components/crm/crm-settings-form";
-import { load, requireCrm } from "@/lib/load";
+import { CommissionSettingsForm } from "@/components/crm/deposit-actions";
+import { can, load, requireCrm } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Settings" };
 
 export default async function CrmSettingsPage() {
-  await requireCrm("crm.manage");
-  const s = await load(() => api(crmRoutes.settings));
+  const v = await requireCrm("crm.manage");
+  const [s, commission] = await Promise.all([
+    load(() => api(crmRoutes.settings)),
+    can(v, "crm.commission.manage") ? load(() => api(crmRoutes.commissionSettings)) : null,
+  ]);
   return (
     <>
       <PageHeader help="/docs/settings" title="Settings" />
@@ -25,6 +29,23 @@ export default async function CrmSettingsPage() {
             <CrmSettingsForm s={s} />
           </CardContent>
         </Card>
+        {commission ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Commission on JetaFX deposits</CardTitle>
+              <CardDescription>
+                Percent of each verified deposit, by which deposit it is. Products (Inner Circle, the clubs…) are managed under{" "}
+                <Link href="/products" className="underline">
+                  Products
+                </Link>
+                .
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CommissionSettingsForm s={commission} />
+            </CardContent>
+          </Card>
+        ) : null}
         <Card>
           <CardHeader>
             <CardTitle>Website lead form</CardTitle>

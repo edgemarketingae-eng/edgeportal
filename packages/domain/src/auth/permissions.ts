@@ -32,6 +32,7 @@ export const PERMISSIONS = {
   "crm.leads.delete": "Delete leads permanently",
   "crm.staff.manage": "Create and manage CRM staff",
   "crm.roles.manage": "Create and edit CRM roles",
+  "crm.commission.manage": "Set commission rates, verify deposits and see everyone's commission",
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
