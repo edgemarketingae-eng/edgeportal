@@ -1,5 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { Course, Lead, LeadInboundEvent, Project, Types, withTx, type LeadInboundEventDoc } from "@edge/db";
+import { Course, Lead, LeadInboundEvent, Project, Types, withTx, type LeadInboundEventDoc, type ProjectDoc } from "@edge/db";
 import { now } from "@edge/domain/clock";
 import { INBOUND_SOURCES } from "@edge/domain/crm/enums";
 import { normalizeLanguage, parseTags } from "@edge/domain/crm/machine";
@@ -128,17 +128,28 @@ async function matchCourse(text?: string) {
   return c ? String(c._id) : null;
 }
 
+/** The active project with this code for a new lead; General when there is no code, or it is missing or not active. */
+async function intakeProject(code?: string): Promise<ProjectDoc> {
+  if (code) {
+    const p = await Project.findOne({ code, status: "ACTIVE" }).lean();
+    if (p) return p as ProjectDoc;
+    console.warn(`[lead-intake] project ${code} is missing or not active; the lead goes to the default project`);
+  }
+  return getDefaultProject();
+}
+
 /**
  * Create the lead, or append an INBOUND entry to an existing live lead with the same phone/email.
  * `assignExecWithPhone` (landing pages) always round-robins an unowned lead to a sales executive
  * who has a phone, whatever the CRM's round-robin setting, because the visitor is sent to that person's WhatsApp.
  * `altPhone` is a second number of the visitor's (e.g. calls vs WhatsApp): an existing lead under it also matches.
+ * `projectCode` puts a new lead in that project (and its team's round-robin); an existing lead stays where it is.
  */
 export async function ingestInboundLead(
   source: string,
   p: InboundLeadPayload,
   eventId: Types.ObjectId | null,
-  opts: { assignExecWithPhone?: boolean; altPhone?: string | null } = {},
+  opts: { assignExecWithPhone?: boolean; altPhone?: string | null; projectCode?: string } = {},
 ): Promise<{ leadId: string; existing: boolean; ownerId: string | null }> {
   const email = normalizeEmail(p.email);
   const parsedPhone = p.phone?.trim() ? parsePhone(p.phone, p.country?.toUpperCase()) : null;
@@ -202,7 +213,7 @@ export async function ingestInboundLead(
   }
 
   const cfg = await getSetting("crm.config");
-  const project = await getDefaultProject();
+  const project = await intakeProject(opts.projectCode);
   const ownerId = opts.assignExecWithPhone
     ? ((await roundRobinPicker(project, { withPhone: true })).next() ?? "")
     : cfg.roundRobin

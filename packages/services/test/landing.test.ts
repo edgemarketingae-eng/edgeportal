@@ -1,4 +1,4 @@
-import { Lead, LeadActivity, StaffProfile, Types } from "@edge/db";
+import { Lead, LeadActivity, Project, StaffProfile, Types } from "@edge/db";
 import { closeTestDb, connectTestDb, resetDb } from "@edge/db/testing";
 import { freezeClock, setClock } from "@edge/domain/clock";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -233,6 +233,41 @@ describe("Forex Growth Hub form", () => {
 
   it("rejects an invalid WhatsApp number", async () => {
     await expect(captureGrowthHubLead({ name: "Bad Number", whatsapp: "12345" })).rejects.toMatchObject({ status: 422 });
+  });
+
+  it("puts new leads in the Free Course support project, round-robined among its team; known leads stay where they are", async () => {
+    const team = await exec("Team Tara", "+971500000081");
+    const outsider = await exec("Aaron Outside", "+971500000082"); // in General only: never picked for this project
+    const noPhone = await exec("Team Nophone");
+    const fcs = await Project.create({ name: "Free Course support", code: "FREE-COURSE-SUPPORT", memberIds: [team, noPhone].map((id) => new Types.ObjectId(id)) });
+
+    const r = await captureGrowthHubLead({ name: "New Viewer", whatsapp: "+971551110030" });
+    const lead = (await Lead.findOne({ phone: "+971551110030" }).lean())!;
+    expect(String(lead.projectId)).toBe(String(fcs._id));
+    expect(String(lead.ownerId)).toBe(team);
+    expect(r.contactName).toBe("Team Tara");
+
+    // Already a lead in General with its owner: same project, same owner.
+    const g = await getDefaultProject();
+    await createLead({ projectId: String(g._id), name: "Known", phone: "+971551110031", source: "WEBSITE", ownerId: outsider }, { type: "SYSTEM" });
+    const known = await captureGrowthHubLead({ name: "Known", whatsapp: "+971551110031" });
+    expect(known.contactName).toBe("Aaron Outside");
+    expect(String((await Lead.findOne({ phone: "+971551110031" }).lean())!.projectId)).toBe(String(g._id));
+  });
+
+  it("uses support WhatsApp when nobody on the project team can take it, and General when the project is not active", async () => {
+    await exec("General Gina", "+971500000091");
+    const fcs = await Project.create({ name: "Free Course support", code: "FREE-COURSE-SUPPORT", memberIds: [] });
+    const none = await captureGrowthHubLead({ name: "Empty Team", whatsapp: "+971551110040" });
+    expect(none).toEqual({ whatsappUrl: null, contactName: null });
+    const lead = (await Lead.findOne({ phone: "+971551110040" }).lean())!;
+    expect(String(lead.projectId)).toBe(String(fcs._id));
+    expect(lead.ownerId).toBeNull();
+
+    await Project.updateOne({ _id: fcs._id }, { $set: { status: "PAUSED" } });
+    const r = await captureGrowthHubLead({ name: "Paused Project", whatsapp: "+971551110041" });
+    expect(r.contactName).toBe("General Gina");
+    expect(String((await Lead.findOne({ phone: "+971551110041" }).lean())!.projectId)).toBe(String((await getDefaultProject())._id));
   });
 });
 

@@ -16,6 +16,8 @@ import { reachableExec } from "./round-robin";
 
 const SOURCE_DETAIL = "Free live class landing page";
 const GROWTH_HUB_DETAIL = "Forex Growth Hub";
+/** CRM project (by code) for new Growth Hub leads; General if it is missing or not active. */
+const GROWTH_HUB_PROJECT = "FREE-COURSE-SUPPORT";
 
 type Utm = { source?: string; medium?: string; campaign?: string; content?: string; term?: string };
 
@@ -43,8 +45,8 @@ async function contactFor(ownerId: string | null) {
 }
 
 /**
- * Create (or refresh) the CRM lead in the General project, round-robin it to a sales executive who has a phone,
- * note on the timeline where the visitor was sent, and return the WhatsApp link.
+ * Create (or refresh) the CRM lead in the General project (or `projectCode`), round-robin it to a sales executive
+ * on that project who has a phone, note on the timeline where the visitor was sent, and return the WhatsApp link.
  */
 async function captureLandingLead(input: {
   name: string;
@@ -54,6 +56,7 @@ async function captureLandingLead(input: {
   message?: string;
   page: string;
   tags: string[];
+  projectCode?: string;
   /** Short id for the timeline entry (data.landing) and the page named in it. */
   landing: { id: string; label: string };
   utm?: Utm;
@@ -63,7 +66,7 @@ async function captureLandingLead(input: {
     "website",
     { name: input.name, phone: input.phone, message: input.message, page: input.page, utm: input.utm, whatsappConsent: true, tags: input.tags },
     null,
-    { assignExecWithPhone: true, altPhone: input.altPhone },
+    { assignExecWithPhone: true, altPhone: input.altPhone, projectCode: input.projectCode },
   );
   const contact = await contactFor(out.ownerId);
   if (contact)
@@ -99,8 +102,9 @@ export async function captureFreeClassLead(input: { name: string; phone: string;
 }
 
 /**
- * Forex Growth Hub form (people watching the recorded classes). The lead's phone is the WhatsApp number, which is
- * where the conversation happens; a different call number is kept in the notes and also used to find a known lead.
+ * Forex Growth Hub form (people watching the recorded classes). New leads go to the Free Course support project.
+ * The lead's phone is the WhatsApp number, which is where the conversation happens; a different call number is
+ * kept in the notes and also used to find a known lead.
  */
 export async function captureGrowthHubLead(input: { name: string; whatsapp: string; phone?: string; page?: string; utm?: Utm }) {
   const wa = parsePhone(input.whatsapp)?.e164 ?? null;
@@ -114,6 +118,7 @@ export async function captureGrowthHubLead(input: { name: string; whatsapp: stri
     message: otherCall ? `WhatsApp: ${wa}\nPhone (calls): ${otherCall}` : undefined,
     page: GROWTH_HUB_DETAIL,
     tags: ["growth-hub"],
+    projectCode: GROWTH_HUB_PROJECT,
     landing: { id: "growth-hub", label: "Forex Growth Hub" },
     utm: input.utm,
     text: (greet, visitor) =>

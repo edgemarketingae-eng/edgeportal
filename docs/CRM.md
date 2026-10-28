@@ -247,11 +247,15 @@ secret, because the page is public. Instead:
 Body (JSON): `name`, `whatsapp` (required), `phone` (the call number, optional), `page`, `utm{}`.
 Response: `{ ok, whatsappUrl, contactName }`, the same as the landing page.
 
-- The lead takes the same path as the free class landing page above:
-  - source WEBSITE, detail "Forex Growth Hub", tag `growth-hub`, WhatsApp consent;
-  - a new lead is round-robined in General among sales executives with a phone;
-  - a known lead keeps its owner, and an owner who is Off hands it on;
-  - with no eligible owner the visitor goes to Support WhatsApp.
+- The lead takes the same path as the free class landing page above, with one difference: a **new** lead goes to the
+  **Free Course support** project (code `FREE-COURSE-SUPPORT`).
+  - Source WEBSITE, detail "Forex Growth Hub", tag `growth-hub`, WhatsApp consent.
+  - It is round-robined among the sales executives **on that project's team** who have a phone.
+  - If that project is missing or not ACTIVE, the lead goes to General instead and the API logs a warning.
+  - A known lead stays in its own project and keeps its owner; an owner who is Off hands it to someone else on that
+    project.
+  - With no eligible owner (for example nobody on the team has a phone), the lead is left unassigned and the
+    visitor goes to Support WhatsApp.
 - The lead's phone is the **WhatsApp number**. A different call number is written to the notes (or, for a known
   lead, the INBOUND entry), and either number finds a known lead.
 - The visitor is sent to `wa.me/<owner's phone>` with "I watched the free trading classes on Forex Growth Hub…" ready
