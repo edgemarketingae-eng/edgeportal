@@ -5,7 +5,8 @@ import { crmSignIn } from "./helpers";
 /**
  * Free class landing page: a signed-out visitor from an ad opens the student app's home page, joins the free class
  * with name and WhatsApp, lands in a sales executive's WhatsApp chat with the message typed in, and the lead shows
- * up in the CRM assigned to that person. The contact page (/support) sends its leads to the Support project.
+ * up in the CRM assigned to that person. The contact page (/support) sends its leads to the Free Course support project
+ * (General when there is none, as in this stack).
  */
 test.describe.configure({ mode: "serial" });
 
@@ -52,12 +53,16 @@ test("2. the lead is in the CRM General project, owned by a sales executive, wit
   await expect(page.getByText(/· General · Owner \S/)).toBeVisible();
 });
 
-test("3. a visitor asks for broker account help on the contact page, and the lead lands in the Support project", async ({ page }) => {
-  let whatsapp = "";
-  await page.route("https://wa.me/**", async (route) => {
-    whatsapp = route.request().url();
-    await route.fulfill({ contentType: "text/html", body: "<h1>WhatsApp</h1>" });
-  });
+test("3. a visitor asks for broker account help on the contact page, and the lead lands in the CRM", async ({ page }) => {
+  let chat = "";
+  for (const [url, app] of [
+    ["https://wa.me/**", "WhatsApp"],
+    ["https://t.me/**", "Telegram"],
+  ])
+    await page.route(url, async (route) => {
+      chat = route.request().url();
+      await route.fulfill({ contentType: "text/html", body: `<h1>${app}</h1>` });
+    });
   await page.goto(`${E2E.student}/support?topic=broker-account&utm_source=e2e-support`);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("How Can We Help?");
   await expect(page.getByRole("radio", { name: /Broker account opening/ })).toBeChecked(); // preselected by the link
@@ -69,9 +74,11 @@ test("3. a visitor asks for broker account help on the contact page, and the lea
   await page.getByLabel("WhatsApp number").fill(asker.phone);
   await page.getByLabel("How can we help? (optional)").fill("Can we do it today?");
   await page.getByRole("button", { name: "Contact us" }).click();
-  // The Support team is empty in this stack: the academy's WhatsApp when it is set, otherwise a thank-you.
-  await expect(page.getByRole("heading", { name: "WhatsApp" }).or(page.getByText(/Our team will contact you shortly/))).toBeVisible();
-  if (whatsapp) expect(new URL(whatsapp).searchParams.get("text")).toMatch(/I'd like to open a JetaFX broker account/);
+  // This stack has no Free Course support project, so the lead goes to General's round-robin (or the academy's WhatsApp, or a thank-you).
+  await expect(
+    page.getByRole("heading", { name: /^(WhatsApp|Telegram)$/ }).or(page.getByText(/Our team will contact you shortly/)),
+  ).toBeVisible();
+  if (chat) expect(new URL(chat).searchParams.get("text")).toMatch(/I'd like to open a JetaFX broker account/);
 
   await page.context().clearCookies();
   await crmSignIn(page, "crm-admin@edgeacademy.local");
@@ -79,7 +86,7 @@ test("3. a visitor asks for broker account help on the contact page, and the lea
   await page.goto(`${E2E.crm}/leads?q=${encodeURIComponent(asker.name)}`);
   await page.getByRole("link", { name: asker.name }).first().click();
   await expect(page).toHaveURL(/\/leads\/[a-f0-9]{24}/);
-  await expect(page.getByText(/· Support ·/)).toBeVisible();
+  await expect(page.getByText(/· General ·/)).toBeVisible();
   await expect(page.getByText("Contact page · Broker account opening").first()).toBeVisible();
   await expect(page.getByText(/Can we do it today\?/).first()).toBeVisible();
 });

@@ -1,4 +1,4 @@
-import { Lead, Project, seedBaseData } from "@edge/db";
+import { Lead, Project } from "@edge/db";
 import { createStaff, setSetting } from "@edge/services";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -112,8 +112,8 @@ describe("free class landing API", () => {
 describe("contact page API", () => {
   const SUPPORT = "/api/v1/public/support/leads";
 
-  it("creates the lead in the Support project with the topic, validates input and ignores bots", async () => {
-    await seedBaseData();
+  it("creates the lead in the Free Course support project with the topic, validates input and ignores bots", async () => {
+    const fcs = await Project.create({ name: "Free Course support", code: "FREE-COURSE-SUPPORT" });
     await request(app).post(SUPPORT).send({ name: "Visitor", phone: "+971551231400", topic: "COURSE" }).expect(404); // internal token only
     const res = await request(app)
       .post(SUPPORT)
@@ -122,7 +122,7 @@ describe("contact page API", () => {
       .expect(200);
     expect(res.body).toMatchObject({ ok: true });
     const lead = (await Lead.findOne({ phone: "+971551231400" }).lean())!;
-    expect(String(lead.projectId)).toBe(String((await Project.findOne({ code: "SUPPORT" }).lean())!._id));
+    expect(String(lead.projectId)).toBe(String(fcs._id));
     expect(lead).toMatchObject({ sourceDetail: "Contact page · Course joining", notes: "Contact page: Course joining\nWeekend batch?" });
 
     const bad = await request(app)

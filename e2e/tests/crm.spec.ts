@@ -90,6 +90,11 @@ test("1c. the CRM admin moves the account to Telegram, and the saved form shows 
       .filter({ visible: true })
       .getByLabel(/^Sales executive/),
   ).toBeChecked();
+
+  // And back: General's round-robin can send landing page visitors in later specs to this account, on WhatsApp.
+  await channel.selectOption("WHATSAPP");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(channel).toHaveValue("WHATSAPP");
 });
 
 test("2. the sales executive sees only their projects, creates a lead, logs a call and moves its task on the board", async ({ page }) => {

@@ -1426,11 +1426,12 @@ export const crmDocs: DocModule[] = [
                 from General into the right project.
               </>
               <>
-                The <b>Support</b> project is created for you and receives new enquiries from the contact page (the student app&apos;s{" "}
-                <i>/support</i> page: help and support, broker account opening, course joining, Inner Circle access, free live classes). Add
-                the support team to it as sales executives: each new enquiry goes round-robin to one of them, and the visitor is sent to
-                that person&apos;s WhatsApp or Telegram. While its team is empty, enquiries wait there unassigned and visitors go to the
-                academy&apos;s support WhatsApp. Someone who is already a lead stays in their project and with their owner.
+                The <b>Free Course support</b> project (code <i>FREE-COURSE-SUPPORT</i>) receives new enquiries from the Forex Growth Hub
+                forms and from the contact page (the student app&apos;s <i>/support</i> page: help and support, broker account opening,
+                course joining, Inner Circle access, free live classes). Each new enquiry goes round-robin to one of its sales executives,
+                and the visitor is sent to that person&apos;s WhatsApp or Telegram. While its team is empty, enquiries wait there unassigned
+                and visitors go to the academy&apos;s support WhatsApp; if the project is missing or not active, they go to General. Someone
+                who is already a lead stays in their project and with their owner.
               </>
               <>
                 A project has <b>project managers</b>, who see and run everything inside it, and <b>sales executives</b> (team members), who

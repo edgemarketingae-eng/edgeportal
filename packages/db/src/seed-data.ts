@@ -1,5 +1,5 @@
 import { RETIRED_SYSTEM_ROLES, SYSTEM_ROLES } from "@edge/domain/auth/permissions";
-import { LEAD_LANGUAGES, SUPPORT_PROJECT_CODE } from "@edge/domain/crm/enums";
+import { LEAD_LANGUAGES } from "@edge/domain/crm/enums";
 import { normalizeLanguage } from "@edge/domain/crm/machine";
 import { Lead, LeadDeposit, Project } from "./models/crm";
 import { FeeRate, Setting } from "./models/payments";
@@ -75,7 +75,7 @@ export const FEE_RATES = [
   },
 ] as const;
 
-/** Idempotent: system roles are kept in sync; fee rates and the default and Support CRM projects are only inserted when missing. */
+/** Idempotent: system roles are kept in sync; fee rates and the default CRM project are only inserted when missing. */
 export async function seedBaseData() {
   for (const r of SYSTEM_ROLES) {
     await Role.updateOne(
@@ -101,21 +101,6 @@ export async function seedBaseData() {
         description: "Inbound and unassigned leads. Open to every CRM user.",
         status: "ACTIVE",
         isDefault: true,
-        managerIds: [],
-        memberIds: [],
-      },
-    },
-    { upsert: true },
-  );
-  // Leads from the student app's contact page; admins add the support team to it.
-  await Project.updateOne(
-    { code: SUPPORT_PROJECT_CODE },
-    {
-      $setOnInsert: {
-        name: "Support",
-        description: "Enquiries from the contact page: help, broker accounts, courses, Inner Circle, free classes.",
-        status: "ACTIVE",
-        isDefault: false,
         managerIds: [],
         memberIds: [],
       },

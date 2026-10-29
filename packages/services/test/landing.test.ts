@@ -1,4 +1,4 @@
-import { Lead, LeadActivity, Project, seedBaseData, StaffProfile, Types } from "@edge/db";
+import { Lead, LeadActivity, Project, StaffProfile, Types } from "@edge/db";
 import { closeTestDb, connectTestDb, resetDb } from "@edge/db/testing";
 import { freezeClock, setClock } from "@edge/domain/clock";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -381,13 +381,10 @@ describe("Forex Growth Hub form", () => {
 });
 
 describe("contact page", () => {
-  it("puts new leads in the seeded Support project, round-robined among its team, with the topic and note", async () => {
-    await seedBaseData();
-    const sup = (await Project.findOne({ code: "SUPPORT" }).lean())!;
-    expect(sup).toMatchObject({ name: "Support", status: "ACTIVE", isDefault: false });
-    await exec("General Gina", "+971500000111"); // in General only: never picked for Support
+  it("puts new leads in the Free Course support project, round-robined among its team, with the topic and note", async () => {
+    await exec("General Gina", "+971500000111"); // in General only: never picked for this project
     const team = await exec("Sana Support", "+971500000112");
-    await Project.updateOne({ _id: sup._id }, { $set: { memberIds: [new Types.ObjectId(team)] } });
+    const sup = await Project.create({ name: "Free Course support", code: "FREE-COURSE-SUPPORT", memberIds: [new Types.ObjectId(team)] });
 
     const r = await captureSupportLead({
       name: "Broker Bilal",
@@ -423,7 +420,7 @@ describe("contact page", () => {
   });
 
   it("keeps a known lead where it is, logs the enquiry on its timeline, and uses support WhatsApp when the team is empty", async () => {
-    await seedBaseData();
+    const fcs = await Project.create({ name: "Free Course support", code: "FREE-COURSE-SUPPORT", memberIds: [] });
     await setSetting("academy.profile", {
       name: "Edge Trading Academy",
       supportEmail: "support@edgeacademy.ae",
@@ -442,13 +439,13 @@ describe("contact page", () => {
     expect(String(lead.projectId)).toBe(String(g._id));
     expect(await LeadActivity.countDocuments({ leadId: lead._id, type: "INBOUND", body: "Contact page: Course joining" })).toBe(1);
 
-    // Nobody on the Support team yet: the lead waits there unassigned and the visitor goes to the academy's WhatsApp.
+    // Nobody on the project team: the lead waits there unassigned and the visitor goes to the academy's WhatsApp.
     const r = await captureSupportLead({ name: "New Nadia", phone: "+971551110081", topic: "SUPPORT" });
     expect(r).toMatchObject({ contactName: "Edge Trading Academy", channel: "WHATSAPP" });
     expect(r.contactUrl).toMatch(/^https:\/\/wa\.me\/971507654321\?/);
     expect(textOf(r.contactUrl!)).toBe("Hi Edge Trading Academy, I'm New Nadia. I need help with something. Can you assist me, please?");
     const nadia = (await Lead.findOne({ phone: "+971551110081" }).lean())!;
-    expect(String(nadia.projectId)).toBe(String((await Project.findOne({ code: "SUPPORT" }).lean())!._id));
+    expect(String(nadia.projectId)).toBe(String(fcs._id));
     expect(nadia.ownerId).toBeNull();
   });
 });

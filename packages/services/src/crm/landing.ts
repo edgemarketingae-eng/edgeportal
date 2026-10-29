@@ -1,7 +1,7 @@
 import type { FreeClassDto } from "@edge/contracts";
 import { Types } from "@edge/db";
 import { now } from "@edge/domain/clock";
-import { SUPPORT_PROJECT_CODE, type ContactChannel, type SupportTopic } from "@edge/domain/crm/enums";
+import type { ContactChannel, SupportTopic } from "@edge/domain/crm/enums";
 import { SUPPORT_TOPIC_LABELS } from "@edge/domain/crm/labels";
 import { whatsappDigits } from "@edge/domain/crm/machine";
 import { HOME_COUNTRY } from "@edge/domain/countries";
@@ -19,8 +19,8 @@ import { reachableExec } from "./round-robin";
 
 const SOURCE_DETAIL = "Free live class landing page";
 const GROWTH_HUB_DETAIL = "Forex Growth Hub";
-/** CRM project (by code) for new Growth Hub leads; General if it is missing or not active. */
-const GROWTH_HUB_PROJECT = "FREE-COURSE-SUPPORT";
+/** CRM project (by code) for new Growth Hub and contact page leads; General if it is missing or not active. */
+const FREE_COURSE_SUPPORT = "FREE-COURSE-SUPPORT";
 
 type Utm = { source?: string; medium?: string; campaign?: string; content?: string; term?: string };
 
@@ -160,7 +160,7 @@ export async function captureGrowthHubLead(input: {
     message: notes.length ? notes.join("\n") : undefined,
     page: innerCircle ? `${GROWTH_HUB_DETAIL} · Inner Circle` : GROWTH_HUB_DETAIL,
     tags: innerCircle ? ["growth-hub", "inner-circle"] : ["growth-hub"],
-    projectCode: GROWTH_HUB_PROJECT,
+    projectCode: FREE_COURSE_SUPPORT,
     landing: innerCircle
       ? { id: "growth-hub-inner-circle", label: "the Forex Growth Hub Inner Circle form" }
       : { id: "growth-hub", label: "Forex Growth Hub" },
@@ -183,7 +183,7 @@ const SUPPORT_ASK: Record<SupportTopic, (clientId?: string) => string> = {
 };
 
 /**
- * Contact page (/support): new leads go to the Support project, tagged with the topic. The topic and the visitor's note
+ * Contact page (/support): new leads go to the Free Course support project, like Growth Hub's, tagged with the topic. The topic and the visitor's note
  * go in the lead's notes (or on the timeline of a known lead) and the note is added to their first chat message.
  */
 export async function captureSupportLead(input: {
@@ -204,7 +204,7 @@ export async function captureSupportLead(input: {
     message: [`Contact page: ${topic}`, note].filter(Boolean).join("\n"),
     page: `Contact page · ${topic}`,
     tags: ["support", `support-${input.topic.toLowerCase().replace(/_/g, "-")}`],
-    projectCode: SUPPORT_PROJECT_CODE,
+    projectCode: FREE_COURSE_SUPPORT,
     landing: { id: "support", label: "the contact page" },
     utm: input.utm,
     text: (greet, visitor) => `Hi ${greet}, I'm ${visitor}. ${SUPPORT_ASK[input.topic](clientId)}${note ? `\n\n${note}` : ""}`,

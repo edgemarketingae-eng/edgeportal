@@ -262,14 +262,17 @@ export function LeadsTable({
                       />
                     </TableCell>
                   ) : null}
-                  <TableCell>
-                    <Link href={`/leads/${l.id}`} className="text-edge-emerald font-semibold hover:underline">
-                      {l.name}
-                    </Link>
-                    <div className="text-muted-foreground flex flex-wrap gap-x-2 text-xs">
-                      {l.email ? <span>{l.email}</span> : null}
-                      {l.courseTitle ? <span>· {l.courseTitle}</span> : null}
-                      {l.batchName ? <span>· {l.batchName}</span> : null}
+                  {/* Long names and emails wrap inside a capped width instead of widening the column. */}
+                  <TableCell className="whitespace-normal">
+                    <div className="max-w-64 min-w-32">
+                      <Link href={`/leads/${l.id}`} className="text-edge-emerald font-semibold wrap-anywhere hover:underline">
+                        {l.name}
+                      </Link>
+                      <div className="text-muted-foreground flex flex-wrap gap-x-2 text-xs wrap-anywhere">
+                        {l.email ? <span>{l.email}</span> : null}
+                        {l.courseTitle ? <span>· {l.courseTitle}</span> : null}
+                        {l.batchName ? <span>· {l.batchName}</span> : null}
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
