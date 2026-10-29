@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, type ComponentProps } from "react";
 import { cn } from "cn";
 import { NativeSelect } from "../components/native-select";
 import { controlClass, controlSize } from "../lib/control";
+import { CountryCombobox, useSearchableCountries } from "./country-picker";
 
 /** Splits a stored number into the country it belongs to and the national part shown in the box. */
 function split(value: string | undefined, fallback: string) {
@@ -90,31 +91,49 @@ export function PhoneInput({
     onCountryChange?.(code);
   }
 
+  const searchable = useSearchableCountries();
   const current = countryByCode(country);
   return (
     <div data-slot="phone-input" className={cn("flex w-full min-w-[16rem] gap-2", className)}>
       <input ref={hidden} type="hidden" name={name} value={toValue(text, country)} />
-      <div className="relative w-[7.5rem] shrink-0">
-        {/* The native select keeps phones' own picker; the chip on top shows just flag and code. */}
-        <div aria-hidden className={cn(controlClass, controlSize.md, "pointer-events-none flex items-center gap-1.5 pr-7 tabular-nums")}>
-          <span className="text-base leading-none">{current?.flag}</span>
-          <span className="truncate">+{current?.dialCode}</span>
-          <ChevronDown className="text-muted-foreground absolute top-1/2 right-2.5 size-4 -translate-y-1/2" />
-        </div>
-        <select
-          aria-label="Country code"
+      {searchable ? (
+        <CountryCombobox
           value={country}
+          onChange={pick}
+          dialCodes
           disabled={disabled}
-          onChange={(e) => pick(e.target.value)}
-          className="absolute inset-0 size-full cursor-pointer appearance-none opacity-0"
-        >
-          {COUNTRIES.map((c) => (
-            <option key={c.code} value={c.code}>
-              {c.flag} {c.name} (+{c.dialCode})
-            </option>
-          ))}
-        </select>
-      </div>
+          aria-label="Country code"
+          className="w-[7.5rem] shrink-0 gap-1.5 tabular-nums"
+          display={(c) => (
+            <>
+              <span className="text-base leading-none">{c?.flag}</span>
+              <span className="truncate">+{c?.dialCode}</span>
+            </>
+          )}
+        />
+      ) : (
+        <div className="relative w-[7.5rem] shrink-0">
+          {/* The native select keeps phones' own picker; the chip on top shows just flag and code. */}
+          <div aria-hidden className={cn(controlClass, controlSize.md, "pointer-events-none flex items-center gap-1.5 pr-7 tabular-nums")}>
+            <span className="text-base leading-none">{current?.flag}</span>
+            <span className="truncate">+{current?.dialCode}</span>
+            <ChevronDown className="text-muted-foreground absolute top-1/2 right-2.5 size-4 -translate-y-1/2" />
+          </div>
+          <select
+            aria-label="Country code"
+            value={country}
+            disabled={disabled}
+            onChange={(e) => pick(e.target.value)}
+            className="absolute inset-0 size-full cursor-pointer appearance-none opacity-0"
+          >
+            {COUNTRIES.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.flag} {c.name} (+{c.dialCode})
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <input
         id={id ?? name}
         type="tel"
@@ -141,8 +160,15 @@ export function PhoneInput({
   );
 }
 
-/** Country picker over every country; `emptyLabel` adds a "not set" first option. */
-export function CountrySelect({ emptyLabel, ...props }: ComponentProps<typeof NativeSelect> & { emptyLabel?: string }) {
+type CountrySelectProps = ComponentProps<typeof NativeSelect> & { emptyLabel?: string };
+
+/**
+ * Country picker over every country; `emptyLabel` adds a "not set" first option. A native select, or a searchable list
+ * inside `SearchableCountryPickers` (uncontrolled there: `name` and `defaultValue`).
+ */
+export function CountrySelect({ emptyLabel, ...props }: CountrySelectProps) {
+  const searchable = useSearchableCountries();
+  if (searchable) return <SearchableCountrySelect emptyLabel={emptyLabel} {...props} />;
   return (
     <NativeSelect {...props}>
       {emptyLabel !== undefined ? <option value="">{emptyLabel}</option> : null}
@@ -152,5 +178,42 @@ export function CountrySelect({ emptyLabel, ...props }: ComponentProps<typeof Na
         </option>
       ))}
     </NativeSelect>
+  );
+}
+
+/** The searchable `CountrySelect`: posts the code under `name` and goes back to `defaultValue` when its form resets. */
+function SearchableCountrySelect({ name, id, defaultValue, emptyLabel, disabled, size, className, ...aria }: CountrySelectProps) {
+  const initial = typeof defaultValue === "string" ? defaultValue : "";
+  const [value, setValue] = useState(initial);
+  const [prevDefault, setPrevDefault] = useState(initial);
+  if (initial !== prevDefault) {
+    setPrevDefault(initial);
+    setValue(initial);
+  }
+  const hidden = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const form = hidden.current?.form;
+    if (!form) return;
+    const onReset = () => setValue(initial);
+    form.addEventListener("reset", onReset);
+    return () => form.removeEventListener("reset", onReset);
+  }, [initial]);
+  const invalid = aria["aria-invalid"];
+  return (
+    <>
+      <input ref={hidden} type="hidden" name={name} value={value} />
+      <CountryCombobox
+        id={id}
+        value={value}
+        onChange={setValue}
+        emptyLabel={emptyLabel}
+        disabled={disabled}
+        size={size}
+        className={className}
+        aria-label={aria["aria-label"]}
+        aria-describedby={aria["aria-describedby"]}
+        aria-invalid={invalid === true || invalid === "true" || undefined}
+      />
+    </>
   );
 }

@@ -1,5 +1,6 @@
 import { Toaster } from "@edge/ui/components/sonner";
 import { TooltipProvider } from "@edge/ui/components/tooltip";
+import { SearchableCountryPickers } from "@edge/ui/forms/country-picker";
 import type { Metadata } from "next";
 import { Manrope } from "next/font/google";
 import "./globals.css";
@@ -16,7 +17,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${manrope.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col font-sans">
-        <TooltipProvider>{children}</TooltipProvider>
+        <TooltipProvider>
+          {/* Country and dial-code pickers with a search box, for staff picking among ~250 countries. */}
+          <SearchableCountryPickers>{children}</SearchableCountryPickers>
+        </TooltipProvider>
         <Toaster richColors position="top-center" />
       </body>
     </html>

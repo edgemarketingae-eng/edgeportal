@@ -131,3 +131,29 @@ test("clickable controls show a pointer", async ({ page }) => {
   expect(await cursor(page.getByRole("checkbox").first())).toBe("pointer");
   expect(await cursor(page.getByLabel("Country code"))).toBe("pointer");
 });
+
+test("CRM country pickers search: the dial code and the lead's country", async ({ page }) => {
+  await crmSignIn(page, "crm-admin@edgeacademy.local");
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.goto(`${E2E.crm}/leads/new`);
+  const code = page.getByRole("button", { name: "Country code" }).filter({ visible: true });
+  await expect(code).toContainText("+971");
+  await code.click();
+  const search = page.getByRole("combobox", { name: "Search countries" });
+  await search.fill("ind");
+  await expect(page.getByRole("option").first()).toContainText("India");
+  await search.press("Enter");
+  await expect(code).toContainText("+91");
+  // A dial code finds its country too, and the list closes on a click.
+  await code.click();
+  await search.fill("+44");
+  await page.getByRole("option", { name: /United Kingdom/ }).click();
+  await expect(code).toContainText("+44");
+
+  const country = page.getByRole("button", { name: "Country", exact: true }).filter({ visible: true });
+  await expect(country).toContainText("Detect from mobile");
+  await country.click();
+  await search.fill("uae");
+  await page.getByRole("option", { name: /United Arab Emirates/ }).click();
+  await expect(country).toContainText("United Arab Emirates");
+});

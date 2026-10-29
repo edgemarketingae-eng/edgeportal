@@ -98,7 +98,8 @@ export function SupportForm({ topic: initial }: { topic: SupportTopic }) {
         </div>
       </fieldset>
 
-      <div className="border-edge-ink/10 grid gap-4 rounded-[32px] border bg-white p-6 shadow-xl sm:p-8 lg:sticky lg:top-6">
+      {/* Below lg the details card leads; the topic tiles follow it. */}
+      <div className="border-edge-ink/10 grid gap-4 rounded-[32px] border bg-white p-6 shadow-xl max-lg:order-first sm:p-8 lg:sticky lg:top-6">
         <div>
           <h2 className={tw(display, "text-3xl")}>Your Details</h2>
           <p className="text-edge-ink/70 mt-2 text-[15px]">Next, you&apos;ll chat with our team on WhatsApp or Telegram.</p>
