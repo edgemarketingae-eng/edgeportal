@@ -77,7 +77,8 @@ export function LeadControls({ lead, options, matchingStudent, duplicates, can }
   const open = lead.stage !== "CONVERTED" && !lead.mergedIntoId;
   const next = nextStage(lead.stage);
   const team = options.teams[lead.project.id] ?? [];
-  const otherProjects = options.projects.filter((p) => p.id !== lead.project.id && p.canAssign);
+  // Any active project the viewer is part of (the options list only has those).
+  const otherProjects = options.projects.filter((p) => p.id !== lead.project.id);
   return (
     <div className="flex flex-wrap gap-2">
       {lead.phone ? (
@@ -162,7 +163,7 @@ export function LeadControls({ lead, options, matchingStudent, duplicates, can }
           action={moveProjectAction}
           hidden={hid}
           title="Move to another project"
-          description="Open tasks move along. The owner stays only if they are on the new project's team."
+          description="Choose one of your projects. Open tasks move along. The owner stays only if they are on the new project's team."
           trigger={
             <Button size="sm" variant="outline">
               Move project

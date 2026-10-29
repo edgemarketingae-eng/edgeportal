@@ -791,9 +791,10 @@ export const crmDocs: DocModule[] = [
               owner&apos;s open follow-ups on this lead move to them.
             </P>
             <P>
-              <b>Move project</b> (CRM managers and admins, or a project manager who manages both projects): press <Ui>Move project</Ui>,
-              pick the <Ui>Project</Ui> and press <Ui>Move</Ui>. Open tasks move along. The owner stays only if they are on the new
-              project&apos;s team.
+              <b>Move project</b> (CRM managers and admins, the project&apos;s managers, and the sales executive who owns the lead): press{" "}
+              <Ui>Move project</Ui>, pick the <Ui>Project</Ui> and press <Ui>Move</Ui>. You can move a lead to any project you are part of,
+              General included. Open tasks move along. The owner stays only if they are on the new project&apos;s team, so a sales executive
+              moving their own lead keeps it.
             </P>
           </>
         ),

@@ -164,7 +164,7 @@ describe("leads", () => {
       delete: false,
       assign: false,
       claim: false,
-      moveProject: false,
+      moveProject: true, // their own lead
       removeConversion: false,
       reviewDeposits: false,
     });
@@ -328,6 +328,46 @@ describe("projects and scope", () => {
     expect(String(moved.projectId)).toBe(Q);
     expect(moved.ownerId).toBeNull();
     expect(await LeadActivity.countDocuments({ leadId: L1, type: "PROJECT_CHANGED" })).toBe(1);
+  });
+});
+
+describe("moving leads between projects", () => {
+  it("lets a sales executive move their own leads to projects they are part of, and keeps them as owner", async () => {
+    const mgr = await staff("crm_manager");
+    const pm = await staff("project_manager");
+    const a = await staff("sales_executive");
+    const b = await staff("sales_executive");
+    const g = await general();
+    const P = await createProject({ name: "Inner Circle", managerIds: [pm.id], memberIds: [a.id, b.id] }, mgr.actor, await mgr.scope());
+    const Q = await createProject({ name: "Not A's", managerIds: [pm.id], memberIds: [b.id] }, mgr.actor, await mgr.scope());
+    const mine = await createLead({ projectId: g, name: "A's lead", phone: "+971503100001", source: "WEBSITE" }, a.actor, await a.scope());
+    const pool = await createLead(
+      { projectId: P, name: "Pool lead", phone: "+971503100002", source: "WEBSITE", ownerId: "" },
+      pm.actor,
+      await pm.scope(),
+    );
+    const theirs = await createLead(
+      { projectId: P, name: "B's lead", phone: "+971503100003", source: "WEBSITE" },
+      b.actor,
+      await b.scope(),
+    );
+    expect((await getLeadDetail(mine, await a.scope())).can.moveProject).toBe(true);
+    expect((await getLeadDetail(pool, await a.scope())).can.moveProject).toBe(false);
+
+    await expect(moveLeadToProject(mine, Q, a.actor, await a.scope())).rejects.toBeInstanceOf(NotFoundError); // not on Q's team
+    await moveLeadToProject(mine, P, a.actor, await a.scope());
+    const moved = (await Lead.findById(mine).lean())!;
+    expect(String(moved.projectId)).toBe(P);
+    expect(String(moved.ownerId)).toBe(a.id);
+    expect(await LeadActivity.countDocuments({ leadId: mine, type: "PROJECT_CHANGED" })).toBe(1);
+    await moveLeadToProject(mine, g, a.actor, await a.scope()); // General: everyone is part of it
+    expect(String((await Lead.findById(mine).lean())!.projectId)).toBe(g);
+
+    // The unassigned pool and colleagues' leads stay with the project manager, who moves any lead of their project.
+    await expect(moveLeadToProject(pool, g, a.actor, await a.scope())).rejects.toBeInstanceOf(NotFoundError);
+    await expect(moveLeadToProject(theirs, g, a.actor, await a.scope())).rejects.toBeInstanceOf(NotFoundError);
+    await moveLeadToProject(pool, g, pm.actor, await pm.scope());
+    expect(String((await Lead.findById(pool).lean())!.projectId)).toBe(g);
   });
 });
 

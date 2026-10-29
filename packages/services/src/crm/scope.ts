@@ -51,6 +51,14 @@ export function managesProject(s: CrmScope, projectId: Types.ObjectId) {
   return s.all || s.managed.some((x) => x.equals(projectId));
 }
 
+/**
+ * Move a lead to another project: a manager of its project (or crm.all), or the person who owns it. The target can be
+ * any project the mover is part of (see `moveLeadToProject`).
+ */
+export function canMoveLead(lead: Pick<LeadDoc, "projectId" | "ownerId">, s: CrmScope) {
+  return managesProject(s, lead.projectId) || (!!lead.ownerId && lead.ownerId.equals(s.me));
+}
+
 /** Member, manager, or the default project (open to everyone). */
 export function inProject(s: CrmScope, projectId: Types.ObjectId) {
   return managesProject(s, projectId) || projectId.equals(s.defaultProjectId) || s.member.some((x) => x.equals(projectId));
