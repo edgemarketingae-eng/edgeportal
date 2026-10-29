@@ -1,5 +1,12 @@
 import { studentRoutes } from "@edge/contracts";
-import { captureFreeClassLead, getCurrentBatch, getPublicFreeClass, getStudentPortal, updateStudentProfile } from "@edge/services";
+import {
+  captureFreeClassLead,
+  captureSupportLead,
+  getCurrentBatch,
+  getPublicFreeClass,
+  getStudentPortal,
+  updateStudentProfile,
+} from "@edge/services";
 import { Router } from "express";
 import { rateLimit } from "express-rate-limit";
 import { requireStudent } from "../http/guards";
@@ -24,6 +31,11 @@ export function studentRouter() {
     const { website, ...input } = req.valid.body;
     if (website) return { ok: true as const, contactUrl: null, channel: null, contactName: null };
     return { ok: true as const, ...(await captureFreeClassLead(input)) };
+  });
+  register(r, studentRoutes.supportLead, leadLimiter, async (req) => {
+    const { website, ...input } = req.valid.body;
+    if (website) return { ok: true as const, contactUrl: null, channel: null, contactName: null };
+    return { ok: true as const, ...(await captureSupportLead(input)) };
   });
   register(r, studentRoutes.portal, async (req) => getStudentPortal(requireStudent(req).userId));
   register(r, studentRoutes.updateProfile, async (req) => {

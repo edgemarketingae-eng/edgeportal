@@ -70,6 +70,28 @@ test("1b. the new account signs in with that temporary password and sets their o
   await expect(row.getByLabel("Temporary password", { exact: true })).toHaveCount(0);
 });
 
+test("1c. the CRM admin moves the account to Telegram, and the saved form shows Telegram without a reload", async ({ page }) => {
+  await crmSignIn(page, "crm-admin@edgeacademy.local");
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.goto(`${E2E.crm}/team`);
+  await page.getByRole("link", { name: account.name }).click();
+  await expect(page).toHaveURL(/\/team\/[a-f0-9]{24}/);
+  // The team list keeps its create form mounted (hidden): only the visible fields are this account's.
+  const channel = page.getByLabel("Chat with leads on").filter({ visible: true });
+  await channel.selectOption("TELEGRAM");
+  await page.getByLabel("Telegram username").filter({ visible: true }).fill(`@e2e_exec_${uniq}`);
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByText("Saved.")).toBeVisible();
+  await expect(channel).toHaveValue("TELEGRAM");
+  await expect(page.getByLabel("Telegram username").filter({ visible: true })).toHaveValue(`@e2e_exec_${uniq}`);
+  await expect(
+    page
+      .getByRole("group", { name: "CRM roles" })
+      .filter({ visible: true })
+      .getByLabel(/^Sales executive/),
+  ).toBeChecked();
+});
+
 test("2. the sales executive sees only their projects, creates a lead, logs a call and moves its task on the board", async ({ page }) => {
   await crmSignIn(page, "sales@edgeacademy.local");
   await expect(page).toHaveURL(/\/dashboard$/);

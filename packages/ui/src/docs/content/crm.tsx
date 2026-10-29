@@ -382,10 +382,24 @@ export const crmDocs: DocModule[] = [
               ]}
             />
             <P>
-              For anything else, use the search box (name, email, mobile or tag) and the filters: <Ui>Project</Ui>, <Ui>Stage</Ui>,{" "}
-              <Ui>Source</Ui>, <Ui>Owner</Ui>, <Ui>Temperature</Ui>, <Ui>Batch</Ui>, <Ui>Follow-up</Ui> (overdue, due today, due this week,
-              no follow-up), <Ui>Created</Ui> and <Ui>Sort</Ui>.
+              For anything else, use the search box and the filters: <Ui>Project</Ui>, <Ui>Stage</Ui>, <Ui>Source</Ui>, <Ui>Owner</Ui>,{" "}
+              <Ui>Temperature</Ui>, <Ui>Batch</Ui>, <Ui>Follow-up</Ui> (overdue, due today, due this week, no follow-up), <Ui>Created</Ui>{" "}
+              and <Ui>Sort</Ui>.
             </P>
+            <List>
+              <>
+                Search finds a lead in <b>any stage</b>, converted and lost ones too, unless you pick a <Ui>Stage</Ui>. You only see leads
+                you have access to.
+              </>
+              <>
+                Type a name, email, tag or source; the words can be in any order (<i>hassan ali</i> finds Ali Hassan).
+              </>
+              <>
+                Type a number to find a mobile however it is written (<i>050 123 4567</i>, <i>+971501234567</i>), a JetaFX client ID, or a
+                second number kept in the lead&apos;s notes.
+              </>
+              <>Text from the lead&apos;s notes, such as a website message, is searched too.</>
+            </List>
             <Note kind="tip">The WhatsApp and phone icons next to a mobile number open a chat or a call straight from the list.</Note>
           </>
         ),
@@ -960,7 +974,7 @@ export const crmDocs: DocModule[] = [
             <P>
               The lead moves to <b>Converted</b>, the products appear next to its stage, and the conversion is added to the timeline.
               Converted leads leave the default Open view of the leads list: use the <Ui>Converted</Ui> view or the <Ui>Converted to</Ui>{" "}
-              filter to find them again (for example to log a 2nd deposit).
+              filter to find them again (for example to log a later deposit).
             </P>
             <Note kind="info">
               Converting a lead to a product doesn&apos;t create a student account. When they join the course, use{" "}
@@ -1022,8 +1036,7 @@ export const crmDocs: DocModule[] = [
                 In the <Ui>Deposits</Ui> box, press <Ui>Deposit</Ui>.
               </>
               <>
-                Choose <Ui>Which deposit</Ui>: <Ui>1st deposit</Ui>, <Ui>2nd deposit</Ui> or <Ui>Later deposit</Ui>. The next one is picked
-                for you.
+                Choose <Ui>Which deposit</Ui>: <Ui>1st deposit</Ui> or <Ui>Later deposit</Ui>. The next one is picked for you.
               </>
               <>
                 Enter the <Ui>Amount (USD)</Ui> and the <Ui>Deposit date</Ui>. If the lead has no JetaFX client ID yet, enter it too; it is
@@ -1034,8 +1047,8 @@ export const crmDocs: DocModule[] = [
               </>
             </Steps>
             <P>
-              The deposit is <b>Pending</b> until a CRM admin checks it against the JetaFX report. A lead has at most one 1st and one 2nd
-              deposit; log the rest as later deposits. Logged one by mistake? Press <Ui>Delete</Ui> while it is still pending.
+              The deposit is <b>Pending</b> until a CRM admin checks it against the JetaFX report. A lead has at most one 1st deposit; log
+              the rest as later deposits. Logged one by mistake? Press <Ui>Delete</Ui> while it is still pending.
             </P>
           </>
         ),
@@ -1047,7 +1060,8 @@ export const crmDocs: DocModule[] = [
           <>
             <List>
               <>
-                Commission is a fixed percent of each <b>verified</b> deposit, with its own rate for 1st, 2nd and later deposits. CRM admins
+                Commission is a percent of each <b>verified</b> deposit. A lead&apos;s 1st deposit has its own rate; a later deposit earns
+                the rate of the slab its amount reaches (for example 2% from $10,000, 2.5% from $25,000), on the whole amount. CRM admins
                 set the rates in Settings.
               </>
               <>
@@ -1410,6 +1424,13 @@ export const crmDocs: DocModule[] = [
                 The <b>General</b> project is the default. Everyone with CRM access works there, so it has no team to manage. Enquiries from
                 the website land there, and round-robin shares General leads across every active sales executive. Managers then move leads
                 from General into the right project.
+              </>
+              <>
+                The <b>Support</b> project is created for you and receives new enquiries from the contact page (the student app&apos;s{" "}
+                <i>/support</i> page: help and support, broker account opening, course joining, Inner Circle access, free live classes). Add
+                the support team to it as sales executives: each new enquiry goes round-robin to one of them, and the visitor is sent to
+                that person&apos;s WhatsApp or Telegram. While its team is empty, enquiries wait there unassigned and visitors go to the
+                academy&apos;s support WhatsApp. Someone who is already a lead stays in their project and with their owner.
               </>
               <>
                 A project has <b>project managers</b>, who see and run everything inside it, and <b>sales executives</b> (team members), who
@@ -1816,9 +1837,21 @@ export const crmDocs: DocModule[] = [
         body: (
           <>
             <P>
-              The <Ui>Commission on JetaFX deposits</Ui> box sets the percent of each verified deposit that the lead&apos;s owner earns, by
-              which deposit it is: <Ui>1st deposit (%)</Ui>, <Ui>2nd deposit (%)</Ui> and <Ui>Later deposits (%)</Ui> (3rd onwards). Press{" "}
-              <Ui>Save commission rates</Ui>.
+              The <Ui>Commission on JetaFX deposits</Ui> box sets the percent of each verified deposit that the lead&apos;s owner earns:
+            </P>
+            <List>
+              <>
+                <Ui>First deposit (%)</Ui>: every new customer&apos;s first deposit.
+              </>
+              <>
+                <Ui>Later deposits</Ui>: a <Ui>Base rate</Ui> for any amount, plus slabs from an amount. Press <Ui>Add slab</Ui>, enter the
+                starting amount in USD and its percent. A deposit earns the rate of the highest slab it reaches, on the whole amount: with
+                1% base, 2% from $10,000, 2.5% from $25,000 and 3% from $40,000, a $30,000 deposit earns 2.5% ($750) and a $5,000 one 1%
+                ($50).
+              </>
+            </List>
+            <P>
+              Press <Ui>Save commission rates</Ui>.
             </P>
             <Note kind="info">
               A new rate applies to deposits verified from then on. Deposits that are already verified keep the rate they were verified

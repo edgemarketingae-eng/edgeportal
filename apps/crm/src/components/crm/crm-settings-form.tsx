@@ -17,8 +17,9 @@ export function CrmSettingsForm({ s }: { s: CrmSettingsDto }) {
     if (state.error) toast.error(state.error);
   }, [state]);
   const v = state.values;
+  // Remount after a save too, or React's form reset would put the checkbox back to its first-rendered value.
   return (
-    <form key={JSON.stringify(v ?? {})} action={action} className="grid gap-4">
+    <form key={JSON.stringify(v ?? s)} action={action} className="grid gap-4">
       <FormError state={state} />
       <div className="grid gap-4 sm:grid-cols-3">
         <Field

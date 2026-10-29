@@ -8,6 +8,7 @@ import {
   LeadConversion,
   LeadDeposit,
   seedBaseData,
+  Setting,
   StudentProfile,
   Types,
 } from "@edge/db";
@@ -297,13 +298,58 @@ describe("products and conversions", () => {
   });
 });
 
+describe("lead search", () => {
+  it("finds a lead whatever its stage, by words in any order, its mobile however typed and numbers or text in its notes", async () => {
+    const exec = await staff("sales_executive");
+    const g = await general();
+    const scope = await exec.scope();
+    const id = await createLead(
+      {
+        projectId: g,
+        name: "Ali Hassan",
+        phone: "+971501234567",
+        email: "ali.h@example.com",
+        source: "WEBSITE",
+        jetaFxClientId: "88123456",
+        notes: "Wants a broker account.\nPhone (calls): +971559876543",
+      },
+      exec.actor,
+      scope,
+    );
+    await createLead({ projectId: g, name: "Hassan Omar", phone: phone(), source: "INSTAGRAM" }, exec.actor, scope);
+    await markConversions(id, { productIds: [await product("INNER-CIRCLE")] }, exec.actor, scope);
+    const find = async (q: string) => (await listLeads({ q }, scope)).rows.map((l) => l.name).sort();
+
+    expect(await find("88123456")).toEqual(["Ali Hassan"]); // converted, and still found from the default view
+    expect(await find("hassan ali")).toEqual(["Ali Hassan"]);
+    expect(await find("hassan")).toEqual(["Ali Hassan", "Hassan Omar"]);
+    expect(await find("050 123 4567")).toEqual(["Ali Hassan"]);
+    expect(await find("+971 50 123 4567")).toEqual(["Ali Hassan"]);
+    expect(await find("0559876543")).toEqual(["Ali Hassan"]); // the second number, kept in the notes
+    expect(await find("broker account")).toEqual(["Ali Hassan"]);
+    expect(await find("ali omar")).toEqual([]);
+    // Without a search the default view still lists open leads only.
+    expect((await listLeads({}, scope)).rows.map((l) => l.name)).toEqual(["Hassan Omar"]);
+  });
+});
+
 describe("deposits and commission", () => {
   async function setup() {
     const exec = await staff("sales_executive");
     const other = await staff("sales_executive");
     const admin = await staff("crm_admin");
     const mgr = await staff("crm_manager");
-    await saveCommissionSettings({ firstPct: 10, secondPct: 5, laterPct: 2.5 }, admin.actor);
+    await saveCommissionSettings(
+      {
+        firstPct: 10,
+        slabs: [
+          { from: 0, pct: 1 },
+          { from: 25000, pct: 2.5 },
+          { from: 10000, pct: 2 },
+        ],
+      },
+      admin.actor,
+    );
     const id = await createLead(
       { projectId: await general(), name: "Depositor", phone: phone(), source: "INSTAGRAM" },
       exec.actor,
@@ -358,24 +404,45 @@ describe("deposits and commission", () => {
     expect(await InAppNotification.countDocuments({ userId: exec.id, title: "Deposit verified" })).toBe(1);
 
     // A later rate change leaves verified deposits alone.
-    await saveCommissionSettings({ firstPct: 20, secondPct: 5, laterPct: 2.5 }, admin.actor);
-    expect((await getCommissionSettings()).firstPct).toBe(20);
+    await saveCommissionSettings(
+      {
+        firstPct: 20,
+        slabs: [
+          { from: 0, pct: 1 },
+          { from: 25000, pct: 2.5 },
+          { from: 10000, pct: 2 },
+        ],
+      },
+      admin.actor,
+    );
+    expect(await getCommissionSettings()).toEqual({
+      firstPct: 20,
+      slabs: [
+        { from: 0, pct: 1 },
+        { from: 10000, pct: 2 },
+        { from: 25000, pct: 2.5 },
+      ],
+    });
     expect((await LeadDeposit.findById(dep).lean())!.commissionMinor).toBe(10000);
-    const second = await logDeposit(id, { sequence: "SECOND", amount: "400", depositedAt: "2026-10-06" }, exec.actor, await exec.scope());
-    await verifyDeposit(second, admin.actor, await admin.scope());
-    expect((await LeadDeposit.findById(second).lean())!.commissionMinor).toBe(2000);
+    // Later deposits earn the rate of the slab their amount reaches, on the whole amount.
+    const big = await logDeposit(id, { sequence: "LATER", amount: "30000", depositedAt: "2026-10-06" }, exec.actor, await exec.scope());
+    const small = await logDeposit(id, { sequence: "LATER", amount: "400", depositedAt: "2026-10-06" }, exec.actor, await exec.scope());
+    await verifyDeposit(big, admin.actor, await admin.scope());
+    await verifyDeposit(small, admin.actor, await admin.scope());
+    expect((await LeadDeposit.findById(big).lean())!).toMatchObject({ commissionPct: "0.025000", commissionMinor: 75000 });
+    expect((await LeadDeposit.findById(small).lean())!).toMatchObject({ commissionPct: "0.010000", commissionMinor: 400 });
 
     // The executive sees their own commission, a manager who can see the lead does not.
     expect((await getLeadDetail(id, await exec.scope())).deposits.every((x) => x.commissionMinor != null)).toBe(true);
     expect((await getLeadDetail(id, await mgr.scope())).deposits.every((x) => x.commissionMinor == null)).toBe(true);
     const mine = await listDeposits({}, await exec.scope());
-    expect(mine.summary).toMatchObject({ verifiedCount: 2, verifiedMinor: 140000, commissionMinor: 12000 });
+    expect(mine.summary).toMatchObject({ verifiedCount: 3, verifiedMinor: 3140000, commissionMinor: 85400 });
     expect((await listDeposits({}, await other.scope())).total).toBe(0);
-    expect((await listDeposits({ staff: exec.id }, await admin.scope())).total).toBe(2);
+    expect((await listDeposits({ staff: exec.id }, await admin.scope())).total).toBe(3);
 
     const c = await getStaffCommission(exec.id, await admin.scope());
-    expect(c.commission).toEqual({ month: 12000, lastMonth: 0, all: 12000 });
-    expect(c.deposits).toEqual({ month: 140000, all: 140000 });
+    expect(c.commission).toEqual({ month: 85400, lastMonth: 0, all: 85400 });
+    expect(c.deposits).toEqual({ month: 3140000, all: 3140000 });
     await expect(getStaffCommission(exec.id, await mgr.scope())).rejects.toBeInstanceOf(NotFoundError);
   });
 
@@ -406,6 +473,23 @@ describe("deposits and commission", () => {
     );
   });
 
+  it("migrates the old 1st / 2nd / later rates: 2nd deposits become later ones, the later rate the base slab", async () => {
+    const { exec, id } = await setup();
+    const dep = await logDeposit(
+      id,
+      { sequence: "LATER", amount: "200", depositedAt: "2026-10-05", jetaFxClientId: "JX-5" },
+      exec.actor,
+      await exec.scope(),
+    );
+    await LeadDeposit.collection.updateOne({ _id: new Types.ObjectId(dep) }, { $set: { sequence: "SECOND" } });
+    await Setting.updateOne({ _id: "crm.commission" }, { $set: { value: { firstPct: "0.04", secondPct: "0.03", laterPct: "0.015" } } });
+    await seedBaseData();
+    expect((await LeadDeposit.findById(dep).lean())!.sequence).toBe("LATER");
+    expect(await getCommissionSettings()).toEqual({ firstPct: 4, slabs: [{ from: 0, pct: 1.5 }] });
+    await seedBaseData(); // no-op once done
+    expect(await getCommissionSettings()).toEqual({ firstPct: 4, slabs: [{ from: 0, pct: 1.5 }] });
+  });
+
   it("keeps leads with deposits from being deleted", async () => {
     const { exec, admin, id } = await setup();
     await logDeposit(
@@ -425,7 +509,7 @@ describe("leaderboard", () => {
     const idle = await staff("sales_executive");
     const admin = await staff("crm_admin");
     const g = await general();
-    await saveCommissionSettings({ firstPct: 10, secondPct: 5, laterPct: 1 }, admin.actor);
+    await saveCommissionSettings({ firstPct: 10, slabs: [{ from: 0, pct: 1 }] }, admin.actor);
     const inner = await product("INNER-CIRCLE");
     const f1 = await product("F1-CLUB");
 

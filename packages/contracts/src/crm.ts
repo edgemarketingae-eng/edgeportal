@@ -226,10 +226,22 @@ export const DepositFilters = z.object({
 });
 export type DepositFilters = z.input<typeof DepositFilters>;
 
+const percent = z.coerce.number({ message: "Enter a percentage" }).min(0, "Enter 0 to 100").max(100, "Enter 0 to 100");
+
+/** A later deposit of at least `from` USD earns `pct` percent of the whole deposit. */
+export const CommissionSlabInput = z.object({
+  from: z.coerce.number({ message: "Enter an amount" }).min(0, "Enter an amount of 0 or more"),
+  pct: percent,
+});
+
 export const CommissionSettingsInput = z.object({
-  firstPct: z.coerce.number({ message: "Enter a percentage" }).min(0).max(100),
-  secondPct: z.coerce.number({ message: "Enter a percentage" }).min(0).max(100),
-  laterPct: z.coerce.number({ message: "Enter a percentage" }).min(0).max(100),
+  firstPct: percent,
+  slabs: z
+    .array(CommissionSlabInput)
+    .min(1)
+    .max(10, "Up to 10 slabs")
+    .refine((s) => s.some((x) => x.from === 0), "Keep a base rate (from 0)")
+    .refine((s) => new Set(s.map((x) => x.from)).size === s.length, "Each slab needs its own starting amount"),
 });
 
 export const LeaderboardQuery = z.object({
@@ -410,7 +422,11 @@ export const DepositList = paged(LeadDepositDto).extend({
 });
 export type DepositList = z.infer<typeof DepositList>;
 
-export const CommissionSettingsDto = z.object({ firstPct: z.number(), secondPct: z.number(), laterPct: z.number() });
+export const CommissionSettingsDto = z.object({
+  firstPct: z.number(),
+  /** Sorted by `from` (USD); the first is the base rate from 0. */
+  slabs: z.array(z.object({ from: z.number(), pct: z.number() })),
+});
 export type CommissionSettingsDto = z.infer<typeof CommissionSettingsDto>;
 
 export const LeaderboardRow = z.object({

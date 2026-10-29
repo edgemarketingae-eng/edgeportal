@@ -1,7 +1,8 @@
 import type { FreeClassDto } from "@edge/contracts";
 import { Types } from "@edge/db";
 import { now } from "@edge/domain/clock";
-import type { ContactChannel } from "@edge/domain/crm/enums";
+import { SUPPORT_PROJECT_CODE, type ContactChannel, type SupportTopic } from "@edge/domain/crm/enums";
+import { SUPPORT_TOPIC_LABELS } from "@edge/domain/crm/labels";
 import { whatsappDigits } from "@edge/domain/crm/machine";
 import { HOME_COUNTRY } from "@edge/domain/countries";
 import { parsePhone } from "@edge/domain/phone";
@@ -12,8 +13,8 @@ import { reachableExec } from "./round-robin";
 
 /**
  * Public lead pages that send the visitor straight to a sales executive's chat (WhatsApp or Telegram, whichever the
- * executive uses): the free live class landing page (student app home) and the Forex Growth Hub forms
- * (growthhub.edgeverse.ae, a separate static site).
+ * executive uses): the free live class landing page (student app home), the contact page (student app /support) and
+ * the Forex Growth Hub forms (growthhub.edgeverse.ae, a separate static site).
  */
 
 const SOURCE_DETAIL = "Free live class landing page";
@@ -97,7 +98,11 @@ async function captureLandingLead(input: {
       { type: "WEBHOOK", id: "leads:website" },
       {
         body: `Sent to ${contact.exec ? `${contact.name}'s` : "the academy support"} ${CHANNEL_NAME[contact.channel]} from ${input.landing.label}. Expect their message.`,
-        data: { landing: input.landing.id, channel: contact.channel, [contact.channel === "TELEGRAM" ? "telegram" : "whatsapp"]: contact.handle },
+        data: {
+          landing: input.landing.id,
+          channel: contact.channel,
+          [contact.channel === "TELEGRAM" ? "telegram" : "whatsapp"]: contact.handle,
+        },
       },
     );
   return {
@@ -107,10 +112,8 @@ async function captureLandingLead(input: {
   };
 }
 
-/** Free live class landing page. */
+/** Free live class landing page ("Contact support"): the visitor asks the team for help. */
 export async function captureFreeClassLead(input: { name: string; phone: string; utm?: Utm }) {
-  const fc = await getSetting("marketing.freeClass");
-  const title = fc.enabled ? fc.title : null;
   return captureLandingLead({
     name: input.name,
     phone: input.phone,
@@ -118,8 +121,7 @@ export async function captureFreeClassLead(input: { name: string; phone: string;
     tags: ["free-live-class"],
     landing: { id: "free-class", label: "the free class page" },
     utm: input.utm,
-    text: (greet, visitor) =>
-      `Hi ${greet}, I'm ${visitor}. I'd like to join the free live trading class${title ? ` (${title})` : ""}. Please send me the details.`,
+    text: (greet, visitor) => `Hi ${greet}, I'm ${visitor}. I need help with something. Can you assist me, please?`,
   });
 }
 
@@ -159,12 +161,52 @@ export async function captureGrowthHubLead(input: {
     page: innerCircle ? `${GROWTH_HUB_DETAIL} · Inner Circle` : GROWTH_HUB_DETAIL,
     tags: innerCircle ? ["growth-hub", "inner-circle"] : ["growth-hub"],
     projectCode: GROWTH_HUB_PROJECT,
-    landing: innerCircle ? { id: "growth-hub-inner-circle", label: "the Forex Growth Hub Inner Circle form" } : { id: "growth-hub", label: "Forex Growth Hub" },
+    landing: innerCircle
+      ? { id: "growth-hub-inner-circle", label: "the Forex Growth Hub Inner Circle form" }
+      : { id: "growth-hub", label: "Forex Growth Hub" },
     utm: input.utm,
     text: innerCircle
       ? (greet, visitor) =>
           `Hi ${greet}, I'm ${visitor}. I have created my JetaFX account${clientId ? ` (Client ID: ${clientId})` : ""}. Please add me to the Inner Circle.`
       : (greet, visitor) =>
           `Hi ${greet}, I'm ${visitor}. I watched the free trading classes on Forex Growth Hub and I'd like to know about your courses. Please send me the details.`,
+  });
+}
+
+/** The visitor's first chat message on the contact page, by topic. */
+const SUPPORT_ASK: Record<SupportTopic, (clientId?: string) => string> = {
+  SUPPORT: () => "I need help with something. Can you assist me, please?",
+  BROKER_ACCOUNT: () => "I'd like to open a JetaFX broker account. Can you help me with it, please?",
+  COURSE: () => "I'd like to join a course at Edge Trading Academy. Please send me the details.",
+  INNER_CIRCLE: (id) => `I'd like to get Inner Circle access${id ? ` (JetaFX Client ID: ${id})` : ""}. Can you help me, please?`,
+  FREE_CLASS: () => "I'd like to join the free live trading class. Please send me the details.",
+};
+
+/**
+ * Contact page (/support): new leads go to the Support project, tagged with the topic. The topic and the visitor's note
+ * go in the lead's notes (or on the timeline of a known lead) and the note is added to their first chat message.
+ */
+export async function captureSupportLead(input: {
+  name: string;
+  phone: string;
+  topic: SupportTopic;
+  message?: string;
+  jetaFxClientId?: string;
+  utm?: Utm;
+}) {
+  const topic = SUPPORT_TOPIC_LABELS[input.topic];
+  const note = input.message?.trim() || null;
+  const clientId = input.jetaFxClientId?.trim() || undefined;
+  return captureLandingLead({
+    name: input.name,
+    phone: input.phone,
+    jetaFxClientId: clientId,
+    message: [`Contact page: ${topic}`, note].filter(Boolean).join("\n"),
+    page: `Contact page · ${topic}`,
+    tags: ["support", `support-${input.topic.toLowerCase().replace(/_/g, "-")}`],
+    projectCode: SUPPORT_PROJECT_CODE,
+    landing: { id: "support", label: "the contact page" },
+    utm: input.utm,
+    text: (greet, visitor) => `Hi ${greet}, I'm ${visitor}. ${SUPPORT_ASK[input.topic](clientId)}${note ? `\n\n${note}` : ""}`,
   });
 }

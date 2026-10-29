@@ -6,8 +6,6 @@ import { api } from "@edge/web/server";
 import { refresh } from "next/cache";
 import { fail, run } from "./common";
 
-const COMMISSION_FIELDS = ["firstPct", "secondPct", "laterPct"];
-
 export async function logDepositAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   return run(async () => {
     await api(crmRoutes.logDeposit, {
@@ -37,20 +35,23 @@ export async function deleteDepositAction(_prev: ActionState, form: FormData): P
   return run(() => api(crmRoutes.deleteDeposit, { params: { id: text(form, "id") } }));
 }
 
+/** The slab rows as posted: one `slabFrom` and one `slabPct` per row, in order. */
+function slabRows(form: FormData) {
+  const pcts = form.getAll("slabPct").map((x) => String(x).trim());
+  return form.getAll("slabFrom").map((x, i) => ({ from: String(x).trim(), pct: pcts[i] ?? "" }));
+}
+
 export async function saveCommissionSettingsAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   let message: string | undefined;
+  const slabs = slabRows(form);
   try {
     message = (
       await api(crmRoutes.saveCommissionSettings, {
-        body: {
-          firstPct: text(form, "firstPct"),
-          secondPct: text(form, "secondPct"),
-          laterPct: text(form, "laterPct"),
-        } satisfies RouteBody<typeof crmRoutes.saveCommissionSettings>,
+        body: { firstPct: text(form, "firstPct"), slabs } satisfies RouteBody<typeof crmRoutes.saveCommissionSettings>,
       })
     ).message;
   } catch (e) {
-    return fail(e, values(form, COMMISSION_FIELDS));
+    return fail(e, { ...values(form, ["firstPct"]), slabs: JSON.stringify(slabs) });
   }
   refresh();
   return { ok: true, message };

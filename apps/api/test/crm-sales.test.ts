@@ -87,15 +87,41 @@ describe("products, deposits and commission over the API", () => {
     // Rates and verification: CRM admin only (not the executive, not a CRM manager).
     for (const a of [exec.agent, mgr.agent]) {
       await a.get("/api/v1/crm/commission").set(INTERNAL).expect(403);
-      await a.post("/api/v1/crm/commission").set(INTERNAL).send({ firstPct: 50, secondPct: 50, laterPct: 50 }).expect(403);
+      await a
+        .post("/api/v1/crm/commission")
+        .set(INTERNAL)
+        .send({ firstPct: 50, slabs: [{ from: 0, pct: 50 }] })
+        .expect(403);
       await a.post(`/api/v1/crm/deposits/${dep}/verify`).set(INTERNAL).expect(403);
       await a.get(`/api/v1/crm/team/${exec.id}/commission`).set(INTERNAL).expect(403);
     }
-    await admin.agent.post("/api/v1/crm/commission").set(INTERNAL).send({ firstPct: 10, secondPct: 5, laterPct: 2 }).expect(200);
+    // Later-deposit slabs need a base rate from 0 and distinct starting amounts.
+    for (const slabs of [
+      [{ from: 10000, pct: 2 }],
+      [
+        { from: 0, pct: 1 },
+        { from: 0, pct: 2 },
+      ],
+      [{ from: 0, pct: 120 }],
+    ])
+      await admin.agent.post("/api/v1/crm/commission").set(INTERNAL).send({ firstPct: 10, slabs }).expect(400);
+    await admin.agent
+      .post("/api/v1/crm/commission")
+      .set(INTERNAL)
+      .send({
+        firstPct: 10,
+        slabs: [
+          { from: "10000", pct: "2" },
+          { from: "0", pct: "1" },
+        ],
+      })
+      .expect(200);
     expect((await admin.agent.get("/api/v1/crm/commission").set(INTERNAL).expect(200)).body).toEqual({
       firstPct: 10,
-      secondPct: 5,
-      laterPct: 2,
+      slabs: [
+        { from: 0, pct: 1 },
+        { from: 10000, pct: 2 },
+      ],
     });
     await admin.agent.post(`/api/v1/crm/deposits/${dep}/verify`).set(INTERNAL).expect(200);
     expect((await LeadDeposit.findById(dep).lean())!.commissionMinor).toBe(15000);

@@ -1,8 +1,8 @@
 import { RETIRED_SYSTEM_ROLES, SYSTEM_ROLES } from "@edge/domain/auth/permissions";
-import { LEAD_LANGUAGES } from "@edge/domain/crm/enums";
+import { LEAD_LANGUAGES, SUPPORT_PROJECT_CODE } from "@edge/domain/crm/enums";
 import { normalizeLanguage } from "@edge/domain/crm/machine";
-import { Lead, Project } from "./models/crm";
-import { FeeRate } from "./models/payments";
+import { Lead, LeadDeposit, Project } from "./models/crm";
+import { FeeRate, Setting } from "./models/payments";
 import { Role, StaffProfile } from "./models/people";
 
 /** Gateway fee rates: public list prices until the client confirms its contracts (editable in Settings). */
@@ -75,7 +75,7 @@ export const FEE_RATES = [
   },
 ] as const;
 
-/** Idempotent: system roles are kept in sync; fee rates and the default CRM project are only inserted when missing. */
+/** Idempotent: system roles are kept in sync; fee rates and the default and Support CRM projects are only inserted when missing. */
 export async function seedBaseData() {
   for (const r of SYSTEM_ROLES) {
     await Role.updateOne(
@@ -107,6 +107,21 @@ export async function seedBaseData() {
     },
     { upsert: true },
   );
+  // Leads from the student app's contact page; admins add the support team to it.
+  await Project.updateOne(
+    { code: SUPPORT_PROJECT_CODE },
+    {
+      $setOnInsert: {
+        name: "Support",
+        description: "Enquiries from the contact page: help, broker accounts, courses, Inner Circle, free classes.",
+        status: "ACTIVE",
+        isDefault: false,
+        managerIds: [],
+        memberIds: [],
+      },
+    },
+    { upsert: true },
+  );
   for (const f of FEE_RATES) {
     await FeeRate.updateOne(
       { key: f.key },
@@ -115,6 +130,7 @@ export async function seedBaseData() {
     );
   }
   await normalizeLeadLanguages();
+  await migrateCommission();
 }
 
 /** Lead language used to be free text; map old values onto the dropdown codes (no-op once done). */
@@ -123,4 +139,20 @@ async function normalizeLeadLanguages() {
   for (const old of legacy as string[]) {
     await Lead.collection.updateMany({ language: old }, { $set: { language: normalizeLanguage(old) } });
   }
+}
+
+/**
+ * Commission used to have a rate per 1st / 2nd / later deposit; now later deposits are rated by amount slab. 2nd
+ * deposits become later ones (verified ones keep their commission) and the old later rate becomes the base slab.
+ * No-op once done.
+ */
+async function migrateCommission() {
+  await LeadDeposit.collection.updateMany({ sequence: "SECOND" }, { $set: { sequence: "LATER" } });
+  const row = await Setting.findById("crm.commission").lean();
+  const v = row?.value as { firstPct?: string; laterPct?: string; slabs?: unknown } | undefined;
+  if (v && !v.slabs)
+    await Setting.updateOne(
+      { _id: "crm.commission" },
+      { $set: { value: { firstPct: v.firstPct ?? "0", slabs: [{ fromMinor: 0, pct: v.laterPct ?? "0" }] } } },
+    );
 }

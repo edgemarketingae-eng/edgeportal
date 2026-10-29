@@ -31,7 +31,13 @@ function ContactFields({ channel, phone, telegram }: { channel?: string; phone?:
         <p className="text-muted-foreground text-xs">Landing page and Growth Hub visitors are sent to this app.</p>
       </div>
       <Field label="Phone (WhatsApp)" name="phone" type="tel" defaultValue={phone} hint="Needed when chatting on WhatsApp." />
-      <Field label="Telegram username" name="telegramUsername" defaultValue={telegram} placeholder="@username" hint="Needed when chatting on Telegram." />
+      <Field
+        label="Telegram username"
+        name="telegramUsername"
+        defaultValue={telegram}
+        placeholder="@username"
+        hint="Needed when chatting on Telegram."
+      />
     </>
   );
 }
@@ -68,7 +74,13 @@ export function CreateCrmStaffForm({ roles, projects }: { roles: RoleOption[]; p
         <Field label="Full name" name="name" defaultValue={v?.name} required />
         <Field label="Login email" name="email" type="email" defaultValue={v?.email} required />
         <Field label="Job title" name="title" defaultValue={v?.title} />
-        <Field label="Google Workspace email" name="workspaceEmail" type="email" defaultValue={v?.workspaceEmail} hint="Only needed for Meet consultations later." />
+        <Field
+          label="Google Workspace email"
+          name="workspaceEmail"
+          type="email"
+          defaultValue={v?.workspaceEmail}
+          hint="Only needed for Meet consultations later."
+        />
         <ContactFields channel={v?.contactChannel} phone={v?.phone} telegram={v?.telegramUsername} />
       </div>
       <RoleChecks roles={roles} selected={list(v?.roleKeys)} />
@@ -98,7 +110,16 @@ export function EditCrmStaffForm({
   user,
   roles,
 }: {
-  user: { id: string; name: string; title: string; workspaceEmail: string; phone: string; telegramUsername: string; contactChannel: string; roleKeys: string[] };
+  user: {
+    id: string;
+    name: string;
+    title: string;
+    workspaceEmail: string;
+    phone: string;
+    telegramUsername: string;
+    contactChannel: string;
+    roleKeys: string[];
+  };
   roles: RoleOption[];
 }) {
   const [state, action, pending] = useActionState(updateCrmStaffAction, {} as ActionState);
@@ -106,8 +127,10 @@ export function EditCrmStaffForm({
     if (state.ok) toast.success(state.message ?? "Saved");
   }, [state]);
   const v = state.values;
+  // After a save, remount with the saved user: React resets the form after an action, and a select or checkbox would
+  // otherwise go back to the value it was first rendered with.
   return (
-    <form key={formKey(state)} action={action} className="grid gap-4">
+    <form key={v ? formKey(state) : JSON.stringify(user)} action={action} className="grid gap-4">
       <input type="hidden" name="userId" value={user.id} />
       <FormError state={state} />
       <div className="grid gap-4 sm:grid-cols-2">
@@ -146,7 +169,15 @@ export function ResetPasswordButton({ userId }: { userId: string }) {
   );
 }
 
-export function RoleForm({ role, permissions, disabled }: { role?: { id: string; name: string; description: string | null; permissions: string[]; isSystem?: boolean }; permissions: [string, string][]; disabled?: boolean }) {
+export function RoleForm({
+  role,
+  permissions,
+  disabled,
+}: {
+  role?: { id: string; name: string; description: string | null; permissions: string[]; isSystem?: boolean };
+  permissions: [string, string][];
+  disabled?: boolean;
+}) {
   const [state, action, pending] = useActionState(saveCrmRoleAction, {} as ActionState);
   useEffect(() => {
     if (state.ok) toast.success(state.message ?? "Saved");

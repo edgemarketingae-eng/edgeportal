@@ -62,14 +62,18 @@ export const LEAD_LANGUAGES = ["MALAYALAM", "TAMIL", "ENGLISH", "HINDI", "OTHER"
 export const PRODUCT_STATUSES = ["ACTIVE", "ARCHIVED"] as const;
 /** MANUAL = marked by staff; STUDENT = recorded when the lead became a student (the student-course product). */
 export const CONVERSION_SOURCES = ["MANUAL", "STUDENT"] as const;
-/** Broker deposits logged on a lead; each sequence has its own commission rate. */
-export const DEPOSIT_SEQUENCES = ["FIRST", "SECOND", "LATER"] as const;
+/** Broker deposits logged on a lead: the first has its own commission rate, later ones are rated by amount slab. */
+export const DEPOSIT_SEQUENCES = ["FIRST", "LATER"] as const;
 export const DEPOSIT_STATUSES = ["PENDING", "VERIFIED", "REJECTED"] as const;
 /** Broker deposits are in US dollars. */
 export const DEPOSIT_CURRENCY = "USD";
 export const LEADERBOARD_PERIODS = ["month", "lastMonth", "quarter", "year", "all"] as const;
 /** Public ingest endpoints: POST /api/webhooks/leads/:source */
 export const INBOUND_SOURCES = ["website"] as const;
+/** What a visitor asks about on the student app's contact page (/support). */
+export const SUPPORT_TOPICS = ["SUPPORT", "BROKER_ACCOUNT", "COURSE", "INNER_CIRCLE", "FREE_CLASS"] as const;
+/** CRM project (by code) for new leads from the contact page; seeded, and General if it is missing or not active. */
+export const SUPPORT_PROJECT_CODE = "SUPPORT";
 
 export type LeadStage = (typeof LEAD_STAGES)[number];
 export type OpenLeadStage = (typeof OPEN_LEAD_STAGES)[number];
@@ -92,6 +96,7 @@ export type DepositSequence = (typeof DEPOSIT_SEQUENCES)[number];
 export type DepositStatus = (typeof DEPOSIT_STATUSES)[number];
 export type LeaderboardPeriod = (typeof LEADERBOARD_PERIODS)[number];
 export type InboundSource = (typeof INBOUND_SOURCES)[number];
+export type SupportTopic = (typeof SUPPORT_TOPICS)[number];
 
 /** Owner value meaning "spread across the project's sales executives" (bulk assign, import). */
 export const ROUND_ROBIN = "ROUND_ROBIN";

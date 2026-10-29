@@ -34,7 +34,8 @@ export default async function CrmSettingsPage() {
             <CardHeader>
               <CardTitle>Commission on JetaFX deposits</CardTitle>
               <CardDescription>
-                Percent of each verified deposit, by which deposit it is. Products (Inner Circle, the clubs…) are managed under{" "}
+                Percent of each verified deposit: first deposits at a fixed rate, later deposits by the slab their amount falls in. Products
+                (Inner Circle, the clubs…) are managed under{" "}
                 <Link href="/products" className="underline">
                   Products
                 </Link>

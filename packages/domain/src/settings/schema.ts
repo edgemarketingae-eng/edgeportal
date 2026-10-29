@@ -42,10 +42,16 @@ export const SETTINGS = {
       lostReasons: ["Budget", "Timing", "Not interested", "Unreachable", "Chose another academy", "Duplicate"],
     },
   },
-  /** Commission on verified broker deposits, per deposit sequence, as fractions ("0.1" = 10%). */
+  /**
+   * Commission on verified broker deposits, as fractions ("0.1" = 10%): a rate for first deposits, and amount slabs
+   * for later ones (sorted by `fromMinor`, the first from 0).
+   */
   "crm.commission": {
-    schema: z.object({ firstPct: z.string(), secondPct: z.string(), laterPct: z.string() }),
-    default: { firstPct: "0", secondPct: "0", laterPct: "0" },
+    schema: z.object({
+      firstPct: z.string(),
+      slabs: z.array(z.object({ fromMinor: z.number().int().min(0), pct: z.string() })).min(1),
+    }),
+    default: { firstPct: "0", slabs: [{ fromMinor: 0, pct: "0" }] },
   },
   "academy.profile": {
     schema: z.object({ name: z.string(), supportEmail: z.string(), supportWhatsapp: z.string(), website: z.string() }),

@@ -76,11 +76,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
   const converted = new Set(conversions.map((c) => c.product.id));
   const markable = options.products.filter((p) => !converted.has(p.id));
   const live = deposits.filter((d) => d.status !== "REJECTED");
-  const nextSequence: DepositSequence = !live.some((d) => d.sequence === "FIRST")
-    ? "FIRST"
-    : !live.some((d) => d.sequence === "SECOND")
-      ? "SECOND"
-      : "LATER";
+  const nextSequence: DepositSequence = live.some((d) => d.sequence === "FIRST") ? "LATER" : "FIRST";
   const verifiedMinor = deposits.filter((d) => d.status === "VERIFIED").reduce((n, d) => n + d.amountMinor, 0);
   const answered = Object.values(l.qualification).some(Boolean);
   const utm = [l.utm.source, l.utm.medium, l.utm.campaign, l.utm.content, l.utm.term].filter(Boolean).join(" / ");

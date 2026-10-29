@@ -1,6 +1,7 @@
 import type { CommissionSettingsDto, CrmSettingsDto } from "@edge/contracts";
 import { fractionToPercent, percentToFraction } from "@edge/domain/crm/commission";
 import type { Actor } from "@edge/domain/enums";
+import { toMajor, toMinor } from "@edge/domain/money";
 import { audit } from "../audit";
 import { env } from "../env";
 import { getSetting, setSetting } from "../settings";
@@ -42,22 +43,28 @@ export async function saveCrmSettings(
   await audit({ actor, action: "crm.settings.update", entityType: "Setting", entityId: "crm.config", before, after: next });
 }
 
-/** Commission rates as percentages (stored as fractions). */
+/** Commission rates as percentages and slab amounts in USD (stored as fractions and minor units). */
 export async function getCommissionSettings(): Promise<CommissionSettingsDto> {
   const r = await getSetting("crm.commission");
-  return { firstPct: fractionToPercent(r.firstPct), secondPct: fractionToPercent(r.secondPct), laterPct: fractionToPercent(r.laterPct) };
+  return {
+    firstPct: fractionToPercent(r.firstPct),
+    slabs: [...r.slabs]
+      .sort((a, b) => a.fromMinor - b.fromMinor)
+      .map((x) => ({ from: toMajor(x.fromMinor), pct: fractionToPercent(x.pct) })),
+  };
 }
 
 /** New rates apply to deposits verified from now on; verified deposits keep the rate they were verified with. */
 export async function saveCommissionSettings(
-  input: { firstPct: number; secondPct: number; laterPct: number },
+  input: { firstPct: number; slabs: { from: number; pct: number }[] },
   actor: Actor & { type: "USER" },
 ) {
   const before = await getSetting("crm.commission");
   const next = {
     firstPct: percentToFraction(input.firstPct),
-    secondPct: percentToFraction(input.secondPct),
-    laterPct: percentToFraction(input.laterPct),
+    slabs: input.slabs
+      .map((x) => ({ fromMinor: toMinor(x.from), pct: percentToFraction(x.pct) }))
+      .sort((a, b) => a.fromMinor - b.fromMinor),
   };
   await setSetting("crm.commission", next, actor.id);
   await audit({ actor, action: "crm.commission.update", entityType: "Setting", entityId: "crm.commission", before, after: next });

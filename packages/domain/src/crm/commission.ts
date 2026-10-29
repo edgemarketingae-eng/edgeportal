@@ -1,17 +1,27 @@
 import Decimal from "decimal.js";
 import type { DepositSequence } from "./enums";
 
-/** Commission rates per deposit sequence, as fractions ("0.1" = 10%). */
+/** A later deposit of at least `fromMinor` earns `pct` (a fraction, "0.02" = 2%). */
+export interface CommissionSlab {
+  fromMinor: number;
+  pct: string;
+}
+
+/** First deposits earn `firstPct`; a later deposit earns the rate of the slab its amount falls in. Fractions. */
 export interface CommissionRates {
   firstPct: string;
-  secondPct: string;
-  laterPct: string;
+  /** One slab starts at 0 (the base rate for any amount). */
+  slabs: CommissionSlab[];
 }
 
 const D = Decimal.clone({ precision: 40, rounding: Decimal.ROUND_HALF_UP });
 
-export function rateFor(rates: CommissionRates, sequence: DepositSequence): string {
-  return sequence === "FIRST" ? rates.firstPct : sequence === "SECOND" ? rates.secondPct : rates.laterPct;
+/** The rate for a deposit: the first-deposit rate, or the highest slab the amount reaches (the whole deposit at that rate). */
+export function rateFor(rates: CommissionRates, sequence: DepositSequence, amountMinor: number): string {
+  if (sequence === "FIRST") return rates.firstPct;
+  let best: CommissionSlab | null = null;
+  for (const s of rates.slabs) if (s.fromMinor <= amountMinor && (!best || s.fromMinor > best.fromMinor)) best = s;
+  return best?.pct ?? "0";
 }
 
 /** Commission in minor units: amount * pct, rounded half up to a whole cent. */

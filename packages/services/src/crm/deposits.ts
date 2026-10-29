@@ -21,7 +21,7 @@ import { has, listCrmUsers, type CrmScope } from "./scope";
 const depositsHref = () => `${env.CRM_APP_URL}/deposits`;
 const usd = (minor: number) => formatMoney(minor, DEPOSIT_CURRENCY);
 /** Sequences a lead can have only once (unless the earlier one was rejected). */
-const ONCE: DepositSequence[] = ["FIRST", "SECOND"];
+const ONCE: DepositSequence[] = ["FIRST"];
 
 const canManage = (scope: CrmScope) => has(scope, "crm.commission.manage");
 
@@ -101,13 +101,13 @@ async function loadDeposit(id: string) {
   return d as LeadDepositDoc;
 }
 
-/** Verify (commission managers): fixes the commission with today's rate for the deposit's sequence. */
+/** Verify (commission managers): fixes the commission with today's first-deposit rate, or slab rate for a later deposit's amount. */
 export async function verifyDeposit(id: string, actor: Actor & { type: "USER" }, scope: CrmScope) {
   if (!canManage(scope)) throw new NotFoundError("Deposit");
   const d = await loadDeposit(id);
   if (d.status !== "PENDING") throw new TransitionError("Only pending deposits can be verified");
   const rates = await getSetting("crm.commission");
-  const pct = rateFor(rates, d.sequence);
+  const pct = rateFor(rates, d.sequence, d.amountMinor);
   const commissionMinor = commissionFor(d.amountMinor, pct);
   const at = now();
   const lead = await withTx(async () => {

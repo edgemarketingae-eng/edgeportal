@@ -128,7 +128,7 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
           );
         })}
       </div>
-      <FilterBar q={f.q} placeholder="Search name, email, mobile, tag, JetaFX ID…">
+      <FilterBar q={f.q} placeholder="Search name, mobile, email, JetaFX ID, notes…">
         {f.view ? <input type="hidden" name="view" value={f.view} /> : null}
         <FilterSelect name="project" label="Project" value={f.project} options={options.projects.map((p) => [p.id, p.name])} />
         <FilterSelect name="stage" label="Stage" value={f.stage} options={LEAD_STAGES.map((s) => [s, LEAD_STAGE_LABELS[s]])} />

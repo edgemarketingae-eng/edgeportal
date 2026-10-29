@@ -20,8 +20,9 @@ export function TaskForm({ detail }: { detail: TaskDetail }) {
   }, [state]);
   const t = detail.task;
   const v = state.values;
+  // Remount after a save too, or React's form reset would put the selects back to their first-rendered values.
   return (
-    <form key={JSON.stringify(v ?? {})} action={action} className="grid gap-4">
+    <form key={JSON.stringify(v ?? t)} action={action} className="grid gap-4">
       <input type="hidden" name="id" value={t.id} />
       <FormError state={state} />
       <Field label="Title" name="title" defaultValue={v?.title ?? t.title} required />

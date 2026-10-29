@@ -9,7 +9,7 @@ import { createContext, use, useActionState, useEffect, useState, type Component
 import { joinFreeClassAction, type JoinState } from "./actions";
 import { display, tw } from "./brand";
 
-const UTM = ["source", "medium", "campaign", "content", "term"] as const;
+export const UTM = ["source", "medium", "campaign", "content", "term"] as const;
 
 const JoinContext = createContext<() => void>(() => {});
 
@@ -28,7 +28,7 @@ export function JoinFreeClass({ children }: { children: ReactNode }) {
   );
 }
 
-const TONES = {
+export const TONES = {
   /** Brand CTA on light: Ink button, Edge Green label. */
   ink: "bg-edge-ink text-edge-green hover:bg-edge-pine",
   /** On Ink surfaces: Edge Green button, Ink label. */
@@ -71,22 +71,10 @@ function JoinForm() {
               Opening {telegram ? "Telegram" : "WhatsApp"} so you can say hi to {state.contactName ?? "our team"}. Send the message and
               they&apos;ll help you from there.
             </DialogDescription>
-            <Button
-              asChild
-              className={cn(
-                "mt-2 h-14 w-full rounded-2xl text-base font-bold text-white",
-                telegram ? "bg-[#229ED9] hover:bg-[#1c8cc2]" : "bg-[#25D366] hover:bg-[#1ebe5b]",
-              )}
-            >
-              <a href={url}>
-                <MessageCircle className="size-5" /> Open {telegram ? "Telegram" : "WhatsApp"}
-              </a>
-            </Button>
+            <OpenChatButton url={url} telegram={telegram} />
           </>
         ) : (
-          <DialogDescription className="text-edge-ink/70 text-[15px]">
-            Thanks! Our team will contact you shortly.
-          </DialogDescription>
+          <DialogDescription className="text-edge-ink/70 text-[15px]">Thanks! Our team will contact you shortly.</DialogDescription>
         )}
       </div>
     );
@@ -125,6 +113,23 @@ function JoinForm() {
         <Lock className="size-3" /> No card, no fees. We only use your number for the class details.
       </p>
     </form>
+  );
+}
+
+/** The chat link in the app's colours (the page also opens it by itself). */
+export function OpenChatButton({ url, telegram }: { url: string; telegram: boolean }) {
+  return (
+    <Button
+      asChild
+      className={cn(
+        "mt-2 h-14 w-full rounded-2xl text-base font-bold text-white",
+        telegram ? "bg-[#229ED9] hover:bg-[#1c8cc2]" : "bg-[#25D366] hover:bg-[#1ebe5b]",
+      )}
+    >
+      <a href={url}>
+        <MessageCircle className="size-5" /> Open {telegram ? "Telegram" : "WhatsApp"}
+      </a>
+    </Button>
   );
 }
 

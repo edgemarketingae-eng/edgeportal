@@ -5,7 +5,7 @@ import { crmSignIn } from "./helpers";
 /**
  * Sales journey: the sales desk creates a lead with the language dropdown, a JetaFX client ID and a qualification
  * answer, marks it converted to Inner Circle and logs its 1st JetaFX deposit -> the CRM admin sets the commission
- * rates and verifies the deposit -> the commission shows on the deposit, the team page and the leaderboard.
+ * rates (first deposit and later-deposit slabs) and verifies the deposit -> the commission shows on the deposit, the team page and the leaderboard.
  */
 test.describe.configure({ mode: "serial" });
 
@@ -59,9 +59,14 @@ test("2. the CRM admin sets the rates and verifies the deposit", async ({ page }
   await crmSignIn(page, "crm-admin@edgeacademy.local");
   await expect(page).toHaveURL(/\/dashboard$/);
   await page.goto(`${E2E.crm}/settings`);
-  await page.getByLabel("1st deposit (%)").fill("10");
+  await page.getByLabel("First deposit (%)").fill("10");
+  await page.getByLabel("Base rate · any amount").fill("1");
+  await page.getByRole("button", { name: "Add slab" }).click();
+  await page.getByLabel("Slab 1 from (USD)").fill("10000");
+  await page.getByLabel("Slab 1 (%)").fill("2");
   await page.getByRole("button", { name: "Save commission rates" }).click();
   await expect(page.getByText(/Commission rates saved/)).toBeVisible();
+  await expect(page.getByLabel("Slab 1 from (USD)")).toHaveValue("10000"); // the saved slab stays after the save
 
   await page.goto(`${E2E.crm}/deposits?status=PENDING`);
   const row = page.getByRole("row").filter({ has: page.getByRole("link", { name: lead.name }) });

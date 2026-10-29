@@ -14,6 +14,7 @@ import type {
   LeadTemperature,
   ProductStatus,
   ProjectStatus,
+  SupportTopic,
   TaskPriority,
 } from "./enums";
 
@@ -61,7 +62,6 @@ export const PRODUCT_STATUS_LABELS: Record<ProductStatus, string> = { ACTIVE: "A
 
 export const DEPOSIT_SEQUENCE_LABELS: Record<DepositSequence, string> = {
   FIRST: "1st deposit",
-  SECOND: "2nd deposit",
   LATER: "Later deposit",
 };
 
@@ -143,4 +143,12 @@ export const ACTIVITY_LABELS: Record<LeadActivityType, string> = {
   DEPOSIT_LOGGED: "Deposit logged",
   DEPOSIT_VERIFIED: "Deposit verified",
   DEPOSIT_REJECTED: "Deposit rejected",
+};
+
+export const SUPPORT_TOPIC_LABELS: Record<SupportTopic, string> = {
+  SUPPORT: "Help & support",
+  BROKER_ACCOUNT: "Broker account opening",
+  COURSE: "Course joining",
+  INNER_CIRCLE: "Inner Circle access",
+  FREE_CLASS: "Free live class",
 };

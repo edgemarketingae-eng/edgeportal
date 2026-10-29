@@ -1,4 +1,4 @@
-import { CONTACT_CHANNELS } from "@edge/domain/crm/enums";
+import { CONTACT_CHANNELS, SUPPORT_TOPICS } from "@edge/domain/crm/enums";
 import { z } from "zod";
 import { EnrollmentDto } from "./enrollment";
 import { route } from "./route";
@@ -70,6 +70,13 @@ export const GrowthHubLeadInput = FreeClassLeadInput.omit({ phone: true }).exten
   page: z.string().trim().max(500).optional(),
 });
 
+/** The contact page (/support): what the visitor needs, and optionally a note and their JetaFX client ID. */
+export const SupportLeadInput = FreeClassLeadInput.extend({
+  topic: z.enum(SUPPORT_TOPICS, { message: "Choose what you need help with" }),
+  message: z.string().trim().max(1000, "Keep it under 1,000 characters").optional(),
+  jetaFxClientId: z.string().trim().max(40).optional(),
+});
+
 /** Where the visitor goes next: the lead owner's (or support's) chat, with their first message typed in. */
 const LandingLeadResult = z.object({
   ok: z.literal(true),
@@ -81,7 +88,11 @@ const LandingLeadResult = z.object({
 export const studentRoutes = {
   portal: route({ method: "GET", path: "/api/v1/student/portal", response: PortalDto }),
   /** No session needed (sign-up page): the batch new students are assigned to. */
-  enrollingNow: route({ method: "GET", path: "/api/v1/public/enrolling-now", response: z.object({ batch: z.object({ name: z.string(), startDate: z.string() }).nullable() }) }),
+  enrollingNow: route({
+    method: "GET",
+    path: "/api/v1/public/enrolling-now",
+    response: z.object({ batch: z.object({ name: z.string(), startDate: z.string() }).nullable() }),
+  }),
   /** No session needed (landing page): the next free live class, or null when switched off. */
   freeClass: route({ method: "GET", path: "/api/v1/public/free-class", response: z.object({ freeClass: FreeClassDto.nullable() }) }),
   /** No session needed (landing page): creates the CRM lead and returns the assigned sales executive's chat link. */
@@ -91,6 +102,8 @@ export const studentRoutes = {
     body: FreeClassLeadInput,
     response: LandingLeadResult,
   }),
+  /** No session needed (contact page): creates the lead in the Support project and returns the chat link. */
+  supportLead: route({ method: "POST", path: "/api/v1/public/support/leads", body: SupportLeadInput, response: LandingLeadResult }),
   updateProfile: route({ method: "POST", path: "/api/v1/student/profile", body: ProfileInput, response: zOk }),
 };
 

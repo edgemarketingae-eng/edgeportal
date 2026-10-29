@@ -1,4 +1,4 @@
-import { Lead } from "@edge/db";
+import { Lead, Project, seedBaseData } from "@edge/db";
 import { createStaff, setSetting } from "@edge/services";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -106,5 +106,38 @@ describe("free class landing API", () => {
       .set(INTERNAL)
       .send({ enabled: true, title: "Forex Live", startsAt: "soon", durationMinutes: 90, platform: "" });
     expect(invalid.body.error.fieldErrors.startsAt).toBeTruthy();
+  });
+});
+
+describe("contact page API", () => {
+  const SUPPORT = "/api/v1/public/support/leads";
+
+  it("creates the lead in the Support project with the topic, validates input and ignores bots", async () => {
+    await seedBaseData();
+    await request(app).post(SUPPORT).send({ name: "Visitor", phone: "+971551231400", topic: "COURSE" }).expect(404); // internal token only
+    const res = await request(app)
+      .post(SUPPORT)
+      .set(visitor("203.0.113.20"))
+      .send({ name: "Course Visitor", phone: "+971551231400", topic: "COURSE", message: "Weekend batch?" })
+      .expect(200);
+    expect(res.body).toMatchObject({ ok: true });
+    const lead = (await Lead.findOne({ phone: "+971551231400" }).lean())!;
+    expect(String(lead.projectId)).toBe(String((await Project.findOne({ code: "SUPPORT" }).lean())!._id));
+    expect(lead).toMatchObject({ sourceDetail: "Contact page · Course joining", notes: "Contact page: Course joining\nWeekend batch?" });
+
+    const bad = await request(app)
+      .post(SUPPORT)
+      .set(visitor("203.0.113.21"))
+      .send({ name: "Topicless", phone: "+971551231401", topic: "PIZZA" });
+    expect(bad.status).toBe(400);
+    expect(bad.body.error.code).toBe("VALIDATION");
+
+    const bot = await request(app)
+      .post(SUPPORT)
+      .set(visitor("203.0.113.21"))
+      .send({ name: "Bot Name", phone: "+971551231402", topic: "SUPPORT", website: "spam.example" })
+      .expect(200);
+    expect(bot.body).toEqual({ ok: true, contactUrl: null, channel: null, contactName: null });
+    expect(await Lead.countDocuments({ phone: "+971551231402" })).toBe(0);
   });
 });

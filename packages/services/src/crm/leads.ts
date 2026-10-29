@@ -642,6 +642,32 @@ interface ListRow extends LeadDoc {
   p?: { name: string; code: string }[];
 }
 
+const SEARCH_FIELDS = ["name", "email", "tags", "sourceDetail", "jetaFxClientId"] as const;
+const contains = (s: string, flags = "i") => new RegExp(escapeRegex(s), flags);
+const digitsOf = (s: string) => s.replace(/\D/g, "").replace(/^0+/, "");
+
+/**
+ * Lead search. A number (digits and phone punctuation only) matches the mobile, the JetaFX ID or a number in the notes
+ * (a second number from a form, a number as typed). Anything else matches when every word is in the name, email, a
+ * tag, the source, the JetaFX ID or the mobile, in any order, or when the whole text is in the notes (website messages).
+ */
+export function leadSearchFilter(q: string): Record<string, unknown> {
+  // Short text would match inside too many notes.
+  const inNotes = q.length >= 4 ? [{ notes: contains(q) }] : [];
+  if (/\d/.test(q) && /^[\d\s()+\-.]+$/.test(q)) {
+    const d = digitsOf(q);
+    const or: Record<string, unknown>[] = [{ jetaFxClientId: contains(q.replace(/\s+/g, "")) }, ...inNotes];
+    if (d.length >= 3) or.push({ phone: contains(d, "") }, { jetaFxClientId: contains(d, "") }, { notes: contains(d, "") });
+    return { $or: or };
+  }
+  const words = q.split(/\s+/).slice(0, 8);
+  const every = words.map((w) => {
+    const d = digitsOf(w);
+    return { $or: [...SEARCH_FIELDS.map((f) => ({ [f]: contains(w) })), ...(d.length >= 3 ? [{ phone: contains(d, "") }] : [])] };
+  });
+  return { $or: [{ $and: every }, ...inNotes] };
+}
+
 /** The Mongo conditions for a leads filter within the viewer's scope (shared by the list, CSV and bulk actions). */
 export function leadMatch(filters: LeadFilters, scope: CrmScope): Record<string, unknown>[] {
   const at = now();
@@ -649,20 +675,14 @@ export function leadMatch(filters: LeadFilters, scope: CrmScope): Record<string,
   const sc = leadScopeFilter(scope);
   if (Object.keys(sc).length) and.push(sc);
   const q = filters.q?.trim();
-  if (q) {
-    const rx = new RegExp(escapeRegex(q), "i");
-    const digits = q.replace(/\D/g, "").replace(/^0+/, "");
-    const or: Record<string, unknown>[] = [{ name: rx }, { email: rx }, { tags: rx }, { sourceDetail: rx }, { jetaFxClientId: rx }];
-    if (digits.length >= 3) or.push({ phone: new RegExp(escapeRegex(digits)) });
-    and.push({ $or: or });
-  }
+  if (q) and.push(leadSearchFilter(q));
   const project = optId(filters.project);
   if (project) and.push({ projectId: project });
   const product = optId(filters.product);
   if (product) and.push({ productIds: product });
   if (filters.stage) and.push({ stage: filters.stage });
-  // A product filter means converted leads, so it never hides them.
-  else if (filters.view !== "all" && !product) and.push({ stage: { $in: [...OPEN_LEAD_STAGES] } });
+  // A product filter means converted leads, and a search looks for a person whatever their stage, so neither hides closed leads.
+  else if (filters.view !== "all" && !product && !q) and.push({ stage: { $in: [...OPEN_LEAD_STAGES] } });
   if (filters.source) and.push({ source: filters.source });
   if (filters.temperature) and.push({ temperature: filters.temperature });
   const course = optId(filters.course);

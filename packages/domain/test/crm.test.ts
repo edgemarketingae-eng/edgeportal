@@ -149,12 +149,31 @@ describe("lead language", () => {
 });
 
 describe("commission", () => {
-  const rates = { firstPct: "0.1", secondPct: "0.05", laterPct: "0.025" };
+  // The slab.png rates: 4% first deposit; later deposits 1% base, 2% from $10k, 2.5% from $25k, 3% from $40k (unsorted on purpose).
+  const rates = {
+    firstPct: "0.04",
+    slabs: [
+      { fromMinor: 2_500_000, pct: "0.025" },
+      { fromMinor: 0, pct: "0.01" },
+      { fromMinor: 4_000_000, pct: "0.03" },
+      { fromMinor: 1_000_000, pct: "0.02" },
+    ],
+  };
 
-  it("picks the rate for the deposit sequence", () => {
-    expect(rateFor(rates, "FIRST")).toBe("0.1");
-    expect(rateFor(rates, "SECOND")).toBe("0.05");
-    expect(rateFor(rates, "LATER")).toBe("0.025");
+  it("rates a first deposit at the first-deposit rate, whatever its amount", () => {
+    expect(rateFor(rates, "FIRST", 500_000)).toBe("0.04");
+    expect(rateFor(rates, "FIRST", 5_000_000)).toBe("0.04");
+  });
+
+  it("rates a later deposit by the highest slab its amount reaches", () => {
+    expect(rateFor(rates, "LATER", 500_000)).toBe("0.01"); // $5,000: base
+    expect(rateFor(rates, "LATER", 999_999)).toBe("0.01");
+    expect(rateFor(rates, "LATER", 1_000_000)).toBe("0.02"); // exactly $10,000
+    expect(rateFor(rates, "LATER", 3_000_000)).toBe("0.025"); // $30,000
+    expect(rateFor(rates, "LATER", 4_000_000)).toBe("0.03");
+    expect(rateFor(rates, "LATER", 10_000_000)).toBe("0.03");
+    expect(commissionFor(3_000_000, rateFor(rates, "LATER", 3_000_000))).toBe(75_000); // $750 on the whole $30,000
+    expect(rateFor({ firstPct: "0.04", slabs: [{ fromMinor: 1_000_000, pct: "0.02" }] }, "LATER", 500_000)).toBe("0"); // no base slab
   });
 
   it("rounds half up to a whole cent", () => {
