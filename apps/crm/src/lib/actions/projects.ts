@@ -1,7 +1,7 @@
 "use server";
 
 import { crmRoutes, type RouteBody } from "@edge/contracts";
-import { text, toActionState, values, type ActionState } from "@edge/web/actions";
+import { dialogError, text, toActionState, values, type ActionState } from "@edge/web/actions";
 import { api } from "@edge/web/server";
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
@@ -65,6 +65,16 @@ export async function projectMemberAction(_prev: ActionState, form: FormData): P
     for (const userId of userIds) await api(crmRoutes.projectMember, { params: { id: text(form, "id") }, body: { userId, role } });
     return { ok: true as const, message: `${userIds.length} ${userIds.length === 1 ? "person" : "people"} added.` };
   });
+}
+
+export async function deleteProjectAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  if (text(form, "confirm").trim().toUpperCase() !== "DELETE") return { error: "Type DELETE to confirm." };
+  try {
+    await api(crmRoutes.deleteProject, { params: { id: text(form, "id") } });
+  } catch (e) {
+    return dialogError(e);
+  }
+  redirect("/projects?deleted=1");
 }
 
 export async function removeProjectMemberAction(_prev: ActionState, form: FormData): Promise<ActionState> {

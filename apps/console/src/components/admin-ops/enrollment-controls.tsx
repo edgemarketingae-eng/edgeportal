@@ -2,9 +2,11 @@
 
 import { ActionButton, ActionDialog } from "@edge/ui/blocks/action-dialog";
 import { Button } from "@edge/ui/components/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@edge/ui/components/dropdown-menu";
 import { Label } from "@edge/ui/components/label";
 import { Textarea } from "@edge/ui/components/textarea";
-import { NativeSelect } from "@edge/ui/components/native-select";
+import { Select } from "@edge/ui/components/select";
+import { SegmentedControl } from "@edge/ui/forms/segmented-control";
 import { Field } from "@edge/ui/forms/field";
 import {
   approveAction,
@@ -15,6 +17,8 @@ import {
   rejectAction,
   unlockAction,
 } from "@/app/admin/enrollment-actions";
+import { CalendarClock, Ellipsis, Lock, Shuffle } from "lucide-react";
+import { useState } from "react";
 import { manualPaymentAction } from "@/app/admin/students/[id]/actions";
 
 export interface ControlsProps {
@@ -38,8 +42,22 @@ export function EnrollmentControls({ studentId, enrollment: e, batches, can }: C
       </ActionDialog>
     ) : null;
   }
+  return <Controls studentId={studentId} e={e} batches={batches} can={can} />;
+}
+
+/** The dialogs opened from the "More" menu. */
+type MoreDialog = "lock" | "due" | "batch";
+
+function Controls({ studentId, e, batches, can }: Omit<ControlsProps, "enrollment"> & { e: NonNullable<ControlsProps["enrollment"]> }) {
+  const [dialog, setDialog] = useState<MoreDialog | null>(null);
+  const controlled = (d: MoreDialog) => ({ open: dialog === d, onOpenChange: (o: boolean) => setDialog(o ? d : null) });
   const hid = { enrollmentId: e.id };
   const partly = e.paymentState === "PARTIALLY_PAID";
+  const show = {
+    lock: can.lock && e.status === "ACTIVE",
+    due: can.editTerms && partly,
+    batch: can.assignBatch && !["REJECTED", "CANCELLED"].includes(e.status),
+  };
   return (
     <div className="flex flex-wrap gap-2">
       {can.approve && e.status === "PENDING_APPROVAL" ? (
@@ -65,17 +83,13 @@ export function EnrollmentControls({ studentId, enrollment: e, batches, can }: C
           </ActionDialog>
         </>
       ) : null}
-      {can.lock && e.status === "ACTIVE" ? (
+      {show.lock ? (
         <ActionDialog
+          {...controlled("lock")}
           action={lockAction}
           hidden={hid}
           title="Lock access"
           description="The student loses access to classes and recordings until unlocked."
-          trigger={
-            <Button size="sm" variant="outline">
-              Lock access
-            </Button>
-          }
           submitLabel="Lock"
           destructive
         >
@@ -99,33 +113,13 @@ export function EnrollmentControls({ studentId, enrollment: e, batches, can }: C
           )}
         </ActionDialog>
       ) : null}
-      {can.editTerms && partly ? (
-        <ActionDialog
-          action={extendDueAction}
-          hidden={hid}
-          title="Change balance due date"
-          trigger={
-            <Button size="sm" variant="outline">
-              Change due date
-            </Button>
-          }
-          submitLabel="Save"
-        >
+      {show.due ? (
+        <ActionDialog {...controlled("due")} action={extendDueAction} hidden={hid} title="Change balance due date" submitLabel="Save">
           <Field label="New due date" name="newDueDate" type="date" defaultValue={e.balanceDueOn ?? undefined} required />
         </ActionDialog>
       ) : null}
-      {can.assignBatch && !["REJECTED", "CANCELLED"].includes(e.status) ? (
-        <ActionDialog
-          action={changeBatchAction}
-          hidden={hid}
-          title="Move to another batch"
-          trigger={
-            <Button size="sm" variant="outline">
-              Change batch
-            </Button>
-          }
-          submitLabel="Move"
-        >
+      {show.batch ? (
+        <ActionDialog {...controlled("batch")} action={changeBatchAction} hidden={hid} title="Move to another batch" submitLabel="Move">
           <BatchSelect batches={batches.filter((b) => b.id !== e.batchId)} />
         </ActionDialog>
       ) : null}
@@ -142,33 +136,66 @@ export function EnrollmentControls({ studentId, enrollment: e, batches, can }: C
           }
           submitLabel="Record payment"
         >
-          <div className="grid content-start gap-2">
-            <Label htmlFor="kind">Type</Label>
-            <NativeSelect id="kind" name="kind" defaultValue={e.paymentState === "UNPAID" ? "FULL" : "BALANCE"}>
-              {e.paymentState === "UNPAID" ? (
-                <>
-                  <option value="FULL">Full payment</option>
-                  <option value="ADVANCE">Advance</option>
-                </>
-              ) : (
-                <option value="BALANCE">Remaining balance</option>
-              )}
-            </NativeSelect>
-          </div>
+          {e.paymentState === "UNPAID" ? (
+            <SegmentedControl
+              name="kind"
+              label="Type"
+              defaultValue="FULL"
+              options={[
+                { value: "FULL", label: "Full payment" },
+                { value: "ADVANCE", label: "Advance" },
+              ]}
+            />
+          ) : (
+            <div className="grid content-start gap-2">
+              <Label>Type</Label>
+              <input type="hidden" name="kind" value="BALANCE" />
+              <p className="text-sm font-medium">Remaining balance</p>
+            </div>
+          )}
           {e.paymentState === "UNPAID" ? (
             <Field label="Advance amount (AED, ex VAT, only for advance)" name="amount" inputMode="decimal" />
           ) : null}
-          <div className="grid content-start gap-2">
-            <Label htmlFor="method">Method</Label>
-            <NativeSelect id="method" name="method">
-              <option value="BANK_TRANSFER">Bank transfer</option>
-              <option value="CASH">Cash</option>
-              <option value="OTHER">Other</option>
-            </NativeSelect>
-          </div>
+          <SegmentedControl
+            name="method"
+            label="Method"
+            defaultValue="BANK_TRANSFER"
+            options={[
+              { value: "BANK_TRANSFER", label: "Bank transfer" },
+              { value: "CASH", label: "Cash" },
+              { value: "OTHER", label: "Other" },
+            ]}
+          />
           <Field label="Reference" name="reference" required />
           <Field label="Notes" name="notes" />
         </ActionDialog>
+      ) : null}
+      {show.lock || show.due || show.batch ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="outline">
+              <Ellipsis /> More
+            </Button>
+          </DropdownMenuTrigger>
+          {/* Its dialogs sit above, outside the menu, which closes (and unmounts) as one opens. */}
+          <DropdownMenuContent align="end" className="w-52">
+            {show.due ? (
+              <DropdownMenuItem onSelect={() => setDialog("due")}>
+                <CalendarClock /> Change due date…
+              </DropdownMenuItem>
+            ) : null}
+            {show.batch ? (
+              <DropdownMenuItem onSelect={() => setDialog("batch")}>
+                <Shuffle /> Change batch…
+              </DropdownMenuItem>
+            ) : null}
+            {show.lock ? (
+              <DropdownMenuItem variant="destructive" onSelect={() => setDialog("lock")}>
+                <Lock /> Lock access…
+              </DropdownMenuItem>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
       ) : null}
     </div>
   );
@@ -178,13 +205,16 @@ function BatchSelect({ batches }: { batches: { id: string; label: string }[] }) 
   return (
     <div className="grid content-start gap-2">
       <Label htmlFor="batchId">Batch</Label>
-      <NativeSelect id="batchId" name="batchId" required>
+      <Select id="batchId" name="batchId" defaultValue="" required>
+        <option value="" disabled>
+          Choose a batch
+        </option>
         {batches.map((b) => (
           <option key={b.id} value={b.id}>
             {b.label}
           </option>
         ))}
-      </NativeSelect>
+      </Select>
     </div>
   );
 }

@@ -23,36 +23,54 @@ export const dialogLayout = {
   footer: "m-0 rounded-b-xl",
 };
 
-/** A button that opens a dialog with a small form bound to a server action. Toasts on success. */
+/**
+ * A button that opens a dialog with a small form bound to a server action. Toasts on success. Without a `trigger`,
+ * pass `open`/`onOpenChange` and open it from elsewhere (a menu item: a dialog inside a menu would close with it).
+ */
 export function ActionDialog({
   action,
   trigger,
+  open: openProp,
+  onOpenChange,
   title,
   description,
   hidden,
   children,
   submitLabel = "Confirm",
+  cancelLabel = "Cancel",
   destructive,
   size = "sm",
   bodyClassName,
+  toastOptions,
 }: {
   action: Action;
-  trigger: ReactNode;
+  trigger?: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   title: string;
   description?: ReactNode;
   hidden: Record<string, string>;
   children?: ReactNode;
   submitLabel?: string;
+  /** The dismiss button; name it for what it keeps ("Keep class") when the action itself is a cancel. */
+  cancelLabel?: string;
   destructive?: boolean;
   /** Width from the sm breakpoint up: sm 24rem, md 32rem, lg 42rem, xl 56rem. */
   size?: keyof typeof SIZES;
   bodyClassName?: string;
+  /** For the success toast, e.g. to keep a one-time password on screen until dismissed. */
+  toastOptions?: Parameters<typeof toast.success>[1];
 }) {
-  const [open, setOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = openProp ?? ownOpen;
+  function setOpen(next: boolean) {
+    setOwnOpen(next);
+    onOpenChange?.(next);
+  }
   const [state, formAction, pending] = useActionState(async (prev: ActionState, form: FormData) => {
     const result = await action(prev, form);
     if (result.ok) {
-      toast.success(result.message ?? "Done");
+      toast.success(result.message ?? "Done", toastOptions);
       setOpen(false);
       return {} as ActionState;
     }
@@ -60,7 +78,7 @@ export function ActionDialog({
   }, {} as ActionState);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
       <DialogContent className={cn(dialogLayout.content, SIZES[size])}>
         <form action={formAction} className={dialogLayout.form}>
           <DialogHeader className={dialogLayout.header}>
@@ -76,10 +94,10 @@ export function ActionDialog({
           </div>
           <DialogFooter className={dialogLayout.footer}>
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-              Cancel
+              {cancelLabel}
             </Button>
-            <Button type="submit" variant={destructive ? "destructive" : "default"} disabled={pending}>
-              {pending ? "Working…" : submitLabel}
+            <Button type="submit" variant={destructive ? "destructive" : "default"} pending={pending}>
+              {submitLabel}
             </Button>
           </DialogFooter>
         </form>
@@ -113,8 +131,8 @@ export function ActionButton({
       {Object.entries(hidden).map(([k, v]) => (
         <input key={k} type="hidden" name={k} value={v} />
       ))}
-      <Button type="submit" variant={variant} size={size} disabled={pending}>
-        {pending ? "Working…" : children}
+      <Button type="submit" variant={variant} size={size} pending={pending}>
+        {children}
       </Button>
     </form>
   );

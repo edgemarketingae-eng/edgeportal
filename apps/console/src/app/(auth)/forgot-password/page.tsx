@@ -8,7 +8,9 @@ import { useActionState } from "react";
 
 export default function ForgotPasswordPage() {
   const [state, action, pending] = useActionState(async (_prev: ActionState, form: FormData): Promise<ActionState> => {
-    const email = String(form.get("email") ?? "").trim().toLowerCase();
+    const email = String(form.get("email") ?? "")
+      .trim()
+      .toLowerCase();
     if (!email.includes("@")) return { fieldErrors: { email: "Enter a valid email" }, values: { email } };
     const { error } = await authClient.requestPasswordReset({ email, redirectTo: "/reset-password" });
     if (error) return { error: authErrorMessage(error), values: { email } };
@@ -25,9 +27,17 @@ export default function ForgotPasswordPage() {
       ) : (
         <form action={action} className="grid gap-4">
           <FormError state={state} />
-          <Field label="Email" name="email" type="email" autoComplete="email" defaultValue={state.values?.email} error={state.fieldErrors?.email} required />
-          <Button type="submit" size="lg" disabled={pending}>
-            {pending ? "Sending…" : "Send reset link"}
+          <Field
+            label="Email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            defaultValue={state.values?.email}
+            error={state.fieldErrors?.email}
+            required
+          />
+          <Button type="submit" size="lg" pending={pending}>
+            Send reset link
           </Button>
         </form>
       )}

@@ -5,14 +5,14 @@ import { LEAD_SOURCES } from "@edge/domain/crm/enums";
 import { LEAD_SOURCE_LABELS } from "@edge/domain/crm/labels";
 import { Button } from "@edge/ui/components/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@edge/ui/components/card";
-import { Input } from "@edge/ui/components/input";
 import { Label } from "@edge/ui/components/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@edge/ui/components/table";
 import { Textarea } from "@edge/ui/components/textarea";
-import { NativeSelect } from "@edge/ui/components/native-select";
+import { Select } from "@edge/ui/components/select";
 import { CountrySelect } from "@edge/ui/forms/phone-input";
 import { HOME_COUNTRY } from "@edge/domain/countries";
 import { FormError, FormMessage } from "@edge/ui/forms/field";
+import { FileInput } from "@edge/ui/forms/file-input";
 import Link from "next/link";
 import { useActionState } from "react";
 import { importLeadsAction, previewImportAction } from "@/lib/actions/import";
@@ -69,17 +69,17 @@ export function ImportForm({ options, meId }: { options: CrmOptions; meId: strin
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="grid content-start gap-2">
                 <Label htmlFor="file">…or a file</Label>
-                <Input id="file" name="file" type="file" accept=".csv,text/csv" className="h-auto py-1.5" />
+                <FileInput id="file" name="file" accept=".csv,text/csv" hint="A .csv file with a header row" />
               </div>
               <div className="grid content-start gap-2">
                 <Label htmlFor="source">Source for these leads</Label>
-                <NativeSelect id="source" name="source" defaultValue={v?.source || "IMPORT"}>
+                <Select id="source" name="source" defaultValue={v?.source || "IMPORT"}>
                   {LEAD_SOURCES.map((s) => (
                     <option key={s} value={s}>
                       {LEAD_SOURCE_LABELS[s]}
                     </option>
                   ))}
-                </NativeSelect>
+                </Select>
               </div>
               <div className="grid content-start gap-2">
                 <Label htmlFor="defaultCountry">Country for numbers without a +code</Label>
@@ -92,8 +92,8 @@ export function ImportForm({ options, meId }: { options: CrmOptions; meId: strin
               </div>
               <ProjectOwnerFields options={options} meId={meId} defaultProjectId={v?.projectId} defaultOwnerId={v?.ownerId} roundRobin />
             </div>
-            <Button type="submit" size="sm" className="w-fit" disabled={previewing}>
-              {previewing ? "Checking…" : "Check the file"}
+            <Button type="submit" size="sm" className="w-fit" pending={previewing}>
+              Check the file
             </Button>
           </form>
         </CardContent>

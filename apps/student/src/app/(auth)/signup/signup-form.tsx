@@ -97,8 +97,8 @@ export function SignUpForm() {
           </Label>
         </div>
       </div>
-      <Button type="submit" size="lg" disabled={pending}>
-        {pending ? "Creating account…" : "Create account"}
+      <Button type="submit" size="lg" pending={pending}>
+        Create account
       </Button>
       <p className="text-muted-foreground text-center text-sm">
         Already registered?{" "}

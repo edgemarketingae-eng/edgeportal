@@ -7,7 +7,7 @@ import { toDubaiLocal } from "@edge/domain/dates";
 import { Button } from "@edge/ui/components/button";
 import { Label } from "@edge/ui/components/label";
 import { Textarea } from "@edge/ui/components/textarea";
-import { NativeSelect } from "@edge/ui/components/native-select";
+import { Select } from "@edge/ui/components/select";
 import { Field, FormError, type ActionState } from "@edge/ui/forms/field";
 import { useActionState, useEffect } from "react";
 import { toast } from "sonner";
@@ -29,23 +29,23 @@ export function TaskForm({ detail }: { detail: TaskDetail }) {
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="grid content-start gap-2">
           <Label htmlFor="type">Type</Label>
-          <NativeSelect id="type" name="type" defaultValue={v?.type ?? t.type}>
+          <Select id="type" name="type" defaultValue={v?.type ?? t.type}>
             {FOLLOWUP_TYPES.map((x) => (
               <option key={x} value={x}>
                 {FOLLOWUP_TYPE_LABELS[x]}
               </option>
             ))}
-          </NativeSelect>
+          </Select>
         </div>
         <div className="grid content-start gap-2">
           <Label htmlFor="priority">Priority</Label>
-          <NativeSelect id="priority" name="priority" defaultValue={v?.priority ?? t.priority}>
+          <Select id="priority" name="priority" defaultValue={v?.priority ?? t.priority}>
             {TASK_PRIORITIES.map((p) => (
               <option key={p} value={p}>
                 {TASK_PRIORITY_LABELS[p]}
               </option>
             ))}
-          </NativeSelect>
+          </Select>
         </div>
         <Field
           className="sm:col-span-2"
@@ -58,14 +58,14 @@ export function TaskForm({ detail }: { detail: TaskDetail }) {
       {detail.assignees.length > 1 ? (
         <div className="grid content-start gap-2">
           <Label htmlFor="assigneeId">Assigned to</Label>
-          <NativeSelect id="assigneeId" name="assigneeId" defaultValue={v?.assigneeId ?? t.assignee?.id ?? ""}>
+          <Select id="assigneeId" name="assigneeId" defaultValue={v?.assigneeId ?? t.assignee?.id ?? ""}>
             <option value="">Unassigned</option>
             {detail.assignees.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
               </option>
             ))}
-          </NativeSelect>
+          </Select>
         </div>
       ) : (
         <input type="hidden" name="assigneeId" value={t.assignee?.id ?? ""} />
@@ -74,8 +74,8 @@ export function TaskForm({ detail }: { detail: TaskDetail }) {
         <Label htmlFor="description">Details</Label>
         <Textarea id="description" name="description" rows={4} defaultValue={v?.description ?? t.description ?? ""} />
       </div>
-      <Button className="w-fit" size="sm" disabled={pending}>
-        {pending ? "Saving…" : "Save task"}
+      <Button className="w-fit" size="sm" pending={pending}>
+        Save task
       </Button>
     </form>
   );
@@ -88,8 +88,8 @@ export function TaskCommentForm({ taskId }: { taskId: string }) {
       <input type="hidden" name="taskId" value={taskId} />
       <FormError state={state} />
       <Textarea name="body" rows={2} placeholder="Add a comment…" defaultValue={state.values?.body} aria-label="Comment" required />
-      <Button size="sm" className="w-fit" disabled={pending}>
-        {pending ? "Posting…" : "Comment"}
+      <Button size="sm" className="w-fit" pending={pending}>
+        Comment
       </Button>
     </form>
   );

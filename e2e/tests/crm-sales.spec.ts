@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { E2E } from "../config";
-import { crmSignIn } from "./helpers";
+import { crmSignIn, pickOption } from "./helpers";
 
 /**
  * Sales journey: the sales desk creates a lead with the language dropdown, a JetaFX client ID and a qualification
@@ -21,7 +21,7 @@ test("1. a sales executive qualifies a lead, marks a conversion and logs a depos
   await page.goto(`${E2E.crm}/leads/new`);
   await page.getByLabel("Name", { exact: true }).fill(lead.name);
   await page.getByLabel("Mobile (WhatsApp)").fill(lead.phone);
-  await page.getByLabel("Language").selectOption({ label: "Malayalam" });
+  await pickOption(page, "Language", "Malayalam");
   await page.getByLabel("JetaFX client ID").fill(lead.jetaFx);
   await page.getByLabel("Trading experience and capital").fill("6 months on demo, can start with $1,000");
   await page.getByRole("button", { name: "Create lead" }).click();

@@ -6,8 +6,9 @@ import { Button } from "@edge/ui/components/button";
 import { Checkbox } from "@edge/ui/components/checkbox";
 import { Label } from "@edge/ui/components/label";
 import { Textarea } from "@edge/ui/components/textarea";
-import { NativeSelect } from "@edge/ui/components/native-select";
+import { Select } from "@edge/ui/components/select";
 import { Field, FormError, type ActionState } from "@edge/ui/forms/field";
+import { SegmentedControl } from "@edge/ui/forms/segmented-control";
 import { useActionState, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { addActivityAction } from "@/lib/actions/leads";
@@ -38,7 +39,7 @@ export function ActivityComposer({ leadId }: { leadId: string }) {
         {LEAD_TOUCH_TYPES.map((t) => (
           <label
             key={t}
-            className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold ${type === t ? "border-edge-emerald bg-edge-mint/40 text-edge-emerald" : "text-muted-foreground hover:text-foreground"}`}
+            className={`has-focus-visible:ring-edge-green/30 cursor-pointer rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors has-focus-visible:ring-4 ${type === t ? "border-edge-emerald bg-edge-mint/40 text-edge-emerald" : "bg-card text-muted-foreground hover:text-foreground"}`}
           >
             <input type="radio" name="type" value={t} checked={type === t} onChange={() => setType(t)} className="sr-only" />
             {ACTIVITY_LABELS[t]}
@@ -48,23 +49,26 @@ export function ActivityComposer({ leadId }: { leadId: string }) {
       {type === "CALL" ? (
         <div className="grid gap-1.5 sm:max-w-xs">
           <Label htmlFor="outcome">Outcome</Label>
-          <NativeSelect id="outcome" name="outcome" defaultValue={v?.outcome ?? "ANSWERED"}>
+          <Select id="outcome" name="outcome" defaultValue={v?.outcome ?? "ANSWERED"}>
             {CALL_OUTCOMES.map((o) => (
               <option key={o} value={o}>
                 {CALL_OUTCOME_LABELS[o]}
               </option>
             ))}
-          </NativeSelect>
+          </Select>
         </div>
       ) : null}
       {type === "WHATSAPP" || type === "EMAIL" ? (
-        <div className="grid gap-1.5 sm:max-w-xs">
-          <Label htmlFor="direction">Direction</Label>
-          <NativeSelect id="direction" name="direction" defaultValue={v?.direction ?? "OUT"}>
-            <option value="OUT">Sent by us</option>
-            <option value="IN">Received from the lead</option>
-          </NativeSelect>
-        </div>
+        <SegmentedControl
+          name="direction"
+          label="Direction"
+          defaultValue={v?.direction ?? "OUT"}
+          options={[
+            { value: "OUT", label: "Sent by us" },
+            { value: "IN", label: "Received from the lead" },
+          ]}
+          className="sm:max-w-sm"
+        />
       ) : null}
       <div className="grid content-start gap-2">
         <Textarea name="body" rows={3} placeholder={PLACEHOLDER[type]} defaultValue={v?.body} aria-label="Details" />
@@ -86,19 +90,19 @@ export function ActivityComposer({ leadId }: { leadId: string }) {
           <Field label="Title" name="nextFollowUpTitle" placeholder="Follow up" defaultValue={v?.nextFollowUpTitle} />
           <div className="grid content-start gap-2">
             <Label htmlFor="nextFollowUpType">Type</Label>
-            <NativeSelect id="nextFollowUpType" name="nextFollowUpType" defaultValue={v?.nextFollowUpType ?? ""}>
+            <Select id="nextFollowUpType" name="nextFollowUpType" defaultValue={v?.nextFollowUpType ?? ""}>
               <option value="">Same as this activity</option>
               {FOLLOWUP_TYPES.map((t) => (
                 <option key={t} value={t}>
                   {FOLLOWUP_TYPE_LABELS[t]}
                 </option>
               ))}
-            </NativeSelect>
+            </Select>
           </div>
         </div>
       ) : null}
-      <Button type="submit" size="sm" className="w-fit" disabled={pending}>
-        {pending ? "Saving…" : "Log activity"}
+      <Button type="submit" size="sm" className="w-fit" pending={pending}>
+        Log activity
       </Button>
     </form>
   );

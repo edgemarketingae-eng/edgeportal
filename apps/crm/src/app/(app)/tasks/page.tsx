@@ -11,7 +11,7 @@ import { api } from "@edge/web/server";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { FollowUpDue } from "@/components/crm/due";
-import { AddTaskDialog, CancelTaskButton, CompleteTaskDialog, RescheduleTaskDialog } from "@/components/crm/task-actions";
+import { AddTaskDialog, TaskRowActions } from "@/components/crm/task-actions";
 import { TaskBoard } from "@/components/crm/task-board";
 import { can, load, requireCrm } from "@/lib/load";
 
@@ -149,11 +149,7 @@ export default async function TasksPage(props: PageProps<"/tasks">) {
         </p>
       </div>
       {canWrite && status === "open" ? (
-        <div className="flex flex-wrap gap-1">
-          <CompleteTaskDialog taskId={t.id} type={t.type} title={t.title} lead={!!t.leadId} />
-          <RescheduleTaskDialog taskId={t.id} dueAt={t.dueAt} />
-          <CancelTaskButton taskId={t.id} />
-        </div>
+        <TaskRowActions taskId={t.id} type={t.type} title={t.title} lead={!!t.leadId} dueAt={t.dueAt} />
       ) : null}
     </li>
   );
@@ -190,7 +186,7 @@ export default async function TasksPage(props: PageProps<"/tasks">) {
               const list = grouped.get(g)!;
               if (!list.length && g !== "Today") return null;
               return (
-                <Card key={g} className={g === "Overdue" && list.length ? "border-destructive/40" : undefined}>
+                <Card key={g} className={g === "Overdue" && list.length ? "ring-destructive/40" : undefined}>
                   <CardHeader>
                     <CardTitle>
                       {g} <span className="text-muted-foreground text-sm font-normal">({list.length})</span>

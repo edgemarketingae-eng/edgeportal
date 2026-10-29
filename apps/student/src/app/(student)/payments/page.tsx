@@ -1,6 +1,7 @@
 import { paymentRoutes } from "@edge/contracts";
 import { formatDateTime } from "@edge/domain/dates";
 import { formatMoney } from "@edge/domain/money";
+import { TableEmpty } from "@edge/ui/blocks/empty-state";
 import { GATEWAY_LABELS, KIND_LABELS, PaymentStatusBadge } from "@edge/ui/blocks/payment-status-badge";
 import { Card } from "@edge/ui/components/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@edge/ui/components/table";
@@ -31,11 +32,7 @@ export default async function PaymentsPage() {
           </TableHeader>
           <TableBody>
             {payments.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-muted-foreground py-10 text-center">
-                  No payments yet.
-                </TableCell>
-              </TableRow>
+              <TableEmpty colSpan={5} title="No payments yet." />
             ) : (
               payments.map((p) => (
                 <TableRow key={p.id}>

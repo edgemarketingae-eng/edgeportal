@@ -1,5 +1,6 @@
 import { classRoutes } from "@edge/contracts";
 import { formatDateTime, formatTime } from "@edge/domain/dates";
+import { Alert, AlertDescription } from "@edge/ui/components/alert";
 import { Badge } from "@edge/ui/components/badge";
 import { Button } from "@edge/ui/components/button";
 import { Card, CardContent } from "@edge/ui/components/card";
@@ -37,7 +38,11 @@ export default async function ClassesPage(props: PageProps<"/classes">) {
   return (
     <>
       <PageHeader help="/docs/classes" title="Live classes" description="All times are Dubai time (GMT+4). Classes run on Google Meet." />
-      {error ? <p className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">{error}</p> : null}
+      {error ? (
+        <Alert variant="warning" className="mb-4">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
       <section className="grid gap-3">
         {upcoming.length === 0 ? (
           <Card>

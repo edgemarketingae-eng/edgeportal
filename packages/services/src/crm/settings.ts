@@ -5,6 +5,7 @@ import { toMajor, toMinor } from "@edge/domain/money";
 import { audit } from "../audit";
 import { env } from "../env";
 import { getSetting, setSetting } from "../settings";
+import { rerateCurrentMonth } from "./deposits";
 import { getDefaultProject } from "./scope";
 
 export async function getCrmSettings(): Promise<CrmSettingsDto> {
@@ -54,7 +55,11 @@ export async function getCommissionSettings(): Promise<CommissionSettingsDto> {
   };
 }
 
-/** New rates apply to deposits verified from now on; verified deposits keep the rate they were verified with. */
+/**
+ * A new first-deposit rate applies to first deposits verified from now on (verified ones keep theirs). New slabs apply
+ * to the current month at once: everyone's verified later deposits this month are re-rated. Past months keep their
+ * rates unless one of their deposits is verified or rejected later (or the backfill script re-rates them).
+ */
 export async function saveCommissionSettings(
   input: { firstPct: number; slabs: { from: number; pct: number }[] },
   actor: Actor & { type: "USER" },
@@ -68,4 +73,5 @@ export async function saveCommissionSettings(
   };
   await setSetting("crm.commission", next, actor.id);
   await audit({ actor, action: "crm.commission.update", entityType: "Setting", entityId: "crm.commission", before, after: next });
+  await rerateCurrentMonth(actor);
 }

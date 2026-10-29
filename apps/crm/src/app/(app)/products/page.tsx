@@ -1,5 +1,6 @@
 import { crmRoutes } from "@edge/contracts";
 import { formatDate } from "@edge/domain/dates";
+import { TableEmpty } from "@edge/ui/blocks/empty-state";
 import { Badge } from "@edge/ui/components/badge";
 import { Card } from "@edge/ui/components/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@edge/ui/components/table";
@@ -36,11 +37,7 @@ export default async function ProductsPage() {
           </TableHeader>
           <TableBody>
             {products.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-muted-foreground py-6 text-center">
-                  No products yet.
-                </TableCell>
-              </TableRow>
+              <TableEmpty colSpan={5} title="No products yet." />
             ) : (
               products.map((p) => (
                 <TableRow key={p.id} className={p.status === "ARCHIVED" ? "opacity-60" : undefined}>

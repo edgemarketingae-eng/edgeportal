@@ -2,6 +2,7 @@ import { adminRoutes, catalogRoutes } from "@edge/contracts";
 import { formatDate } from "@edge/domain/dates";
 import { ENROLLMENT_STATUSES, PAYMENT_STATES } from "@edge/domain/enums";
 import { formatMoney } from "@edge/domain/money";
+import { TableEmpty } from "@edge/ui/blocks/empty-state";
 import { FilterBar, FilterResults, FilterScope, FilterSelect } from "@edge/ui/blocks/filter-bar";
 import { EnrollmentBadge, PaymentStateBadge } from "@edge/ui/blocks/status-badges";
 import { Button } from "@edge/ui/components/button";
@@ -88,11 +89,7 @@ export default async function StudentsPage(props: PageProps<"/admin/students">) 
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-muted-foreground py-10 text-center">
-                    No students match these filters.
-                  </TableCell>
-                </TableRow>
+                <TableEmpty colSpan={7} title="No students match these filters." />
               ) : (
                 rows.map((s) => {
                   const e = s.enrollment;

@@ -1,5 +1,7 @@
 "use client";
 
+import { Alert, AlertDescription } from "@edge/ui/components/alert";
+import { CopyButton } from "@edge/ui/blocks/copy-button";
 import { OtpInput } from "@edge/ui/blocks/otp-input";
 import { Button } from "@edge/ui/components/button";
 import { Field, FormError, FormMessage, type ActionState } from "@edge/ui/forms/field";
@@ -35,13 +37,15 @@ export function TwoFactorSetup({ enabled, required }: { enabled: boolean; requir
   if (enabled) {
     return (
       <div className="grid gap-4">
-        <p className="bg-edge-mint/40 text-edge-emerald rounded-md px-3 py-2 text-sm">Two-factor authentication is on for your account.</p>
+        <Alert variant="success">
+          <AlertDescription>Two-factor authentication is on for your account.</AlertDescription>
+        </Alert>
         {!required ? (
           <form action={disableAction} className="grid gap-3">
             <FormMessage state={disable} />
             <FormError state={disable} />
             <Field label="Password to turn it off" name="password" type="password" autoComplete="current-password" required />
-            <Button variant="outline" className="w-fit" disabled={disabling}>
+            <Button variant="outline" className="w-fit" pending={disabling}>
               Turn off two-factor
             </Button>
           </form>
@@ -64,10 +68,14 @@ export function TwoFactorSetup({ enabled, required }: { enabled: boolean; requir
           Can&apos;t scan? Enter this setup key:{" "}
           <code data-testid="totp-secret" className="bg-muted text-foreground rounded px-1.5 py-0.5 font-mono">
             {start.secret}
-          </code>
+          </code>{" "}
+          <CopyButton value={start.secret ?? ""} label="Copy setup key" variant="ghost" size="icon-xs" className="align-middle" />
         </p>
         <div className="bg-muted/50 rounded-lg border p-3">
-          <p className="mb-2 text-sm font-semibold">Backup codes</p>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold">Backup codes</p>
+            <CopyButton value={(start.backupCodes ?? []).join("\n")}>Copy codes</CopyButton>
+          </div>
           <p className="text-muted-foreground mb-2 text-xs">Save these somewhere safe. Each works once if you lose your phone.</p>
           <ul className="grid grid-cols-2 gap-1 font-mono text-sm">
             {start.backupCodes?.map((c) => (
@@ -78,8 +86,8 @@ export function TwoFactorSetup({ enabled, required }: { enabled: boolean; requir
         <form action={confirmAction} className="grid gap-3">
           <FormError state={confirm} />
           <OtpInput autoFocus={false} />
-          <Button className="w-fit" disabled={confirming}>
-            {confirming ? "Checking…" : "Turn on two-factor"}
+          <Button className="w-fit" pending={confirming}>
+            Turn on two-factor
           </Button>
         </form>
       </div>
@@ -90,8 +98,8 @@ export function TwoFactorSetup({ enabled, required }: { enabled: boolean; requir
     <form action={startAction} className="grid gap-3">
       <FormError state={start} />
       <Field label="Confirm your password" name="password" type="password" autoComplete="current-password" required />
-      <Button className="w-fit" disabled={starting}>
-        {starting ? "Preparing…" : "Set up authenticator app"}
+      <Button className="w-fit" pending={starting}>
+        Set up authenticator app
       </Button>
     </form>
   );

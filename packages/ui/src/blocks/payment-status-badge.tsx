@@ -1,13 +1,14 @@
 import { Badge } from "../components/badge";
+import { tone, type Tone } from "../lib/tones";
 
-const STYLES: Record<string, string> = {
-  SUCCEEDED: "bg-edge-green/20 text-edge-emerald border-edge-green/40",
-  PENDING: "bg-amber-50 text-amber-800 border-amber-300",
-  CREATED: "bg-muted text-muted-foreground",
-  AUTHORIZED: "bg-amber-50 text-amber-800 border-amber-300",
-  FAILED: "bg-destructive/10 text-destructive border-destructive/30",
-  CANCELLED: "bg-muted text-muted-foreground",
-  EXPIRED: "bg-muted text-muted-foreground",
+const TONES: Record<string, Tone> = {
+  SUCCEEDED: "success",
+  PENDING: "warning",
+  CREATED: "neutral",
+  AUTHORIZED: "warning",
+  FAILED: "danger",
+  CANCELLED: "gray",
+  EXPIRED: "gray",
 };
 
 const LABELS: Record<string, string> = {
@@ -22,7 +23,7 @@ const LABELS: Record<string, string> = {
 
 export function PaymentStatusBadge({ status }: { status: string }) {
   return (
-    <Badge variant="outline" className={STYLES[status]}>
+    <Badge variant="outline" className={TONES[status] ? tone[TONES[status]] : undefined}>
       {LABELS[status] ?? status}
     </Badge>
   );

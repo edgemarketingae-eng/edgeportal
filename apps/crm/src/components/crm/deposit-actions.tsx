@@ -5,13 +5,13 @@ import { DEPOSIT_SEQUENCES, type DepositSequence } from "@edge/domain/crm/enums"
 import { DEPOSIT_SEQUENCE_LABELS } from "@edge/domain/crm/labels";
 import { formatDate, toDubaiLocal } from "@edge/domain/dates";
 import { formatMoney } from "@edge/domain/money";
-import { ActionButton, ActionDialog } from "@edge/ui/blocks/action-dialog";
+import { ActionDialog } from "@edge/ui/blocks/action-dialog";
 import { Button } from "@edge/ui/components/button";
 import { Input } from "@edge/ui/components/input";
 import { Label } from "@edge/ui/components/label";
-import { NativeSelect } from "@edge/ui/components/native-select";
 import { Textarea } from "@edge/ui/components/textarea";
 import { Field, FormError, type ActionState } from "@edge/ui/forms/field";
+import { SegmentedControl } from "@edge/ui/forms/segmented-control";
 import { Plus, X } from "lucide-react";
 import { Fragment, useActionState, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -24,6 +24,9 @@ import {
 } from "@/lib/actions/deposits";
 
 const today = () => toDubaiLocal(new Date()).slice(0, 10);
+/** "2026-10-31" -> "October 2026" */
+const monthOf = (day: string) =>
+  new Date(`${day.slice(0, 7)}-01T00:00:00.000Z`).toLocaleString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
 
 /** Log a deposit the lead made at JetaFX. Asks for the client ID when the lead has none yet (it is saved on the lead). */
 export function LogDepositDialog({
@@ -50,16 +53,12 @@ export function LogDepositDialog({
       size="md"
     >
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className="grid content-start gap-2">
-          <Label htmlFor="deposit-sequence">Which deposit</Label>
-          <NativeSelect id="deposit-sequence" name="sequence" defaultValue={nextSequence}>
-            {DEPOSIT_SEQUENCES.map((s) => (
-              <option key={s} value={s}>
-                {DEPOSIT_SEQUENCE_LABELS[s]}
-              </option>
-            ))}
-          </NativeSelect>
-        </div>
+        <SegmentedControl
+          name="sequence"
+          label="Which deposit"
+          defaultValue={nextSequence}
+          options={DEPOSIT_SEQUENCES.map((s) => ({ value: s, label: DEPOSIT_SEQUENCE_LABELS[s] }))}
+        />
         <Field label="Amount (USD)" name="amount" inputMode="decimal" placeholder="500" required />
         <Field label="Deposit date" name="depositedAt" type="date" defaultValue={today()} required />
         {clientId ? (
@@ -100,7 +99,7 @@ export function VerifyDepositDialog({
       action={verifyDepositAction}
       hidden={{ id }}
       title="Verify this deposit?"
-      description={`${leadName}: ${DEPOSIT_SEQUENCE_LABELS[sequence].toLowerCase()} of ${formatMoney(amountMinor, "USD")} on ${formatDate(depositedAt)}, JetaFX client ${clientId ?? "unknown"}. Check it against the JetaFX report. The commission is fixed with today's ${sequence === "FIRST" ? "first-deposit rate" : "slab rate for this amount"}.`}
+      description={`${leadName}: ${DEPOSIT_SEQUENCE_LABELS[sequence].toLowerCase()} of ${formatMoney(amountMinor, "USD")} on ${formatDate(depositedAt)}, JetaFX client ${clientId ?? "unknown"}. Check it against the JetaFX report. ${sequence === "FIRST" ? "The commission is fixed with today's first-deposit rate." : `It joins the ${monthOf(depositedAt)} later deposits of the person it counts for: all of them earn the slab rate their total reaches, so their commission is recalculated.`}`}
       trigger={<Button size="sm">Verify</Button>}
       submitLabel="Verify"
     />
@@ -133,9 +132,19 @@ export function RejectDepositDialog({ id, verified }: { id: string; verified: bo
 
 export function DeleteDepositButton({ id }: { id: string }) {
   return (
-    <ActionButton action={deleteDepositAction} hidden={{ id }} variant="ghost">
-      Delete
-    </ActionButton>
+    <ActionDialog
+      action={deleteDepositAction}
+      hidden={{ id }}
+      title="Delete this deposit?"
+      description="The logged deposit is removed from this lead. This can't be undone."
+      trigger={
+        <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10 hover:text-destructive">
+          Delete
+        </Button>
+      }
+      submitLabel="Delete deposit"
+      destructive
+    />
   );
 }
 
@@ -171,8 +180,8 @@ export function CommissionSettingsForm({ s }: { s: CommissionSettingsDto }) {
         The sales executive who owned the lead earns this share of each verified deposit. A new rate applies to deposits verified from now
         on.
       </p>
-      <Button className="w-fit" disabled={pending}>
-        {pending ? "Saving…" : "Save commission rates"}
+      <Button className="w-fit" pending={pending}>
+        Save commission rates
       </Button>
     </form>
   );
@@ -181,8 +190,9 @@ export function CommissionSettingsForm({ s }: { s: CommissionSettingsDto }) {
 type SlabValue = { from: string; pct: string };
 
 /**
- * Later-deposit slabs: the base rate (any amount, always first) and the slabs from an amount. A deposit earns the rate
- * of the highest slab its amount reaches, on the whole amount. Posts one `slabFrom` and one `slabPct` per row.
+ * Later-deposit slabs: the base rate (any total, always first) and the slabs from a monthly total. A person's verified
+ * later deposits in a month (by deposit date, first deposits excluded) all earn the rate of the highest slab their
+ * total reaches, on their whole amounts. Posts one `slabFrom` and one `slabPct` per row.
  */
 function SlabRows({ initial, error }: { initial: SlabValue[]; error?: string }) {
   const [base, ...more] = initial;
@@ -193,15 +203,16 @@ function SlabRows({ initial, error }: { initial: SlabValue[]; error?: string }) 
     <fieldset className="grid gap-3">
       <legend className="mb-1 text-sm font-medium">Later deposits</legend>
       <p className="text-muted-foreground -mt-1 text-xs">
-        By the deposit&apos;s amount: a deposit earns the rate of the highest slab it reaches, on the whole amount.
+        By each person&apos;s monthly total of verified later deposits, from all their leads (first deposits don&apos;t count). All their
+        later deposits that month earn the rate of the highest slab the total reaches. Saving re-rates this month.
       </p>
       <div className="grid max-w-md grid-cols-[1fr_1fr_2.25rem] items-center gap-2 text-sm">
-        <span className="text-muted-foreground text-xs">Deposit amount</span>
+        <span className="text-muted-foreground text-xs">Monthly total</span>
         <span className="text-muted-foreground text-xs">Commission (%)</span>
         <span />
         <input type="hidden" name="slabFrom" value="0" />
         <Label htmlFor="slab-base" className="font-normal">
-          Base rate · any amount
+          Base rate · any total
         </Label>
         <Input id="slab-base" name="slabPct" defaultValue={base?.pct ?? "0"} {...pct} />
         <span />

@@ -1,6 +1,7 @@
 import { catalogRoutes } from "@edge/contracts";
 import { formatDate } from "@edge/domain/dates";
 import { formatMoney } from "@edge/domain/money";
+import { TableEmpty } from "@edge/ui/blocks/empty-state";
 import { Badge } from "@edge/ui/components/badge";
 import { Button } from "@edge/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@edge/ui/components/card";
@@ -53,11 +54,7 @@ export default async function BatchesPage() {
               </TableHeader>
               <TableBody>
                 {c.batches.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-muted-foreground py-6 text-center">
-                      No batches yet.
-                    </TableCell>
-                  </TableRow>
+                  <TableEmpty colSpan={5} title="No batches yet." />
                 ) : (
                   c.batches.map((b) => (
                     <TableRow key={b.id}>

@@ -1,6 +1,8 @@
 import { crmRoutes } from "@edge/contracts";
 import { LEAD_STAGES } from "@edge/domain/crm/enums";
 import { LEAD_SOURCE_LABELS, LEAD_STAGE_LABELS } from "@edge/domain/crm/labels";
+import { TableEmpty } from "@edge/ui/blocks/empty-state";
+import { Alert, AlertDescription } from "@edge/ui/components/alert";
 import { FilterBar, FilterResults, FilterScope, FilterSelect } from "@edge/ui/blocks/filter-bar";
 import { StatCard } from "@edge/ui/blocks/stat-card";
 import { Button } from "@edge/ui/components/button";
@@ -58,9 +60,9 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
         }
       />
       {sp.error === "forbidden" ? (
-        <p className="border-destructive/30 bg-destructive/10 text-destructive mb-4 rounded-md border px-3 py-2 text-sm">
-          You do not have permission for that page.
-        </p>
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>You do not have permission for that page.</AlertDescription>
+        </Alert>
       ) : null}
       <FilterResults>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -172,11 +174,7 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
               </TableHeader>
               <TableBody>
                 {d.projects.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-muted-foreground py-6 text-center">
-                      No active projects.
-                    </TableCell>
-                  </TableRow>
+                  <TableEmpty colSpan={4} title="No active projects." />
                 ) : (
                   d.projects.map((p) => (
                     <TableRow key={p.id}>
@@ -217,11 +215,7 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
               </TableHeader>
               <TableBody>
                 {d.bySource.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-muted-foreground py-6 text-center">
-                      No leads yet.
-                    </TableCell>
-                  </TableRow>
+                  <TableEmpty colSpan={5} title="No leads yet." />
                 ) : (
                   d.bySource.map((s) => (
                     <TableRow key={s.source}>

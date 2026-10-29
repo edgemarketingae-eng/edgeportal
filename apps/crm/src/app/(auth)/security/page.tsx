@@ -1,4 +1,6 @@
+import { Alert, AlertDescription } from "@edge/ui/components/alert";
 import { getViewer } from "@edge/web/server";
+import { ChevronLeft } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -24,13 +26,27 @@ async function Body({ searchParams }: { searchParams: PageProps<"/security">["se
   const enabled = viewer.user.twoFactorEnabled;
   return (
     <>
+      {enabled || !viewer.twoFactorRequired ? (
+        <Link
+          href="/"
+          className="text-muted-foreground hover:text-foreground -mb-2 inline-flex w-fit items-center gap-0.5 text-sm font-medium"
+        >
+          <ChevronLeft aria-hidden className="size-4" /> Back to the CRM
+        </Link>
+      ) : null}
       <div>
         <h2 className="font-display text-2xl uppercase">Two-factor authentication</h2>
         <p className="text-muted-foreground mt-1 text-sm">
-          {sp.required ? "CRM admins must use an authenticator app before opening the CRM." : "Add a second step to your sign-in with an authenticator app."}
+          {sp.required
+            ? "CRM admins must use an authenticator app before opening the CRM."
+            : "Add a second step to your sign-in with an authenticator app."}
         </p>
       </div>
-      {sp.disabled ? <p className="bg-edge-mint/40 text-edge-emerald rounded-md px-3 py-2 text-sm">Two-factor authentication is off.</p> : null}
+      {sp.disabled ? (
+        <Alert variant="success">
+          <AlertDescription>Two-factor authentication is off.</AlertDescription>
+        </Alert>
+      ) : null}
       <TwoFactorSetup enabled={enabled} required={viewer.twoFactorRequired} />
       {enabled || !viewer.twoFactorRequired ? (
         <Link href="/" className="text-edge-emerald text-sm hover:underline">

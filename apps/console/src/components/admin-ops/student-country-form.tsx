@@ -20,8 +20,8 @@ export function StudentCountryForm({ studentId, country }: { studentId: string; 
       <input type="hidden" name="studentId" value={studentId} />
       <div className="flex gap-2">
         <CountrySelect key={country} name="country" defaultValue={country} size="sm" aria-label="Country of residence" />
-        <Button type="submit" size="sm" variant="outline" disabled={pending}>
-          {pending ? "Saving…" : "Save"}
+        <Button type="submit" size="sm" variant="outline" pending={pending}>
+          Save
         </Button>
       </div>
       <p className="text-muted-foreground text-xs">

@@ -8,7 +8,7 @@ import { Button } from "@edge/ui/components/button";
 import { Checkbox } from "@edge/ui/components/checkbox";
 import { Label } from "@edge/ui/components/label";
 import { Textarea } from "@edge/ui/components/textarea";
-import { NativeSelect } from "@edge/ui/components/native-select";
+import { Select } from "@edge/ui/components/select";
 import { Field } from "@edge/ui/forms/field";
 import { Plus } from "lucide-react";
 import { useState } from "react";
@@ -37,18 +37,18 @@ export function ProjectOwnerFields({
     <>
       <div className="grid content-start gap-2">
         <Label htmlFor="qa-project">Project</Label>
-        <NativeSelect id="qa-project" name="projectId" value={projectId} onChange={(e) => setProjectId(e.target.value)} required>
+        <Select id="qa-project" name="projectId" value={projectId} onChange={(e) => setProjectId(e.target.value)} required>
           {options.projects.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
             </option>
           ))}
-        </NativeSelect>
+        </Select>
       </div>
       {project?.canAssign && (team.length > 1 || roundRobin) ? (
         <div className="grid content-start gap-2">
           <Label htmlFor="qa-owner">Owner</Label>
-          <NativeSelect
+          <Select
             key={projectId}
             id="qa-owner"
             name="ownerId"
@@ -62,7 +62,7 @@ export function ProjectOwnerFields({
                 {o.available === false ? " (Off)" : ""}
               </option>
             ))}
-          </NativeSelect>
+          </Select>
         </div>
       ) : null}
     </>
@@ -91,13 +91,13 @@ export function QuickAddLead({ options, meId }: { options: CrmOptions; meId: str
       <Field label="Email" name="email" type="email" />
       <div className="grid content-start gap-2">
         <Label htmlFor="qa-source">Source</Label>
-        <NativeSelect id="qa-source" name="source" defaultValue="INSTAGRAM">
+        <Select id="qa-source" name="source" defaultValue="INSTAGRAM">
           {LEAD_SOURCES.map((s) => (
             <option key={s} value={s}>
               {LEAD_SOURCE_LABELS[s]}
             </option>
           ))}
-        </NativeSelect>
+        </Select>
       </div>
       <ProjectOwnerFields options={options} meId={meId} />
       <Field label="Next follow-up (optional)" name="nextFollowUpAt" type="datetime-local" />

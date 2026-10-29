@@ -16,6 +16,10 @@ function within(m: PublicFeeRate, total: number) {
   return (m.minTotalMinor == null || total >= m.minTotalMinor) && (m.maxTotalMinor == null || total <= m.maxTotalMinor);
 }
 
+/** The advance presets: pill buttons that act as one radio group, big enough to tap. */
+const chip = "h-10 rounded-full border px-4 text-sm font-semibold transition-colors";
+const chipOn = "border-edge-emerald bg-edge-mint/60 text-edge-emerald";
+
 export function CheckoutForm({ mode, options }: { mode: "first" | "balance"; options: CheckoutOptionsDto }) {
   const { currency, feeMinor, remainingMinor, vatTreatment, courseVatRate, advance, methods } = options;
   const [state, action, pending] = useActionState(startCheckoutAction, {} as ActionState);
@@ -42,7 +46,9 @@ export function CheckoutForm({ mode, options }: { mode: "first" | "balance"; opt
   const quotes = useMemo(() => {
     const out: Record<string, Quote | null> = {};
     for (const m of methods) {
-      out[m.key] = courseMinor ? quote({ courseMinor, vatTreatment, courseVatRate, rate: { pct: m.pct, fixedMinor: m.fixedMinor, feeVatRate: m.feeVatRate } }) : null;
+      out[m.key] = courseMinor
+        ? quote({ courseMinor, vatTreatment, courseVatRate, rate: { pct: m.pct, fixedMinor: m.fixedMinor, feeVatRate: m.feeVatRate } })
+        : null;
     }
     return out;
   }, [courseMinor, methods, vatTreatment, courseVatRate]);
@@ -82,14 +88,16 @@ export function CheckoutForm({ mode, options }: { mode: "first" | "balance"; opt
             </div>
             {kind === "ADVANCE" ? (
               <div className="bg-card grid gap-3 rounded-xl border p-4">
-                <Label>Advance amount</Label>
-                <div className="flex flex-wrap gap-2">
+                <Label id="advance-label">Advance amount</Label>
+                <div role="radiogroup" aria-labelledby="advance-label" className="flex flex-wrap gap-2">
                   {advance.presetsMinor.map((p) => (
                     <button
                       type="button"
+                      role="radio"
+                      aria-checked={preset === p}
                       key={p}
                       onClick={() => setPreset(p)}
-                      className={cn("rounded-full border px-4 py-1.5 text-sm font-semibold", preset === p ? "border-edge-emerald bg-edge-mint/60 text-edge-emerald" : "hover:bg-muted")}
+                      className={cn(chip, preset === p ? chipOn : "bg-card hover:bg-muted")}
                     >
                       {formatMoney(p, currency)}
                     </button>
@@ -97,8 +105,10 @@ export function CheckoutForm({ mode, options }: { mode: "first" | "balance"; opt
                   {advance.allowCustom ? (
                     <button
                       type="button"
+                      role="radio"
+                      aria-checked={preset === "custom"}
                       onClick={() => setPreset("custom")}
-                      className={cn("rounded-full border px-4 py-1.5 text-sm font-semibold", preset === "custom" ? "border-edge-emerald bg-edge-mint/60 text-edge-emerald" : "hover:bg-muted")}
+                      className={cn(chip, preset === "custom" ? chipOn : "bg-card hover:bg-muted")}
                     >
                       Other amount
                     </button>
@@ -128,7 +138,11 @@ export function CheckoutForm({ mode, options }: { mode: "first" | "balance"; opt
 
         <section className="grid gap-3">
           <h2 className="font-semibold">{mode === "first" ? "2." : "1."} Payment method</h2>
-          {methods.length === 0 ? <p className="text-muted-foreground text-sm">No online payment method is available for your country. Please contact the academy.</p> : null}
+          {methods.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              No online payment method is available for your country. Please contact the academy.
+            </p>
+          ) : null}
           <div className="grid gap-2">
             {methods.map((m) => {
               const q = quotes[m.key];
@@ -137,12 +151,29 @@ export function CheckoutForm({ mode, options }: { mode: "first" | "balance"; opt
                 <label
                   key={m.key}
                   className={cn(
-                    "bg-card flex cursor-pointer items-center gap-3 rounded-xl border p-4 transition-colors",
+                    "bg-card has-focus-visible:ring-edge-green/30 flex cursor-pointer items-center gap-3 rounded-xl border p-4 transition-colors has-focus-visible:ring-4",
                     method === m.key ? "border-edge-emerald ring-edge-emerald/20 ring-2" : "hover:bg-muted/50",
                     !ok && "cursor-not-allowed opacity-50",
                   )}
                 >
-                  <input type="radio" name="method-choice" className="accent-[#03624C]" checked={method === m.key} disabled={!ok} onChange={() => setMethod(m.key)} />
+                  <input
+                    type="radio"
+                    name="method-choice"
+                    className="sr-only"
+                    checked={method === m.key}
+                    disabled={!ok}
+                    onChange={() => setMethod(m.key)}
+                  />
+                  {/* The radio itself is hidden; this is its dot, drawn like the other radios. */}
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "flex size-[18px] shrink-0 items-center justify-center rounded-full border",
+                      method === m.key ? "border-edge-emerald bg-edge-emerald" : "border-foreground/25 bg-card",
+                    )}
+                  >
+                    {method === m.key ? <span className="size-2 rounded-full bg-white" /> : null}
+                  </span>
                   <CreditCard className="text-edge-emerald size-5" />
                   <span className="flex-1">
                     <span className="block font-semibold">{m.label}</span>
@@ -177,7 +208,8 @@ export function CheckoutForm({ mode, options }: { mode: "first" | "balance"; opt
           {pending ? "Redirecting…" : selected ? `Pay ${formatMoney(selected.totalMinor, currency)}` : "Pay"}
         </Button>
         <p className="text-muted-foreground mt-3 flex items-start gap-1.5 text-xs">
-          <ShieldCheck className="mt-0.5 size-3.5 shrink-0" /> You will complete the payment on the provider&apos;s secure page. Course fees are non-refundable.
+          <ShieldCheck className="mt-0.5 size-3.5 shrink-0" /> You will complete the payment on the provider&apos;s secure page. Course fees
+          are non-refundable.
         </p>
       </aside>
     </form>
@@ -205,13 +237,28 @@ function Row({ label, value, hint, strong }: { label: string; value: string; hin
   );
 }
 
-function PlanCard({ active, onClick, title, subtitle, note }: { active: boolean; onClick: () => void; title: string; subtitle: string; note: string }) {
+function PlanCard({
+  active,
+  onClick,
+  title,
+  subtitle,
+  note,
+}: {
+  active: boolean;
+  onClick: () => void;
+  title: string;
+  subtitle: string;
+  note: string;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={cn("bg-card rounded-xl border p-4 text-left transition-colors", active ? "border-edge-emerald ring-edge-emerald/20 ring-2" : "hover:bg-muted/50")}
+      className={cn(
+        "bg-card rounded-xl border p-4 text-left transition-colors",
+        active ? "border-edge-emerald ring-edge-emerald/20 ring-2" : "hover:bg-muted/50",
+      )}
     >
       <span className="block font-semibold">{title}</span>
       <span className="text-edge-emerald block text-lg font-bold">{subtitle}</span>

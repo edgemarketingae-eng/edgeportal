@@ -1,27 +1,55 @@
 import Decimal from "decimal.js";
 import type { DepositSequence } from "./enums";
 
-/** A later deposit of at least `fromMinor` earns `pct` (a fraction, "0.02" = 2%). */
+/** A month whose later-deposit total reaches `fromMinor` earns `pct` (a fraction, "0.02" = 2%). */
 export interface CommissionSlab {
   fromMinor: number;
   pct: string;
 }
 
-/** First deposits earn `firstPct`; a later deposit earns the rate of the slab its amount falls in. Fractions. */
+/**
+ * First deposits earn `firstPct`. Later deposits earn the rate of the slab that the credited person's verified
+ * later-deposit total for the month falls in (first deposits never count). Fractions.
+ */
 export interface CommissionRates {
   firstPct: string;
-  /** One slab starts at 0 (the base rate for any amount). */
+  /** One slab starts at 0 (the base rate for any total). */
   slabs: CommissionSlab[];
 }
 
 const D = Decimal.clone({ precision: 40, rounding: Decimal.ROUND_HALF_UP });
 
-/** The rate for a deposit: the first-deposit rate, or the highest slab the amount reaches (the whole deposit at that rate). */
-export function rateFor(rates: CommissionRates, sequence: DepositSequence, amountMinor: number): string {
+/**
+ * The rate for a deposit: the first-deposit rate, or for a later deposit the highest slab its month's later-deposit
+ * total (`monthTotalMinor`) reaches. Every later deposit of that person and month earns that rate on its whole amount.
+ */
+export function rateFor(rates: CommissionRates, sequence: DepositSequence, monthTotalMinor: number): string {
   if (sequence === "FIRST") return rates.firstPct;
+  return slabFor(rates, monthTotalMinor)?.pct ?? "0";
+}
+
+/** The highest slab a later-deposit month total reaches (null when there is no base slab and the total is below all). */
+export function slabFor(rates: CommissionRates, monthTotalMinor: number): CommissionSlab | null {
   let best: CommissionSlab | null = null;
-  for (const s of rates.slabs) if (s.fromMinor <= amountMinor && (!best || s.fromMinor > best.fromMinor)) best = s;
-  return best?.pct ?? "0";
+  for (const s of rates.slabs) if (s.fromMinor <= monthTotalMinor && (!best || s.fromMinor > best.fromMinor)) best = s;
+  return best;
+}
+
+/** The next slab above a month total, or null at the top. */
+export function nextSlab(rates: CommissionRates, monthTotalMinor: number): CommissionSlab | null {
+  let next: CommissionSlab | null = null;
+  for (const s of rates.slabs) if (s.fromMinor > monthTotalMinor && (!next || s.fromMinor < next.fromMinor)) next = s;
+  return next;
+}
+
+/**
+ * The month a deposit counts toward: `[from, to)` around its date. Deposit dates are stored as UTC midnight of the
+ * calendar day, so the UTC month is the deposit's month.
+ */
+export function depositMonthRange(depositedAt: Date) {
+  const y = depositedAt.getUTCFullYear();
+  const m = depositedAt.getUTCMonth();
+  return { from: new Date(Date.UTC(y, m, 1)), to: new Date(Date.UTC(y, m + 1, 1)) };
 }
 
 /** Commission in minor units: amount * pct, rounded half up to a whole cent. */

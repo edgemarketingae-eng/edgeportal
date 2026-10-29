@@ -1,5 +1,6 @@
 import { adminRoutes } from "@edge/contracts";
 import { formatDateTime } from "@edge/domain/dates";
+import { TableEmpty } from "@edge/ui/blocks/empty-state";
 import { FilterBar, FilterResults, FilterScope } from "@edge/ui/blocks/filter-bar";
 import { Card } from "@edge/ui/components/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@edge/ui/components/table";
@@ -38,6 +39,7 @@ export default async function AuditPage(props: PageProps<"/admin/audit">) {
               </TableRow>
             </TableHeader>
             <TableBody>
+              {rows.length === 0 ? <TableEmpty colSpan={5} title="No audit entries match." /> : null}
               {rows.map((r) => (
                 <TableRow key={r.id}>
                   <TableCell className="whitespace-nowrap">{formatDateTime(r.createdAt)}</TableCell>

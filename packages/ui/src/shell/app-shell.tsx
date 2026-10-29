@@ -1,4 +1,4 @@
-import { Bell, CircleHelp, LogOut } from "lucide-react";
+import { Bell, ChevronLeft, CircleHelp, LogOut } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Logo } from "../brand/logo";
@@ -12,6 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../components/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { MobileNav } from "./mobile-nav";
 import { NavLinks, type NavItem } from "./nav";
 
@@ -78,7 +79,7 @@ export function AppShell({
           <Link
             href={signOutHref}
             prefetch={false}
-            className="text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm"
+            className="text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground focus-visible:ring-edge-green/70 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm outline-none focus-visible:ring-2"
           >
             <LogOut className="size-4" /> Sign out
           </Link>
@@ -86,28 +87,42 @@ export function AppShell({
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="bg-card/95 sticky top-0 z-30 flex h-14 items-center gap-2 border-b px-3 backdrop-blur sm:px-6">
-          <MobileNav items={items} logo={logo} />
+          <MobileNav items={items} logo={logo} areaLabel={areaLabel} signOutHref={signOutHref} />
           <span className="text-muted-foreground text-sm font-semibold lg:hidden">{areaLabel}</span>
           <div className="ml-auto flex items-center gap-1">
             {helpHref ? (
-              <Button asChild variant="ghost" size="icon" aria-label="Help & docs" title="Help & docs">
-                <Link href={helpHref}>
-                  <CircleHelp />
-                </Link>
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button asChild variant="ghost" size="icon" aria-label="Help & docs">
+                    <Link href={helpHref}>
+                      <CircleHelp />
+                    </Link>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent sideOffset={6}>Help &amp; docs</TooltipContent>
+              </Tooltip>
             ) : null}
-            <Button
-              asChild
-              variant="ghost"
-              size="icon"
-              aria-label={`Notifications${unread ? ` (${unread} unread)` : ""}`}
-              className="relative"
-            >
-              <Link href={notificationsHref}>
-                <Bell />
-                {unread ? <span className="bg-edge-coral absolute top-1.5 right-1.5 size-2 rounded-full" /> : null}
-              </Link>
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Notifications${unread ? ` (${unread} unread)` : ""}`}
+                  className="relative"
+                >
+                  <Link href={notificationsHref}>
+                    <Bell />
+                    {unread ? (
+                      <span className="bg-edge-coral ring-card absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none font-bold text-white ring-2">
+                        {unread > 99 ? "99+" : unread}
+                      </span>
+                    ) : null}
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent sideOffset={6}>{unread ? `${unread} unread` : "Notifications"}</TooltipContent>
+            </Tooltip>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="gap-2 px-2">
@@ -153,21 +168,32 @@ export function AppShell({
   );
 }
 
-/** `help` links to the docs guide for this page. */
+/** `help` links to the docs guide for this page; `back` adds a link above the title to the list a detail page is in. */
 export function PageHeader({
   title,
   description,
   actions,
   help,
+  back,
 }: {
   title: string;
   description?: ReactNode;
   actions?: ReactNode;
   help?: string;
+  back?: { href: string; label: string };
 }) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-      <div>
+      <div className="min-w-0">
+        {back ? (
+          <Link
+            href={back.href}
+            className="text-muted-foreground hover:text-foreground mb-2 -ml-1 inline-flex items-center gap-0.5 rounded-md px-1 text-sm font-medium"
+          >
+            <ChevronLeft aria-hidden className="size-4" />
+            {back.label}
+          </Link>
+        ) : null}
         <h1 className="font-display text-2xl uppercase sm:text-3xl">{title}</h1>
         {description || help ? (
           <p className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">

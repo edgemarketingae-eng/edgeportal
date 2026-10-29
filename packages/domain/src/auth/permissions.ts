@@ -28,6 +28,7 @@ export const PERMISSIONS = {
   "crm.convert": "Convert leads into student accounts",
   "crm.all": "See every project and lead",
   "crm.projects.manage": "Create and edit projects and their teams",
+  "crm.projects.delete": "Delete empty projects",
   "crm.manage": "CRM settings, imports and merges",
   "crm.leads.delete": "Delete leads permanently",
   "crm.staff.manage": "Create and manage CRM staff",

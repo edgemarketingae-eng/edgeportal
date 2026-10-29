@@ -8,6 +8,7 @@ import { toActionState } from "@edge/web/actions";
 import { hardNavigate, postAuth } from "@edge/web/auth-client";
 import { useActionState, useState } from "react";
 import { ChannelPicker } from "@/components/channel-picker";
+import { resendLabel, useCooldown } from "@/lib/use-cooldown";
 
 export function VerifyPhoneForm({ phone: initialPhone }: { phone: string }) {
   const [changing, setChanging] = useState(false);
@@ -27,12 +28,14 @@ export function VerifyPhoneForm({ phone: initialPhone }: { phone: string }) {
         channel: String(form.get("channel") ?? "sms"),
       });
       setChanging(false);
-      return { message: res.message, values: { phone: res.phone } };
+      return { message: res.message, values: { phone: res.phone, sentAt: String(Date.now()) } };
     } catch (e) {
       return toActionState(e);
     }
   }, {});
   const phone = resendState.values?.phone ?? initialPhone;
+  // Only codes sent from here count: a password sign-in lands here without one.
+  const cooldown = useCooldown(30, resendState.values?.sentAt);
 
   return (
     <div className="grid gap-5">
@@ -45,8 +48,8 @@ export function VerifyPhoneForm({ phone: initialPhone }: { phone: string }) {
         </p>
         <OtpInput />
         {state.fieldErrors?.code ? <p className="text-destructive text-center text-xs">{state.fieldErrors.code}</p> : null}
-        <Button type="submit" size="lg" disabled={pending}>
-          {pending ? "Verifying…" : "Verify mobile number"}
+        <Button type="submit" size="lg" pending={pending}>
+          Verify mobile number
         </Button>
       </form>
       <form action={resend} className="grid gap-3 rounded-lg border p-4">
@@ -55,8 +58,15 @@ export function VerifyPhoneForm({ phone: initialPhone }: { phone: string }) {
         ) : null}
         <ChannelPicker />
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <Button type="submit" variant="outline" size="sm" disabled={resending}>
-            {resending ? "Sending…" : changing ? "Send code to new number" : "Resend code"}
+          <Button
+            type="submit"
+            variant="outline"
+            size="sm"
+            className="tabular-nums"
+            pending={resending}
+            disabled={!changing && cooldown > 0}
+          >
+            {changing ? "Send code to new number" : resendLabel(cooldown, "Resend code")}
           </Button>
           <Button type="button" variant="link" size="sm" onClick={() => setChanging((c) => !c)}>
             {changing ? "Keep current number" : "Wrong number?"}

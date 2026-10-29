@@ -1,6 +1,7 @@
 import { staffRoutes } from "@edge/contracts";
 import { formatDateTime } from "@edge/domain/dates";
-import { ActionButton } from "@edge/ui/blocks/action-dialog";
+import { ActionButton, ActionDialog } from "@edge/ui/blocks/action-dialog";
+import { Button } from "@edge/ui/components/button";
 import { AvailabilitySwitch } from "@edge/ui/blocks/availability";
 import { PendingInvite } from "@edge/ui/blocks/secret-reveal";
 import { Card, CardContent, CardHeader, CardTitle } from "@edge/ui/components/card";
@@ -20,6 +21,7 @@ export default async function StaffMemberPage(props: PageProps<"/admin/staff/[id
   return (
     <>
       <PageHeader
+        back={{ href: "/admin/staff", label: "Staff" }}
         help="/admin/docs/staff"
         title={s.name}
         description={`${s.email}${s.disabled ? " · disabled" : ""}${s.available ? "" : " · Off"}${s.lastSignInAt ? ` · last sign-in ${formatDateTime(s.lastSignInAt)}` : ""}`}
@@ -30,13 +32,25 @@ export default async function StaffMemberPage(props: PageProps<"/admin/staff/[id
               <AvailabilitySwitch action={toggleStaffAvailableAction} userId={s.id} name={s.name} available={s.available} showLabel />
             ) : null}
             <ResetPasswordButton userId={s.id} />
-            <ActionButton
-              action={toggleStaffAction}
-              hidden={{ userId: s.id, disable: s.disabled ? "0" : "1" }}
-              variant={s.disabled ? "default" : "destructive"}
-            >
-              {s.disabled ? "Enable account" : "Disable account"}
-            </ActionButton>
+            {s.disabled ? (
+              <ActionButton action={toggleStaffAction} hidden={{ userId: s.id, disable: "0" }}>
+                Enable account
+              </ActionButton>
+            ) : (
+              <ActionDialog
+                action={toggleStaffAction}
+                hidden={{ userId: s.id, disable: "1" }}
+                title={`Disable ${s.name}'s account?`}
+                description="They are signed out and can't sign in until the account is enabled again. Their history stays."
+                trigger={
+                  <Button size="sm" variant="destructive">
+                    Disable account
+                  </Button>
+                }
+                submitLabel="Disable account"
+                destructive
+              />
+            )}
           </>
         }
       />

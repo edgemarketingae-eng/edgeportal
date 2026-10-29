@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
-    "migrate": "tsx --env-file-if-exists=../../.env src/scripts/migrate.ts"
+    "migrate": "tsx --env-file-if-exists=../../.env src/scripts/migrate.ts",
+    "rerate-commission": "tsx --env-file-if-exists=../../.env src/scripts/rerate-commission.ts"
   },
   "dependencies": {
     "express": "^5.3.0",

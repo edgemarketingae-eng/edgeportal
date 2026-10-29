@@ -17,7 +17,7 @@ import { Checkbox } from "@edge/ui/components/checkbox";
 import { DialogClose, DialogFooter } from "@edge/ui/components/dialog";
 import { Label } from "@edge/ui/components/label";
 import { Textarea } from "@edge/ui/components/textarea";
-import { NativeSelect } from "@edge/ui/components/native-select";
+import { Select } from "@edge/ui/components/select";
 import { CountrySelect } from "@edge/ui/forms/phone-input";
 import { Field, FormError, type ActionState } from "@edge/ui/forms/field";
 import { useActionState, useEffect, useState, type ReactNode } from "react";
@@ -83,7 +83,8 @@ function restore(values: LeadFormValues, s?: Record<string, string>): LeadFormVa
   return { ...values, ...s, marketingConsent: s.marketingConsent === "on", whatsappConsent: s.whatsappConsent === "on" };
 }
 
-function Select({
+/** A select with its error line underneath. */
+function SelectWithError({
   id,
   name,
   value,
@@ -98,9 +99,9 @@ function Select({
 }) {
   return (
     <>
-      <NativeSelect id={id} name={name} defaultValue={value} aria-invalid={!!error || undefined}>
+      <Select id={id} name={name} defaultValue={value} aria-invalid={!!error || undefined}>
         {children}
-      </NativeSelect>
+      </Select>
       {error ? <p className="text-destructive text-xs">{error}</p> : null}
     </>
   );
@@ -198,26 +199,26 @@ export function LeadForm({
               </Field>
               <div className="grid content-start gap-2">
                 <Label htmlFor="preferredChannel">Preferred channel</Label>
-                <Select id="preferredChannel" name="preferredChannel" value={v.preferredChannel} error={fe.preferredChannel}>
+                <SelectWithError id="preferredChannel" name="preferredChannel" value={v.preferredChannel} error={fe.preferredChannel}>
                   <option value="">Not set</option>
                   {LEAD_CHANNELS.map((c) => (
                     <option key={c} value={c}>
                       {LEAD_CHANNEL_LABELS[c]}
                     </option>
                   ))}
-                </Select>
+                </SelectWithError>
               </div>
             </div>
             <div className="grid content-start gap-2">
               <Label htmlFor="language">Language</Label>
-              <Select id="language" name="language" value={v.language} error={fe.language}>
+              <SelectWithError id="language" name="language" value={v.language} error={fe.language}>
                 <option value="">Not set</option>
                 {LEAD_LANGUAGES.map((l) => (
                   <option key={l} value={l}>
                     {LANGUAGE_LABELS[l]}
                   </option>
                 ))}
-              </Select>
+              </SelectWithError>
             </div>
             <div className="grid gap-2">
               <label className="flex items-center gap-2 text-sm">
@@ -242,13 +243,13 @@ export function LeadForm({
             <div className="grid content-start gap-2">
               <Label htmlFor="projectId">Project</Label>
               {creating ? (
-                <NativeSelect id="projectId" name="projectId" value={projectId} onChange={(e) => setProjectId(e.target.value)} required>
+                <Select id="projectId" name="projectId" value={projectId} onChange={(e) => setProjectId(e.target.value)} required>
                   {options.projects.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name}
                     </option>
                   ))}
-                </NativeSelect>
+                </Select>
               ) : (
                 <p className="text-sm font-medium">{projectName ?? "—"}</p>
               )}
@@ -257,13 +258,13 @@ export function LeadForm({
             <div className={pair}>
               <div className="grid content-start gap-2">
                 <Label htmlFor="source">Source</Label>
-                <Select id="source" name="source" value={v.source} error={fe.source}>
+                <SelectWithError id="source" name="source" value={v.source} error={fe.source}>
                   {LEAD_SOURCES.map((s) => (
                     <option key={s} value={s}>
                       {LEAD_SOURCE_LABELS[s]}
                     </option>
                   ))}
-                </Select>
+                </SelectWithError>
               </div>
               <Field
                 label="Source detail"
@@ -276,54 +277,60 @@ export function LeadForm({
             <div className={pair}>
               <div className="grid content-start gap-2">
                 <Label htmlFor="courseInterestId">Course of interest</Label>
-                <NativeSelect id="courseInterestId" name="courseInterestId" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
+                <Select id="courseInterestId" name="courseInterestId" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
                   <option value="">Not set</option>
                   {options.courses.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.title}
                     </option>
                   ))}
-                </NativeSelect>
+                </Select>
               </div>
               <div className="grid content-start gap-2">
                 <Label htmlFor="batchInterestId">Batch of interest</Label>
-                <Select id="batchInterestId" name="batchInterestId" value={v.batchInterestId} error={fe.batchInterestId}>
+                <SelectWithError id="batchInterestId" name="batchInterestId" value={v.batchInterestId} error={fe.batchInterestId}>
                   <option value="">Not set</option>
                   {batches.map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.label}
                     </option>
                   ))}
-                </Select>
+                </SelectWithError>
               </div>
             </div>
             <div className={pair}>
               <div className="grid content-start gap-2">
                 <Label htmlFor="experienceLevel">Trading experience</Label>
-                <Select id="experienceLevel" name="experienceLevel" value={v.experienceLevel} error={fe.experienceLevel}>
+                <SelectWithError id="experienceLevel" name="experienceLevel" value={v.experienceLevel} error={fe.experienceLevel}>
                   <option value="">Unknown</option>
                   {EXPERIENCE_LEVELS.map((x) => (
                     <option key={x} value={x}>
                       {EXPERIENCE_LABELS[x]}
                     </option>
                   ))}
-                </Select>
+                </SelectWithError>
               </div>
               <div className="grid content-start gap-2">
                 <Label htmlFor="temperature">Temperature</Label>
-                <Select id="temperature" name="temperature" value={v.temperature} error={fe.temperature}>
+                <SelectWithError id="temperature" name="temperature" value={v.temperature} error={fe.temperature}>
                   {LEAD_TEMPERATURES.map((t) => (
                     <option key={t} value={t}>
                       {LEAD_TEMPERATURE_LABELS[t]}
                     </option>
                   ))}
-                </Select>
+                </SelectWithError>
               </div>
             </div>
             {creating && project?.canAssign && team.length > 1 ? (
               <div className="grid content-start gap-2">
                 <Label htmlFor="ownerId">Owner</Label>
-                <Select id="ownerId" name="ownerId" value={v.ownerId || (team.some((t) => t.id === meId) ? meId : "")} error={fe.ownerId}>
+                <SelectWithError
+                  key={projectId}
+                  id="ownerId"
+                  name="ownerId"
+                  value={v.ownerId || (team.some((t) => t.id === meId) ? meId : "")}
+                  error={fe.ownerId}
+                >
                   <option value="">Unassigned (pool)</option>
                   {team.map((o) => (
                     <option key={o.id} value={o.id}>
@@ -331,7 +338,7 @@ export function LeadForm({
                       {o.available === false ? " (Off)" : ""}
                     </option>
                   ))}
-                </Select>
+                </SelectWithError>
               </div>
             ) : null}
             <Field
@@ -372,13 +379,13 @@ export function LeadForm({
               Cancel
             </Button>
           </DialogClose>
-          <Button type="submit" disabled={pending}>
-            {pending ? "Saving…" : "Save lead"}
+          <Button type="submit" pending={pending}>
+            Save lead
           </Button>
         </DialogFooter>
       ) : (
-        <Button type="submit" size="lg" className="w-fit" disabled={pending}>
-          {pending ? "Saving…" : creating ? "Create lead" : "Save lead"}
+        <Button type="submit" size="lg" className="w-fit" pending={pending}>
+          {creating ? "Create lead" : "Save lead"}
         </Button>
       )}
     </form>

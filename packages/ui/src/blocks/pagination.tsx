@@ -2,7 +2,7 @@
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { NativeSelect } from "../components/native-select";
+import { Select } from "../components/select";
 import { cn } from "../lib/utils";
 import { FilterLink, useListNavigate } from "./filter-bar";
 
@@ -62,7 +62,7 @@ export function Pagination({
   const to = Math.min(total, page * pageSize);
   const top = () => window.scrollTo({ top: 0, behavior: "smooth" });
   const item =
-    "inline-flex h-8 min-w-8 items-center justify-center rounded-lg border px-2 text-sm font-medium tabular-nums transition-colors";
+    "inline-flex h-9 min-w-9 items-center justify-center rounded-lg border px-2.5 text-sm font-medium tabular-nums transition-colors";
   return (
     <nav aria-label="Pagination" className={cn("mt-4 flex flex-wrap items-center justify-between gap-3 text-sm", className)}>
       <p className="text-muted-foreground tabular-nums">
@@ -112,9 +112,9 @@ export function Pagination({
           </div>
         ) : null}
         {total > SIZES[0]! ? (
-          <label className="text-muted-foreground flex items-center gap-2">
-            Rows
-            <NativeSelect
+          <div className="text-muted-foreground flex items-center gap-2">
+            <span aria-hidden>Rows</span>
+            <Select
               size="sm"
               wrapperClassName="w-20"
               value={pageSize}
@@ -126,8 +126,8 @@ export function Pagination({
                   {s}
                 </option>
               ))}
-            </NativeSelect>
-          </label>
+            </Select>
+          </div>
         ) : null}
       </div>
     </nav>

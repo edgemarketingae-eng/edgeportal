@@ -1,5 +1,6 @@
 import { CircleAlert, CircleCheck } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
+import { Alert, AlertDescription } from "../components/alert";
 import { Input } from "../components/input";
 import { Label } from "../components/label";
 import { cn } from "../lib/utils";
@@ -80,25 +81,19 @@ export function Field({
 export function FormError({ state }: { state?: ActionState }) {
   if (!state?.error) return null;
   return (
-    <div
-      role="alert"
-      className="border-destructive/25 bg-destructive/8 text-destructive flex items-start gap-2 rounded-lg border px-3 py-2.5 text-sm"
-    >
-      <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
-      <span>{state.error}</span>
-    </div>
+    <Alert variant="destructive">
+      <CircleAlert aria-hidden />
+      <AlertDescription>{state.error}</AlertDescription>
+    </Alert>
   );
 }
 
 export function FormMessage({ state }: { state?: ActionState }) {
   if (!state?.message) return null;
   return (
-    <div
-      role="status"
-      className="border-edge-emerald/25 bg-edge-mint/40 text-edge-emerald flex items-start gap-2 rounded-lg border px-3 py-2.5 text-sm"
-    >
-      <CircleCheck aria-hidden className="mt-0.5 size-4 shrink-0" />
-      <span>{state.message}</span>
-    </div>
+    <Alert variant="success">
+      <CircleCheck aria-hidden />
+      <AlertDescription>{state.message}</AlertDescription>
+    </Alert>
   );
 }

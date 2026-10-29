@@ -217,3 +217,10 @@
     background-color: color-mix(in oklab, var(--edge-green) 30%, transparent);
   }
 }
+
+/* FilterBar: "Clear filters" shows only while a filter (an option other than a select's first, "all") or the search box
+   is set. Unlayered, so it wins over the button's display utility. */
+[data-slot="filter-bar"]:not(:has(select option:checked:not(:first-child), input[type="search"]:not(:placeholder-shown)))
+  [data-slot="filter-clear"] {
+  display: none;
+}

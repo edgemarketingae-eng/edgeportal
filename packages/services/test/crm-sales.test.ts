@@ -43,6 +43,7 @@ import {
   mergeLeads,
   NotFoundError,
   rejectDeposit,
+  rerateLaterCommission,
   removeConversion,
   resetEnvForTests,
   saveCommissionSettings,
@@ -424,26 +425,149 @@ describe("deposits and commission", () => {
       ],
     });
     expect((await LeadDeposit.findById(dep).lean())!.commissionMinor).toBe(10000);
-    // Later deposits earn the rate of the slab their amount reaches, on the whole amount.
+    // Later deposits earn the slab their month's total reaches ($30,400 here), each on its whole amount.
     const big = await logDeposit(id, { sequence: "LATER", amount: "30000", depositedAt: "2026-10-06" }, exec.actor, await exec.scope());
     const small = await logDeposit(id, { sequence: "LATER", amount: "400", depositedAt: "2026-10-06" }, exec.actor, await exec.scope());
     await verifyDeposit(big, admin.actor, await admin.scope());
     await verifyDeposit(small, admin.actor, await admin.scope());
     expect((await LeadDeposit.findById(big).lean())!).toMatchObject({ commissionPct: "0.025000", commissionMinor: 75000 });
-    expect((await LeadDeposit.findById(small).lean())!).toMatchObject({ commissionPct: "0.010000", commissionMinor: 400 });
+    expect((await LeadDeposit.findById(small).lean())!).toMatchObject({ commissionPct: "0.025000", commissionMinor: 1000 });
 
     // The executive sees their own commission, a manager who can see the lead does not.
     expect((await getLeadDetail(id, await exec.scope())).deposits.every((x) => x.commissionMinor != null)).toBe(true);
     expect((await getLeadDetail(id, await mgr.scope())).deposits.every((x) => x.commissionMinor == null)).toBe(true);
     const mine = await listDeposits({}, await exec.scope());
-    expect(mine.summary).toMatchObject({ verifiedCount: 3, verifiedMinor: 3140000, commissionMinor: 85400 });
+    expect(mine.summary).toMatchObject({ verifiedCount: 3, verifiedMinor: 3140000, commissionMinor: 86000 });
     expect((await listDeposits({}, await other.scope())).total).toBe(0);
     expect((await listDeposits({ staff: exec.id }, await admin.scope())).total).toBe(3);
 
     const c = await getStaffCommission(exec.id, await admin.scope());
-    expect(c.commission).toEqual({ month: 85400, lastMonth: 0, all: 85400 });
+    expect(c.commission).toEqual({ month: 86000, lastMonth: 0, all: 86000 });
     expect(c.deposits).toEqual({ month: 3140000, all: 3140000 });
     await expect(getStaffCommission(exec.id, await mgr.scope())).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("rates later deposits by the person's monthly total across their leads, first deposits excluded", async () => {
+    const { exec, other, admin, id } = await setup();
+    const as = await admin.scope();
+    const second = await createLead(
+      { projectId: await general(), name: "Second depositor", phone: phone(), source: "INSTAGRAM" },
+      exec.actor,
+      await exec.scope(),
+    );
+    const otherLead = await createLead(
+      { projectId: await general(), name: "Other's depositor", phone: phone(), source: "INSTAGRAM" },
+      other.actor,
+      await other.scope(),
+    );
+    const log = async (who: typeof exec, leadId: string, sequence: "FIRST" | "LATER", amount: string, depositedAt: string) =>
+      logDeposit(leadId, { sequence, amount, depositedAt, jetaFxClientId: `JX-${leadId}` }, who.actor, await who.scope());
+    const get = async (dep: string) => (await LeadDeposit.findById(dep).lean())!;
+
+    const first = await log(exec, id, "FIRST", "20000", "2026-10-01");
+    await verifyDeposit(first, admin.actor, as);
+    const a = await log(exec, id, "LATER", "8000", "2026-10-02");
+    await verifyDeposit(a, admin.actor, as);
+    // $8,000: base 1%. The $20,000 1st deposit doesn't count toward the month.
+    expect(await get(a)).toMatchObject({ commissionPct: "0.010000", commissionMinor: 8000, slabBaseMinor: 800000 });
+    const b = await log(exec, second, "LATER", "6000", "2026-10-03");
+    await verifyDeposit(b, admin.actor, as);
+    // $14,000 from two leads: 2% on both.
+    expect(await get(a)).toMatchObject({ commissionPct: "0.020000", commissionMinor: 16000, slabBaseMinor: 1400000 });
+    expect(await get(b)).toMatchObject({ commissionPct: "0.020000", commissionMinor: 12000 });
+    const c = await log(exec, second, "LATER", "15000", "2026-10-04");
+    // Pending deposits don't count.
+    expect((await get(a)).commissionPct).toBe("0.020000");
+    // Another person's deposits and another month stay out of it.
+    const theirs = await log(other, otherLead, "LATER", "50000", "2026-10-04");
+    await verifyDeposit(theirs, admin.actor, as);
+    const sept = await log(exec, id, "LATER", "30000", "2026-09-28");
+    await verifyDeposit(sept, admin.actor, as);
+    expect(await get(sept)).toMatchObject({ commissionPct: "0.025000", slabBaseMinor: 3000000 });
+    expect((await get(a)).commissionPct).toBe("0.020000");
+    await verifyDeposit(c, admin.actor, as);
+    // $29,000: 2.5% on all three; the 1st deposit keeps its own rate.
+    expect([await get(a), await get(b), await get(c)].map((d) => [d.commissionPct, d.commissionMinor, d.slabBaseMinor])).toEqual([
+      ["0.025000", 20000, 2900000],
+      ["0.025000", 15000, 2900000],
+      ["0.025000", 37500, 2900000],
+    ]);
+    expect(await get(first)).toMatchObject({ commissionPct: "0.100000", commissionMinor: 200000, slabBaseMinor: null });
+    expect(await get(theirs)).toMatchObject({ commissionPct: "0.025000", slabBaseMinor: 5000000 });
+    const note = await InAppNotification.findOne({ userId: exec.id, title: "Deposit verified" }).sort({ _id: -1 }).lean();
+    expect(note!.body).toMatch(/October 2026 later deposits: .*29,000.*2\.5% on all of them\. Your earlier ones this month went up too\./);
+
+    // The deposits page shows the month's progress to the next slab.
+    expect((await listDeposits({}, await exec.scope())).summary.month).toEqual({ laterMinor: 2900000, pct: "0.025000", next: null });
+    expect((await listDeposits({}, as)).summary.month).toBeNull(); // everyone's: no single month
+    expect((await listDeposits({ staff: exec.id }, as)).summary.month).toMatchObject({ laterMinor: 2900000 });
+
+    // Rejecting a verified one drops the month back to $14,000: 2%.
+    await rejectDeposit(c, "Reversed by the broker", admin.actor, as);
+    expect(await get(c)).toMatchObject({ status: "REJECTED", commissionMinor: null, slabBaseMinor: null });
+    expect(await get(a)).toMatchObject({ commissionPct: "0.020000", commissionMinor: 16000, slabBaseMinor: 1400000 });
+    expect((await listDeposits({}, await exec.scope())).summary.month).toEqual({
+      laterMinor: 1400000,
+      pct: "0.020000",
+      next: { fromMinor: 2500000, pct: "0.025000" },
+    });
+
+    // New slabs re-rate the current month at once; September keeps its rate.
+    await saveCommissionSettings(
+      {
+        firstPct: 10,
+        slabs: [
+          { from: 0, pct: 1 },
+          { from: 10000, pct: 3 },
+        ],
+      },
+      admin.actor,
+    );
+    expect(await get(a)).toMatchObject({ commissionPct: "0.030000", commissionMinor: 24000 });
+    expect(await get(b)).toMatchObject({ commissionPct: "0.030000", commissionMinor: 18000 });
+    expect(await get(sept)).toMatchObject({ commissionPct: "0.025000", commissionMinor: 75000 });
+    expect(await get(first)).toMatchObject({ commissionPct: "0.100000" });
+  });
+
+  it("backfills later deposits rated per deposit: a dry run first, then once", async () => {
+    const { exec, admin, id } = await setup();
+    const as = await admin.scope();
+    const dep = async (amount: string, depositedAt: string) => {
+      const d = await logDeposit(id, { sequence: "LATER", amount, depositedAt, jetaFxClientId: "JX-B" }, exec.actor, await exec.scope());
+      await verifyDeposit(d, admin.actor, as);
+      return d;
+    };
+    const sept = await dep("9000", "2026-09-10");
+    const a = await dep("8000", "2026-10-02");
+    const b = await dep("6000", "2026-10-03");
+    // As the old rule left them: each rated by its own amount ($8,000 and $6,000: 1%), no month total.
+    await LeadDeposit.updateMany(
+      { _id: { $in: [sept, a, b] } },
+      [{ $set: { commissionPct: "0.010000", commissionMinor: { $multiply: ["$amountMinor", 0.01] }, slabBaseMinor: null } }],
+      { updatePipeline: true },
+    );
+    const sys = { type: "SYSTEM" as const, id: "test" };
+
+    const dry = await rerateLaterCommission({ apply: false }, sys);
+    expect(dry.map((r) => [r.month, r.totalMinor, r.pct, r.beforeMinor, r.afterMinor, r.changed])).toEqual([
+      ["2026-09", 900000, "0.010000", 9000, 9000, 1], // only the month total is missing
+      ["2026-10", 1400000, "0.020000", 14000, 28000, 2],
+    ]);
+    expect((await LeadDeposit.findById(a).lean())!).toMatchObject({ commissionMinor: 8000, slabBaseMinor: null });
+
+    expect((await rerateLaterCommission({ apply: false, fromMonth: "2026-10" }, sys)).map((r) => r.month)).toEqual(["2026-10"]);
+    await expect(rerateLaterCommission({ apply: false, fromMonth: "Oct" }, sys)).rejects.toThrow(/2026-10/);
+
+    await rerateLaterCommission({ apply: true }, sys);
+    expect((await LeadDeposit.findById(a).lean())!).toMatchObject({
+      commissionPct: "0.020000",
+      commissionMinor: 16000,
+      slabBaseMinor: 1400000,
+    });
+    expect((await LeadDeposit.findById(b).lean())!).toMatchObject({ commissionPct: "0.020000", commissionMinor: 12000 });
+    expect(await AuditLog.countDocuments({ action: "crm.commission.rerate" })).toBe(2);
+    expect(await rerateLaterCommission({ apply: true }, sys)).toEqual([]); // nothing left on the old rule
+    expect((await rerateLaterCommission({ apply: false, all: true }, sys)).every((r) => r.changed === 0)).toBe(true);
   });
 
   it("rejects pending or reversed deposits and lets the logger delete a pending one", async () => {

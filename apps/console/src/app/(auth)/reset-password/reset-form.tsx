@@ -17,10 +17,24 @@ export function ResetPasswordForm({ token }: { token: string }) {
   return (
     <form action={action} className="grid gap-4">
       <FormError state={state} />
-      <Field label="New password" name="password" type="password" autoComplete="new-password" error={state.fieldErrors?.password} required />
-      <Field label="Confirm new password" name="confirm" type="password" autoComplete="new-password" error={state.fieldErrors?.confirm} required />
-      <Button type="submit" size="lg" disabled={pending}>
-        {pending ? "Saving…" : "Set new password"}
+      <Field
+        label="New password"
+        name="password"
+        type="password"
+        autoComplete="new-password"
+        error={state.fieldErrors?.password}
+        required
+      />
+      <Field
+        label="Confirm new password"
+        name="confirm"
+        type="password"
+        autoComplete="new-password"
+        error={state.fieldErrors?.confirm}
+        required
+      />
+      <Button type="submit" size="lg" pending={pending}>
+        Set new password
       </Button>
     </form>
   );

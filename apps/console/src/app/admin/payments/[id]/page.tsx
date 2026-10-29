@@ -1,6 +1,7 @@
 import { paymentRoutes } from "@edge/contracts";
 import { formatDateTime } from "@edge/domain/dates";
 import { formatMoney } from "@edge/domain/money";
+import { Alert, AlertDescription } from "@edge/ui/components/alert";
 import { ActionButton } from "@edge/ui/blocks/action-dialog";
 import { GATEWAY_LABELS, KIND_LABELS, PaymentStatusBadge } from "@edge/ui/blocks/payment-status-badge";
 import { SyncBadge } from "@edge/ui/blocks/status-badges";
@@ -95,7 +96,11 @@ export default async function AdminPaymentPage(props: PageProps<"/admin/payments
             </CardHeader>
             <CardContent className="grid gap-2 text-sm">
               {p.odoo.invoiceName ? <p>Invoice {p.odoo.invoiceName}</p> : <p className="text-muted-foreground">No invoice yet.</p>}
-              {p.odoo.lastError ? <p className="bg-destructive/10 text-destructive rounded p-2 text-xs">{p.odoo.lastError}</p> : null}
+              {p.odoo.lastError ? (
+                <Alert variant="destructive">
+                  <AlertDescription className="text-xs">{p.odoo.lastError}</AlertDescription>
+                </Alert>
+              ) : null}
               {p.odooLogs.length ? (
                 <ul className="text-muted-foreground text-xs">
                   {p.odooLogs.map((l) => (

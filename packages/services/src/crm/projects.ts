@@ -1,5 +1,5 @@
 import type { ProjectDetail, ProjectDto, ProjectInput } from "@edge/contracts";
-import { AuthUser, Batch, Course, CrmTask, Lead, Project, Role, StaffProfile, Types, withTx, type ProjectDoc } from "@edge/db";
+import { AuthUser, Batch, Course, CrmTask, Lead, Project, Role, StaffProfile, TaskComment, Types, withTx, type ProjectDoc } from "@edge/db";
 import { now } from "@edge/domain/clock";
 import { OPEN_LEAD_STAGES, OPEN_TASK_STATUSES, type ProjectStatus } from "@edge/domain/crm/enums";
 import { startOfDubaiDay } from "@edge/domain/dates";
@@ -263,6 +263,53 @@ export async function updateProject(id: string, input: Partial<ProjectInput>, ac
   if (!Object.keys(set).length) return;
   await Project.updateOne({ _id: p._id }, { $set: set });
   await audit({ actor, action: "project.update", entityType: "Project", entityId: id, after: set });
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/**
+ * Delete a project with nothing left in it (CRM admins): not the default project, no team and no leads. Its tasks
+ * without a lead go with it; tasks of leads that moved away (closed ones stay behind on a move) and duplicates merged
+ * away from it follow their lead, or the default project when that lead is gone.
+ */
+export async function deleteProject(id: string, actor: Actor & { type: "USER" }, scope: CrmScope) {
+  if (!has(scope, "crm.projects.delete")) throw new NotFoundError("Project");
+  const p = await loadProject(id, scope);
+  if (p.isDefault) throw new BusinessError("The General project can't be deleted");
+  const team = new Set([...p.managerIds, ...p.memberIds].map(String)).size;
+  if (team) throw new BusinessError(`Remove ${team === 1 ? "the 1 person" : `the ${team} people`} on its team first`);
+  const leads = await Lead.countDocuments({ projectId: p._id, mergedIntoId: null });
+  if (leads) throw new BusinessError(`Move its ${plural(leads, "lead")} to another project first`);
+  await withTx(async () => {
+    const r = await Project.deleteOne({ _id: p._id, isDefault: { $ne: true }, managerIds: { $size: 0 }, memberIds: { $size: 0 } });
+    if (r.deletedCount !== 1) throw new BusinessError("The project changed meanwhile; reload and try again");
+    if (await Lead.exists({ projectId: p._id, mergedIntoId: null }))
+      throw new BusinessError("A lead was just added to this project; reload and try again");
+    // Merged duplicates and lead tasks left behind follow their lead (the default project when it is gone or also here).
+    const homeOf = async (leadIds: Types.ObjectId[]) => {
+      const rows = await Lead.find({ _id: { $in: leadIds } }, { projectId: 1 }).lean();
+      const home = new Map(rows.filter((l) => !l.projectId.equals(p._id)).map((l) => [String(l._id), l.projectId]));
+      return (leadId: Types.ObjectId) => home.get(String(leadId)) ?? scope.defaultProjectId;
+    };
+    const merged = await Lead.find({ projectId: p._id, mergedIntoId: { $ne: null } }, { mergedIntoId: 1 }).lean();
+    const mergedHome = await homeOf(merged.map((m) => m.mergedIntoId!));
+    for (const m of merged) await Lead.updateOne({ _id: m._id }, { $set: { projectId: mergedHome(m.mergedIntoId!) } });
+    const tasks = await CrmTask.find({ projectId: p._id }, { leadId: 1 }).lean();
+    const loose = tasks.filter((t) => !t.leadId).map((t) => t._id);
+    const leadTasks = tasks.filter((t) => t.leadId);
+    const taskHome = await homeOf(leadTasks.map((t) => t.leadId!));
+    for (const t of leadTasks) await CrmTask.updateOne({ _id: t._id }, { $set: { projectId: taskHome(t.leadId!) } });
+    await TaskComment.deleteMany({ taskId: { $in: loose } });
+    await CrmTask.deleteMany({ _id: { $in: loose } });
+    await audit({
+      actor,
+      action: "project.delete",
+      entityType: "Project",
+      entityId: id,
+      before: { name: p.name, code: p.code, status: p.status },
+      after: { tasksDeleted: loose.length, leadTasksMoved: leadTasks.length, mergedLeadsMoved: merged.length },
+    });
+  });
 }
 
 export async function setProjectMember(

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@edge/ui/components/ca
 import { Checkbox } from "@edge/ui/components/checkbox";
 import { Label } from "@edge/ui/components/label";
 import { Textarea } from "@edge/ui/components/textarea";
-import { NativeSelect } from "@edge/ui/components/native-select";
+import { Select } from "@edge/ui/components/select";
 import { Field, FormError, FormMessage, type ActionState } from "@edge/ui/forms/field";
 import { useActionState, useState } from "react";
 import { saveBatchAction } from "@/app/admin/batches/actions";
@@ -73,26 +73,26 @@ export function BatchForm({
           <CardContent className="grid gap-4">
             <div className="grid content-start gap-2">
               <Label htmlFor="courseId">Course</Label>
-              <NativeSelect id="courseId" name="courseId" defaultValue={v.courseId}>
+              <Select id="courseId" name="courseId" defaultValue={v.courseId}>
                 {courses.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.title}
                   </option>
                 ))}
-              </NativeSelect>
+              </Select>
               {fe.courseId ? <p className="text-destructive text-xs">{fe.courseId}</p> : null}
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Code" name="code" defaultValue={v.code} error={fe.code} placeholder="FX-PRO-B2" required />
               <div className="grid content-start gap-2">
                 <Label htmlFor="status">Status</Label>
-                <NativeSelect id="status" name="status" defaultValue={v.status}>
+                <Select id="status" name="status" defaultValue={v.status}>
                   <option value="DRAFT">Draft</option>
                   <option value="OPEN">Open for enrollment</option>
                   <option value="RUNNING">Running</option>
                   <option value="COMPLETED">Completed</option>
                   <option value="ARCHIVED">Archived</option>
-                </NativeSelect>
+                </Select>
               </div>
             </div>
             <Field label="Name" name="name" defaultValue={v.name} error={fe.name} placeholder="Batch 2 - January 2027" required />
@@ -164,10 +164,10 @@ export function BatchForm({
               </div>
               <div className="grid content-start gap-2">
                 <Label htmlFor="balanceDueRule">Balance due</Label>
-                <NativeSelect id="balanceDueRule" name="balanceDueRule" value={rule} onChange={(e) => setRule(e.target.value)}>
+                <Select id="balanceDueRule" name="balanceDueRule" value={rule} onChange={(e) => setRule(e.target.value)}>
                   <option value="DAYS_AFTER_FIRST_PAYMENT">A number of days after the advance</option>
                   <option value="FIXED_DATE">On a fixed date</option>
-                </NativeSelect>
+                </Select>
               </div>
               {rule === "FIXED_DATE" ? (
                 <Field
@@ -216,8 +216,8 @@ export function BatchForm({
           </Card>
         </div>
       </div>
-      <Button type="submit" size="lg" className="w-fit" disabled={pending}>
-        {pending ? "Saving…" : values.id ? "Save batch" : "Create batch"}
+      <Button type="submit" size="lg" className="w-fit" pending={pending}>
+        {values.id ? "Save batch" : "Create batch"}
       </Button>
     </form>
   );

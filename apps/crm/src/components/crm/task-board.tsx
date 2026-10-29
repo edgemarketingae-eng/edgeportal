@@ -2,8 +2,21 @@
 
 import type { BoardDto, TaskDto } from "@edge/contracts";
 import { CRM_TASK_STATUSES } from "@edge/domain/crm/enums";
-import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from "@edge/domain/crm/labels";
-import { closestCorners, DndContext, DragOverlay, KeyboardSensor, PointerSensor, useDroppable, useSensor, useSensors, type DragEndEvent, type DragOverEvent, type DragStartEvent } from "@dnd-kit/core";
+import { TASK_STATUS_LABELS } from "@edge/domain/crm/labels";
+import { TaskPriorityBadge } from "@edge/ui/blocks/status-badges";
+import {
+  closestCorners,
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { MessageSquare } from "lucide-react";
@@ -15,7 +28,6 @@ import { FollowUpDue } from "./due";
 
 type ColumnKey = keyof BoardDto;
 const COLUMNS: ColumnKey[] = ["TODO", "IN_PROGRESS", "WAITING", "DONE"];
-const PRIORITY_DOT: Record<string, string> = { LOW: "bg-slate-300", MEDIUM: "bg-sky-400", HIGH: "bg-amber-500", URGENT: "bg-red-500" };
 
 function initials(name: string) {
   return name
@@ -28,13 +40,17 @@ function initials(name: string) {
 export function TaskCard({ task, dragging }: { task: TaskDto; dragging?: boolean }) {
   return (
     <div className={`bg-card grid gap-1.5 rounded-lg border p-3 text-sm shadow-sm ${dragging ? "rotate-1 shadow-lg" : ""}`}>
-      <div className="flex items-start gap-2">
-        <span className={`mt-1.5 size-2 shrink-0 rounded-full ${PRIORITY_DOT[task.priority] ?? ""}`} title={TASK_PRIORITY_LABELS[task.priority]} />
+      <div className="flex items-start justify-between gap-2">
         <Link href={`/tasks/${task.id}`} className="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>
           {task.title}
         </Link>
+        <TaskPriorityBadge priority={task.priority} />
       </div>
-      {task.leadName ? <p className="text-muted-foreground truncate text-xs">{task.leadName}</p> : <p className="text-muted-foreground truncate text-xs">{task.project.name}</p>}
+      {task.leadName ? (
+        <p className="text-muted-foreground truncate text-xs">{task.leadName}</p>
+      ) : (
+        <p className="text-muted-foreground truncate text-xs">{task.project.name}</p>
+      )}
       <div className="text-muted-foreground flex items-center justify-between gap-2 text-xs">
         <span>{task.dueAt ? <FollowUpDue at={task.dueAt} /> : <span>no due date</span>}</span>
         <span className="flex items-center gap-2">
@@ -44,7 +60,11 @@ export function TaskCard({ task, dragging }: { task: TaskDto; dragging?: boolean
             </span>
           ) : null}
           {task.assignee ? (
-            <span className="bg-edge-emerald flex size-6 items-center justify-center rounded-full text-[10px] font-bold text-white" title={task.assignee.name}>
+            <span
+              className="bg-edge-emerald flex size-6 items-center justify-center rounded-full text-[10px] font-bold text-white"
+              title={task.assignee.name}
+              aria-label={`Assigned to ${task.assignee.name}`}
+            >
               {initials(task.assignee.name)}
             </span>
           ) : null}
@@ -57,7 +77,13 @@ export function TaskCard({ task, dragging }: { task: TaskDto; dragging?: boolean
 function SortableCard({ task, column, disabled }: { task: TaskDto; column: ColumnKey; disabled: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, data: { column }, disabled });
   return (
-    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }} {...attributes} {...listeners} className={disabled ? "" : "cursor-grab active:cursor-grabbing"}>
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
+      {...attributes}
+      {...listeners}
+      className={disabled ? "" : "cursor-grab active:cursor-grabbing"}
+    >
       <TaskCard task={task} />
     </div>
   );
@@ -66,7 +92,11 @@ function SortableCard({ task, column, disabled }: { task: TaskDto; column: Colum
 function Column({ column, tasks, disabled }: { column: ColumnKey; tasks: TaskDto[]; disabled: boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id: `col-${column}`, data: { column } });
   return (
-    <div ref={setNodeRef} data-column={column} className={`bg-muted/40 flex min-h-64 flex-col gap-2 rounded-xl border p-2 ${isOver ? "border-edge-emerald" : ""}`}>
+    <div
+      ref={setNodeRef}
+      data-column={column}
+      className={`bg-muted/40 flex min-h-64 flex-col gap-2 rounded-xl border p-2 ${isOver ? "border-edge-emerald" : ""}`}
+    >
       <div className="flex items-center justify-between px-1 pt-1">
         <h2 className="text-sm font-semibold">{TASK_STATUS_LABELS[column]}</h2>
         <span className="text-muted-foreground text-xs tabular-nums">{tasks.length}</span>
@@ -78,7 +108,11 @@ function Column({ column, tasks, disabled }: { column: ColumnKey; tasks: TaskDto
           ))}
         </div>
       </SortableContext>
-      {tasks.length === 0 ? <p className="text-muted-foreground px-1 py-6 text-center text-xs">{column === "DONE" ? "Nothing done this week" : "Drop tasks here"}</p> : null}
+      {tasks.length === 0 ? (
+        <p className="text-muted-foreground px-1 py-6 text-center text-xs">
+          {column === "DONE" ? "Nothing done this week" : "Drop tasks here"}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -94,7 +128,10 @@ export function TaskBoard({ board, canWrite }: { board: BoardDto; canWrite: bool
     setCols(board);
   }
   const id = useId();
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
   const columnOf = (taskId: string, state: BoardDto = cols) => COLUMNS.find((c) => state[c].some((t) => t.id === taskId));
 
   function onDragStart(e: DragStartEvent) {
@@ -141,7 +178,15 @@ export function TaskBoard({ board, canWrite }: { board: BoardDto; canWrite: bool
   }
 
   return (
-    <DndContext id={id} sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => setActive(null)}>
+    <DndContext
+      id={id}
+      sensors={sensors}
+      collisionDetection={closestCorners}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDragEnd={onDragEnd}
+      onDragCancel={() => setActive(null)}
+    >
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {COLUMNS.map((c) => (
           <Column key={c} column={c} tasks={cols[c]} disabled={!canWrite} />

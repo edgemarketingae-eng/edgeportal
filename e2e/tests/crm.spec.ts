@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { E2E } from "../config";
-import { crmSignIn, expectNoReload, studentSignIn } from "./helpers";
+import { crmSignIn, expectNoReload, pickOption, studentSignIn } from "./helpers";
 
 /**
  * CRM journey on the CRM host: the CRM admin sets up a project and a CRM account -> a sales executive on
@@ -77,12 +77,12 @@ test("1c. the CRM admin moves the account to Telegram, and the saved form shows 
   await page.getByRole("link", { name: account.name }).click();
   await expect(page).toHaveURL(/\/team\/[a-f0-9]{24}/);
   // The team list keeps its create form mounted (hidden): only the visible fields are this account's.
-  const channel = page.getByLabel("Chat with leads on").filter({ visible: true });
-  await channel.selectOption("TELEGRAM");
+  const channel = page.getByRole("radiogroup", { name: "Chat with leads on" }).filter({ visible: true });
+  await channel.getByRole("radio", { name: "Telegram" }).check();
   await page.getByLabel("Telegram username").filter({ visible: true }).fill(`@e2e_exec_${uniq}`);
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Saved.")).toBeVisible();
-  await expect(channel).toHaveValue("TELEGRAM");
+  await expect(channel.getByRole("radio", { name: "Telegram" })).toBeChecked();
   await expect(page.getByLabel("Telegram username").filter({ visible: true })).toHaveValue(`@e2e_exec_${uniq}`);
   await expect(
     page
@@ -92,9 +92,9 @@ test("1c. the CRM admin moves the account to Telegram, and the saved form shows 
   ).toBeChecked();
 
   // And back: General's round-robin can send landing page visitors in later specs to this account, on WhatsApp.
-  await channel.selectOption("WHATSAPP");
+  await channel.getByRole("radio", { name: "WhatsApp" }).check();
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(channel).toHaveValue("WHATSAPP");
+  await expect(channel.getByRole("radio", { name: "WhatsApp" })).toBeChecked();
 });
 
 test("2. the sales executive sees only their projects, creates a lead, logs a call and moves its task on the board", async ({ page }) => {
@@ -107,7 +107,7 @@ test("2. the sales executive sees only their projects, creates a lead, logs a ca
   await expect(page.getByRole("link", { name: "New project" })).toHaveCount(0); // no crm.projects.manage
 
   await page.goto(`${E2E.crm}/leads/new`);
-  await page.getByLabel("Project", { exact: true }).selectOption({ label: project.name });
+  await pickOption(page, "Project", project.name);
   await page.getByLabel("Name", { exact: true }).fill(lead.name);
   await page.getByLabel("Mobile (WhatsApp)").fill(lead.phone);
   await page.getByLabel("Email", { exact: true }).fill(lead.email);
@@ -156,7 +156,7 @@ test("3. filters and view links update the lists in place, without reloading the
 
   await expectNoReload(page, async () => {
     // A select applies on change.
-    await page.getByLabel("Stage", { exact: true }).selectOption("CONTACTED");
+    await pickOption(page, "Stage", "Contacted");
     await expect(page).toHaveURL(/stage=CONTACTED/);
     await expect(page.getByRole("link", { name: lead.name })).toBeVisible();
 
@@ -170,14 +170,14 @@ test("3. filters and view links update the lists in place, without reloading the
     // A view link replaces the query, and the filter controls follow the URL.
     await page.getByRole("link", { name: "Mine", exact: true }).click();
     await expect(page).toHaveURL(/\/leads\?owner=me$/);
-    await expect(page.getByLabel("Owner", { exact: true })).toHaveValue("me");
-    await expect(page.getByLabel("Stage", { exact: true })).toHaveValue("");
+    await expect(page.getByLabel("Owner", { exact: true })).toHaveText("Owner: Me");
+    await expect(page.getByLabel("Stage", { exact: true })).toHaveText("Stage: all");
     await expect(search).toHaveValue("");
   });
 
   await page.goto(`${E2E.crm}/tasks`);
   await expectNoReload(page, async () => {
-    await page.getByLabel("Priority", { exact: true }).selectOption("MEDIUM");
+    await pickOption(page, "Priority", "Medium");
     await expect(page).toHaveURL(/priority=MEDIUM/);
     await expect(page.locator('[data-column="IN_PROGRESS"]').getByRole("link", { name: task })).toBeVisible();
 
@@ -194,7 +194,7 @@ test("4. the CRM admin finds the lead across projects and converts it into a stu
   await page.goto(`${E2E.crm}/leads?q=${encodeURIComponent(lead.name)}&view=all`);
   await page.getByRole("link", { name: lead.name }).click();
   await page.getByRole("button", { name: "Convert to student" }).click();
-  await page.getByLabel("Enroll in batch").selectOption({ index: 1 });
+  await pickOption(page, "Enroll in batch", { index: 1 });
   await page.getByRole("button", { name: "Create student account" }).click();
   await expect(page.getByText(/Student account created/)).toBeVisible();
   await expect(page.getByText("Student account", { exact: true })).toBeVisible();
@@ -231,8 +231,9 @@ test("6. the CRM admin deletes junk leads from the lead page and from the list",
     await expect(page.getByText("Lead created.")).toBeVisible();
   }
 
-  // From the lead page: needs DELETE typed, then lands on the list.
-  await page.getByRole("button", { name: "Delete" }).click();
+  // From the lead page's More menu: needs DELETE typed, then lands on the list.
+  await page.getByRole("button", { name: "More" }).click();
+  await page.getByRole("menuitem", { name: "Delete lead…" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText(/removed for good/)).toBeVisible();
   await dialog.getByLabel(/to confirm/).fill("delete");

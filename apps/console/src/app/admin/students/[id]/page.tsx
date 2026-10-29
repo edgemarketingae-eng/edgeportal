@@ -3,6 +3,7 @@ import { countryName } from "@edge/domain/countries";
 import { LEAD_SOURCE_LABELS } from "@edge/domain/crm/labels";
 import { formatDate, formatDateTime } from "@edge/domain/dates";
 import { formatMoney } from "@edge/domain/money";
+import { TableEmpty } from "@edge/ui/blocks/empty-state";
 import { GATEWAY_LABELS, KIND_LABELS, PaymentStatusBadge } from "@edge/ui/blocks/payment-status-badge";
 import { EnrollmentBadge, PaymentStateBadge, SyncBadge } from "@edge/ui/blocks/status-badges";
 import { Card, CardContent, CardHeader, CardTitle } from "@edge/ui/components/card";
@@ -42,6 +43,7 @@ export default async function StudentDetailPage(props: PageProps<"/admin/student
     <>
       <PageHeader
         help="/admin/docs/students"
+        back={{ href: "/admin/students", label: "Students" }}
         title={s.name}
         description={
           <>
@@ -203,11 +205,7 @@ export default async function StudentDetailPage(props: PageProps<"/admin/student
             </TableHeader>
             <TableBody>
               {payments.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-muted-foreground py-6 text-center">
-                    No payments.
-                  </TableCell>
-                </TableRow>
+                <TableEmpty colSpan={7} title="No payments." />
               ) : (
                 payments.map((pay) => (
                   <TableRow key={pay.id}>

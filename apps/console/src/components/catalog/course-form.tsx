@@ -48,8 +48,8 @@ export function CourseForm({
           Active
         </Label>
       </div>
-      <Button type="submit" size="sm" className="w-fit" disabled={pending}>
-        {pending ? "Saving…" : course ? "Save course" : "Add course"}
+      <Button type="submit" size="sm" className="w-fit" pending={pending}>
+        {course ? "Save course" : "Add course"}
       </Button>
     </form>
   );

@@ -12,7 +12,11 @@ export default function ChangePasswordPage() {
     const newPassword = String(form.get("password") ?? "");
     if (newPassword.length < 8) return { fieldErrors: { password: "At least 8 characters" } };
     if (newPassword !== form.get("confirm")) return { fieldErrors: { confirm: "Passwords do not match" } };
-    const { error } = await authClient.changePassword({ currentPassword: String(form.get("current") ?? ""), newPassword, revokeOtherSessions: true });
+    const { error } = await authClient.changePassword({
+      currentPassword: String(form.get("current") ?? ""),
+      newPassword,
+      revokeOtherSessions: true,
+    });
     if (error) return { error: authErrorMessage(error) };
     return { ok: true, message: "Password changed. Other devices have been signed out." };
   }, {});
@@ -25,10 +29,24 @@ export default function ChangePasswordPage() {
             <FormMessage state={state} />
             <FormError state={state} />
             <Field label="Current password" name="current" type="password" autoComplete="current-password" required />
-            <Field label="New password" name="password" type="password" autoComplete="new-password" error={state.fieldErrors?.password} required />
-            <Field label="Confirm new password" name="confirm" type="password" autoComplete="new-password" error={state.fieldErrors?.confirm} required />
-            <Button type="submit" className="w-fit" disabled={pending}>
-              {pending ? "Saving…" : "Save password"}
+            <Field
+              label="New password"
+              name="password"
+              type="password"
+              autoComplete="new-password"
+              error={state.fieldErrors?.password}
+              required
+            />
+            <Field
+              label="Confirm new password"
+              name="confirm"
+              type="password"
+              autoComplete="new-password"
+              error={state.fieldErrors?.confirm}
+              required
+            />
+            <Button type="submit" className="w-fit" pending={pending}>
+              Save password
             </Button>
           </form>
         </CardContent>

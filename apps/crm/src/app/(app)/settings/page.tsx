@@ -1,4 +1,6 @@
 import { crmRoutes } from "@edge/contracts";
+import { CopyButton } from "@edge/ui/blocks/copy-button";
+import { tone } from "@edge/ui/lib/tones";
 import { Badge } from "@edge/ui/components/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@edge/ui/components/card";
 import { PageHeader } from "@edge/ui/shell/app-shell";
@@ -34,8 +36,8 @@ export default async function CrmSettingsPage() {
             <CardHeader>
               <CardTitle>Commission on JetaFX deposits</CardTitle>
               <CardDescription>
-                Percent of each verified deposit: first deposits at a fixed rate, later deposits by the slab their amount falls in. Products
-                (Inner Circle, the clubs…) are managed under{" "}
+                Percent of each verified deposit: first deposits at a fixed rate, later deposits by the slab each person&apos;s monthly
+                total of later deposits reaches. Products (Inner Circle, the clubs…) are managed under{" "}
                 <Link href="/products" className="underline">
                   Products
                 </Link>
@@ -61,15 +63,9 @@ export default async function CrmSettingsPage() {
           </CardHeader>
           <CardContent className="grid gap-2 text-sm">
             <p className="flex flex-wrap items-center gap-2">
-              <code className="bg-muted rounded px-2 py-1 text-xs">{s.webhookUrl}</code>
-              <Badge
-                variant="outline"
-                className={
-                  s.webhookConfigured
-                    ? "border-edge-green/40 bg-edge-green/20 text-edge-emerald"
-                    : "border-amber-300 bg-amber-50 text-amber-800"
-                }
-              >
+              <code className="bg-muted rounded px-2 py-1 text-xs break-all">{s.webhookUrl}</code>
+              <CopyButton value={s.webhookUrl} label="Copy webhook URL" />
+              <Badge variant="outline" className={s.webhookConfigured ? tone.success : tone.warning}>
                 {s.webhookConfigured ? "secret configured" : "disabled: set LEAD_WEBHOOK_SECRET"}
               </Badge>
             </p>

@@ -83,7 +83,7 @@ export function FeeRateForm({ r }: { r: FeeRateRow }) {
       <label className="flex h-9 items-center gap-1.5 text-xs">
         <Checkbox name="enabled" defaultChecked={v ? v.enabled === "on" : r.enabled} /> On
       </label>
-      <Button size="sm" disabled={pending}>
+      <Button size="sm" pending={pending}>
         Save
       </Button>
     </form>
@@ -135,8 +135,8 @@ export function GeneralSettingsForm({ v: initial }: { v: GeneralValues }) {
         <Field label="Support WhatsApp" name="supportWhatsapp" defaultValue={v.supportWhatsapp} />
         <Field label="Website" name="website" defaultValue={v.website} />
       </div>
-      <Button className="w-fit" disabled={pending}>
-        {pending ? "Saving…" : "Save settings"}
+      <Button className="w-fit" pending={pending}>
+        Save settings
       </Button>
     </form>
   );
@@ -177,8 +177,8 @@ export function FreeClassForm({ v: initial }: { v: FreeClassValues }) {
         />
         <Field label="Where it happens" name="platform" defaultValue={v?.platform ?? initial.platform} hint="e.g. Live on Zoom" />
       </div>
-      <Button className="w-fit" disabled={pending}>
-        {pending ? "Saving…" : "Save free class"}
+      <Button className="w-fit" pending={pending}>
+        Save free class
       </Button>
     </form>
   );

@@ -19,6 +19,7 @@ export default async function AdminHome() {
   return (
     <>
       <PageHeader help="/admin/docs/overview" title="Overview" />
+      <h2 className="text-muted-foreground mb-2 font-sans text-xs font-semibold tracking-wide uppercase">Needs attention</h2>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Needs approval"
@@ -27,7 +28,6 @@ export default async function AdminHome() {
           tone={count("PENDING_APPROVAL") ? "warn" : undefined}
           hint="Paid, waiting for verification"
         />
-        <StatCard label="Active students" value={count("ACTIVE")} href="/admin/students?status=ACTIVE" />
         <StatCard
           label="Balance due in 7 days"
           value={d.balanceDueSoon}
@@ -41,6 +41,22 @@ export default async function AdminHome() {
           tone={count("LOCKED") ? "danger" : undefined}
         />
         <StatCard
+          label="Odoo sync failures"
+          value={d.odooFailures}
+          href="/admin/payments?odoo=FAILED"
+          tone={d.odooFailures ? "danger" : undefined}
+        />
+      </div>
+      <h2 className="text-muted-foreground mt-6 mb-2 font-sans text-xs font-semibold tracking-wide uppercase">Students and revenue</h2>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Active students" value={count("ACTIVE")} href="/admin/students?status=ACTIVE" />
+        <StatCard
+          label="Awaiting payment"
+          value={count("PENDING_PAYMENT")}
+          href="/admin/students?status=PENDING_PAYMENT"
+          hint="Signed up, not paid yet"
+        />
+        <StatCard
           label="Collected today"
           value={formatMoney(d.collectedToday.totalMinor)}
           hint={`${d.collectedToday.count} payments`}
@@ -51,18 +67,6 @@ export default async function AdminHome() {
           value={formatMoney(d.collectedMonth.totalMinor)}
           hint={`${d.collectedMonth.count} payments`}
           href="/admin/payments"
-        />
-        <StatCard
-          label="Awaiting payment"
-          value={count("PENDING_PAYMENT")}
-          href="/admin/students?status=PENDING_PAYMENT"
-          hint="Signed up, not paid yet"
-        />
-        <StatCard
-          label="Odoo sync failures"
-          value={d.odooFailures}
-          href="/admin/payments?odoo=FAILED"
-          tone={d.odooFailures ? "danger" : undefined}
         />
       </div>
       <Card className="mt-6">

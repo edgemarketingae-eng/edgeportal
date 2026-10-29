@@ -22,12 +22,15 @@ import {
   ProductBadge,
   TemperatureBadge,
 } from "@edge/ui/blocks/status-badges";
+import { Disclosure } from "@edge/ui/blocks/disclosure";
+import { Alert, AlertDescription } from "@edge/ui/components/alert";
 import { Badge } from "@edge/ui/components/badge";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@edge/ui/components/card";
 import { PageHeader } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
 import type { Metadata } from "next";
 import { Button } from "@edge/ui/components/button";
+import { CircleCheck, CircleX } from "lucide-react";
 import Link from "next/link";
 import { ActivityComposer } from "@/components/crm/activity-composer";
 import { describeActivity } from "@/components/crm/activity-text";
@@ -85,6 +88,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
     <>
       <PageHeader
         help="/docs/working-a-lead"
+        back={{ href: "/leads", label: "Leads" }}
         title={l.name}
         description={
           <>
@@ -125,132 +129,197 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
         }
       />
       {sp.created ? (
-        <p className="border-edge-emerald/30 bg-edge-mint/40 text-edge-emerald mb-4 rounded-md border px-3 py-2 text-sm">Lead created.</p>
+        <Alert variant="success" className="mb-4">
+          <CircleCheck aria-hidden />
+          <AlertDescription>Lead created.</AlertDescription>
+        </Alert>
       ) : null}
       {l.mergedIntoId ? (
-        <p className="border-destructive/30 bg-destructive/10 text-destructive mb-4 rounded-md border px-3 py-2 text-sm">
-          This lead was merged into{" "}
-          <Link href={`/leads/${l.mergedIntoId}`} className="font-semibold underline">
-            another lead
-          </Link>
-          .
-        </p>
+        <Alert variant="warning" className="mb-4">
+          <AlertDescription>
+            This lead was merged into{" "}
+            <Link href={`/leads/${l.mergedIntoId}`} className="font-semibold">
+              another lead
+            </Link>
+            . It is read-only here.
+          </AlertDescription>
+        </Alert>
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Details</CardTitle>
-            {canWrite && !l.mergedIntoId ? (
-              <CardAction>
-                <EditLeadDialog
-                  values={{
-                    id: l.id,
-                    projectId: l.project.id,
-                    name: l.name,
-                    phone: l.phone ?? "",
-                    email: l.email ?? "",
-                    country: l.country ?? "",
-                    source: l.source,
-                    sourceDetail: l.sourceDetail ?? "",
-                    courseInterestId: l.courseInterestId ?? "",
-                    batchInterestId: l.batchInterestId ?? "",
-                    experienceLevel: l.experienceLevel ?? "",
-                    temperature: l.temperature,
-                    preferredChannel: l.preferredChannel ?? "",
-                    language: l.language ?? "",
-                    jetaFxClientId: l.jetaFxClientId ?? "",
-                    qualificationExperience: l.qualification.experience ?? "",
-                    qualificationOccupation: l.qualification.occupation ?? "",
-                    qualificationPurpose: l.qualification.purpose ?? "",
-                    tags: l.tags.join(", "),
-                    notes: l.notes ?? "",
-                    marketingConsent: l.consent.marketing,
-                    whatsappConsent: l.consent.whatsapp,
-                    nextFollowUpAt: "",
-                    ownerId: l.ownerId ?? "",
-                  }}
-                  options={options}
-                  meId={v.user.id}
-                  projectName={l.project.name}
-                />
-              </CardAction>
-            ) : null}
-          </CardHeader>
-          <CardContent>
-            <dl className="grid gap-4 text-sm sm:grid-cols-2">
-              <Row label="Stage">
-                <span className="flex flex-wrap gap-1.5">
-                  <LeadStageBadge stage={l.stage} />
-                  {l.stage !== "CONVERTED" && l.stage !== "LOST" ? <TemperatureBadge temperature={l.temperature} /> : null}
-                  {l.products.map((p) => (
-                    <ProductBadge key={p.id} name={p.name} />
-                  ))}
-                </span>
-                {l.lostReason ? <span className="text-muted-foreground block text-xs">Reason: {l.lostReason}</span> : null}
-              </Row>
-              <Row label="Next follow-up">
-                {l.nextFollowUpAt ? (
-                  <FollowUpDue at={l.nextFollowUpAt} />
-                ) : (
-                  <span className="text-muted-foreground font-normal">None scheduled</span>
-                )}
-              </Row>
-              <Row label="Course / batch of interest">
-                {l.courseTitle ?? <span className="text-muted-foreground font-normal">Not set</span>}
-                {l.batchName ? <span className="text-muted-foreground font-normal"> · {l.batchName}</span> : null}
-              </Row>
-              <Row label="Trading experience">
-                {l.experienceLevel ? (
-                  EXPERIENCE_LABELS[l.experienceLevel]
-                ) : (
-                  <span className="text-muted-foreground font-normal">Unknown</span>
-                )}
-              </Row>
-              <Row label="Preferred channel / language">
-                {l.preferredChannel ? LEAD_CHANNEL_LABELS[l.preferredChannel] : "–"}
-                {l.language ? ` · ${LANGUAGE_LABELS[l.language]}` : ""}
-                {l.country ? ` · ${countryName(l.country)}` : ""}
-              </Row>
-              <Row label="JetaFX client ID">{l.jetaFxClientId ?? <span className="text-muted-foreground font-normal">Not set</span>}</Row>
-              <Row label="Consent">
-                {l.consent.whatsapp ? "WhatsApp OK" : "No WhatsApp consent"} ·{" "}
-                {l.consent.marketing ? `Marketing (${l.consent.marketingAt ? formatDate(l.consent.marketingAt) : "yes"})` : "No marketing"}
-              </Row>
-              <Row label="First contact / last contact">
-                {l.firstContactedAt ? (
-                  formatDateTime(l.firstContactedAt)
-                ) : (
-                  <span className="text-muted-foreground font-normal">Not yet</span>
-                )}
-                {l.lastContactedAt ? (
-                  <span className="text-muted-foreground font-normal"> · last {formatDateTime(l.lastContactedAt)}</span>
-                ) : null}
-              </Row>
-              <Row label="Created">
-                {formatDateTime(l.createdAt)}
-                {utm ? <span className="text-muted-foreground block text-xs">UTM: {utm}</span> : null}
-              </Row>
-              {l.tags.length ? (
-                <Row label="Tags">
-                  <span className="flex flex-wrap gap-1">
-                    {l.tags.map((t) => (
-                      <Badge key={t} variant="outline">
-                        {t}
-                      </Badge>
+        <div className="grid h-fit gap-4 lg:col-span-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Details</CardTitle>
+              {canWrite && !l.mergedIntoId ? (
+                <CardAction>
+                  <EditLeadDialog
+                    values={{
+                      id: l.id,
+                      projectId: l.project.id,
+                      name: l.name,
+                      phone: l.phone ?? "",
+                      email: l.email ?? "",
+                      country: l.country ?? "",
+                      source: l.source,
+                      sourceDetail: l.sourceDetail ?? "",
+                      courseInterestId: l.courseInterestId ?? "",
+                      batchInterestId: l.batchInterestId ?? "",
+                      experienceLevel: l.experienceLevel ?? "",
+                      temperature: l.temperature,
+                      preferredChannel: l.preferredChannel ?? "",
+                      language: l.language ?? "",
+                      jetaFxClientId: l.jetaFxClientId ?? "",
+                      qualificationExperience: l.qualification.experience ?? "",
+                      qualificationOccupation: l.qualification.occupation ?? "",
+                      qualificationPurpose: l.qualification.purpose ?? "",
+                      tags: l.tags.join(", "),
+                      notes: l.notes ?? "",
+                      marketingConsent: l.consent.marketing,
+                      whatsappConsent: l.consent.whatsapp,
+                      nextFollowUpAt: "",
+                      ownerId: l.ownerId ?? "",
+                    }}
+                    options={options}
+                    meId={v.user.id}
+                    projectName={l.project.name}
+                  />
+                </CardAction>
+              ) : null}
+            </CardHeader>
+            <CardContent>
+              <dl className="grid gap-4 text-sm sm:grid-cols-2">
+                <Row label="Stage">
+                  <span className="flex flex-wrap gap-1.5">
+                    <LeadStageBadge stage={l.stage} />
+                    {l.stage !== "CONVERTED" && l.stage !== "LOST" ? <TemperatureBadge temperature={l.temperature} /> : null}
+                    {l.products.map((p) => (
+                      <ProductBadge key={p.id} name={p.name} />
                     ))}
                   </span>
+                  {l.lostReason ? <span className="text-muted-foreground block text-xs">Reason: {l.lostReason}</span> : null}
                 </Row>
-              ) : null}
-              {l.notes ? (
-                <div className="sm:col-span-2">
-                  <dt className="text-muted-foreground">Notes</dt>
-                  <dd className="whitespace-pre-wrap">{l.notes}</dd>
+                <Row label="Next follow-up">
+                  {l.nextFollowUpAt ? (
+                    <FollowUpDue at={l.nextFollowUpAt} />
+                  ) : (
+                    <span className="text-muted-foreground font-normal">None scheduled</span>
+                  )}
+                </Row>
+                <Row label="Course / batch of interest">
+                  {l.courseTitle ?? <span className="text-muted-foreground font-normal">Not set</span>}
+                  {l.batchName ? <span className="text-muted-foreground font-normal"> · {l.batchName}</span> : null}
+                </Row>
+                <Row label="Trading experience">
+                  {l.experienceLevel ? (
+                    EXPERIENCE_LABELS[l.experienceLevel]
+                  ) : (
+                    <span className="text-muted-foreground font-normal">Unknown</span>
+                  )}
+                </Row>
+                <Row label="Preferred channel / language">
+                  {l.preferredChannel ? LEAD_CHANNEL_LABELS[l.preferredChannel] : "–"}
+                  {l.language ? ` · ${LANGUAGE_LABELS[l.language]}` : ""}
+                  {l.country ? ` · ${countryName(l.country)}` : ""}
+                </Row>
+                <Row label="JetaFX client ID">{l.jetaFxClientId ?? <span className="text-muted-foreground font-normal">Not set</span>}</Row>
+                <Row label="Consent">
+                  {l.consent.whatsapp ? "WhatsApp OK" : "No WhatsApp consent"} ·{" "}
+                  {l.consent.marketing
+                    ? `Marketing (${l.consent.marketingAt ? formatDate(l.consent.marketingAt) : "yes"})`
+                    : "No marketing"}
+                </Row>
+                <Row label="First contact / last contact">
+                  {l.firstContactedAt ? (
+                    formatDateTime(l.firstContactedAt)
+                  ) : (
+                    <span className="text-muted-foreground font-normal">Not yet</span>
+                  )}
+                  {l.lastContactedAt ? (
+                    <span className="text-muted-foreground font-normal"> · last {formatDateTime(l.lastContactedAt)}</span>
+                  ) : null}
+                </Row>
+                <Row label="Created">
+                  {formatDateTime(l.createdAt)}
+                  {utm ? <span className="text-muted-foreground block text-xs">UTM: {utm}</span> : null}
+                </Row>
+                {l.tags.length ? (
+                  <Row label="Tags">
+                    <span className="flex flex-wrap gap-1">
+                      {l.tags.map((t) => (
+                        <Badge key={t} variant="outline">
+                          {t}
+                        </Badge>
+                      ))}
+                    </span>
+                  </Row>
+                ) : null}
+                {l.notes ? (
+                  <div className="sm:col-span-2">
+                    <dt className="text-muted-foreground">Notes</dt>
+                    <dd className="whitespace-pre-wrap">{l.notes}</dd>
+                  </div>
+                ) : null}
+              </dl>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Activity</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-6">
+              {editable ? <ActivityComposer leadId={l.id} /> : null}
+              {activities.length === 0 ? (
+                <p className="text-muted-foreground text-sm">No activity yet.</p>
+              ) : (
+                <ol className="grid gap-3 border-l pl-4 text-sm">
+                  {activities.map((a) => {
+                    const { title, detail } = describeActivity(a);
+                    const touch = [
+                      "NOTE",
+                      "CALL",
+                      "WHATSAPP",
+                      "EMAIL",
+                      "MEETING",
+                      "INBOUND",
+                      "TASK_DONE",
+                      "PRODUCT_CONVERTED",
+                      "DEPOSIT_LOGGED",
+                      "DEPOSIT_VERIFIED",
+                    ].includes(a.type);
+                    return (
+                      <li key={a.id} className="relative">
+                        <span
+                          className={`absolute top-1.5 -left-[21px] size-2.5 rounded-full ${touch ? "bg-edge-emerald" : "bg-muted-foreground/40"}`}
+                        />
+                        <p className="font-medium">{title}</p>
+                        {a.body ? <p className="mt-0.5 whitespace-pre-wrap">{a.body}</p> : null}
+                        {detail ? <p className="text-muted-foreground text-xs">{detail}</p> : null}
+                        <p className="text-muted-foreground text-xs">
+                          <TimeAgo at={a.createdAt} /> ·{" "}
+                          {a.actorType === "USER" ? (a.actorName ?? "Staff") : a.actorType === "WEBHOOK" ? "Website" : "System"}
+                        </p>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+              {activityTotal > activities.length ? (
+                <div className="flex items-center gap-3 text-sm">
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={`/leads/${l.id}?activity=${activityWindow + 50}`} scroll={false}>
+                      Show older activity
+                    </Link>
+                  </Button>
+                  <span className="text-muted-foreground">
+                    Showing {activities.length} of {activityTotal}
+                  </span>
                 </div>
               ) : null}
-            </dl>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
 
         <div className="grid h-fit gap-4">
           {student ? (
@@ -280,7 +349,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
               </CardContent>
             </Card>
           ) : matchingStudent ? (
-            <Card className="border-amber-400/60">
+            <Card className="ring-amber-400/70">
               <CardHeader>
                 <CardTitle>Already a student?</CardTitle>
               </CardHeader>
@@ -292,7 +361,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
           ) : null}
 
           <Card>
-            <CardHeader className="flex-row items-center justify-between">
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
               <CardTitle>Tasks</CardTitle>
               {canWrite && !l.mergedIntoId ? (
                 <AddTaskDialog leadId={l.id} projectId={l.project.id} options={options} meId={v.user.id} label="Follow-up" />
@@ -324,23 +393,30 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
                 </div>
               ))}
               {closed.length ? (
-                <details>
-                  <summary className="text-muted-foreground cursor-pointer text-xs">{closed.length} closed</summary>
-                  <ul className="text-muted-foreground mt-2 grid gap-1 text-xs">
+                <Disclosure summary={`${closed.length} closed`}>
+                  <ul className="text-muted-foreground grid gap-1.5 text-xs">
                     {closed.map((t) => (
-                      <li key={t.id}>
-                        {t.status === "DONE" ? "✓" : "✕"} {t.title} · {t.completedAt ? formatDateTime(t.completedAt) : ""}
+                      <li key={t.id} className="flex items-start gap-1.5">
+                        {t.status === "DONE" ? (
+                          <CircleCheck aria-label="Done" className="text-edge-emerald mt-px size-3.5 shrink-0" />
+                        ) : (
+                          <CircleX aria-label="Cancelled" className="mt-px size-3.5 shrink-0" />
+                        )}
+                        <span>
+                          {t.title}
+                          {t.completedAt ? ` · ${formatDateTime(t.completedAt)}` : ""}
+                        </span>
                       </li>
                     ))}
                   </ul>
-                </details>
+                </Disclosure>
               ) : null}
             </CardContent>
           </Card>
 
           {options.products.length || conversions.length ? (
             <Card>
-              <CardHeader className="flex-row items-center justify-between">
+              <CardHeader className="flex flex-row items-center justify-between gap-2">
                 <CardTitle>Conversions</CardTitle>
                 {editable && markable.length ? <MarkConversionDialog leadId={l.id} products={markable} /> : null}
               </CardHeader>
@@ -368,7 +444,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
 
           {editable || deposits.length ? (
             <Card>
-              <CardHeader className="flex-row items-center justify-between">
+              <CardHeader className="flex flex-row items-center justify-between gap-2">
                 <CardTitle>Deposits</CardTitle>
                 {editable ? <LogDepositDialog leadId={l.id} nextSequence={nextSequence} clientId={l.jetaFxClientId} /> : null}
               </CardHeader>
@@ -390,7 +466,13 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
                     {d.commissionMinor != null ? (
                       <p className="text-xs">
                         Commission {formatMoney(d.commissionMinor, d.currency)}
-                        {d.commissionPct ? <span className="text-muted-foreground"> ({fractionToPercent(d.commissionPct)}%)</span> : null}
+                        {d.commissionPct ? (
+                          <span className="text-muted-foreground">
+                            {" "}
+                            ({fractionToPercent(d.commissionPct)}%
+                            {d.slabBaseMinor != null ? `, month total ${formatMoney(d.slabBaseMinor, d.currency)}` : ""})
+                          </span>
+                        ) : null}
                       </p>
                     ) : null}
                     {d.status === "REJECTED" && d.rejectReason ? (
@@ -425,7 +507,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
           ) : null}
 
           {duplicates.length ? (
-            <Card className="border-amber-400/60">
+            <Card className="ring-amber-400/70">
               <CardHeader>
                 <CardTitle>Possible duplicates</CardTitle>
               </CardHeader>
@@ -460,62 +542,6 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
           ) : (
             <p className="text-muted-foreground text-sm">Not asked yet.</p>
           )}
-        </CardContent>
-      </Card>
-
-      <Card className="mt-4">
-        <CardHeader>
-          <CardTitle>Activity</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-6">
-          {editable ? <ActivityComposer leadId={l.id} /> : null}
-          {activities.length === 0 ? (
-            <p className="text-muted-foreground text-sm">No activity yet.</p>
-          ) : (
-            <ol className="grid gap-3 border-l pl-4 text-sm">
-              {activities.map((a) => {
-                const { title, detail } = describeActivity(a);
-                const touch = [
-                  "NOTE",
-                  "CALL",
-                  "WHATSAPP",
-                  "EMAIL",
-                  "MEETING",
-                  "INBOUND",
-                  "TASK_DONE",
-                  "PRODUCT_CONVERTED",
-                  "DEPOSIT_LOGGED",
-                  "DEPOSIT_VERIFIED",
-                ].includes(a.type);
-                return (
-                  <li key={a.id} className="relative">
-                    <span
-                      className={`absolute top-1.5 -left-[21px] size-2.5 rounded-full ${touch ? "bg-edge-emerald" : "bg-muted-foreground/40"}`}
-                    />
-                    <p className="font-medium">{title}</p>
-                    {a.body ? <p className="mt-0.5 whitespace-pre-wrap">{a.body}</p> : null}
-                    {detail ? <p className="text-muted-foreground text-xs">{detail}</p> : null}
-                    <p className="text-muted-foreground text-xs">
-                      <TimeAgo at={a.createdAt} /> ·{" "}
-                      {a.actorType === "USER" ? (a.actorName ?? "Staff") : a.actorType === "WEBHOOK" ? "Website" : "System"}
-                    </p>
-                  </li>
-                );
-              })}
-            </ol>
-          )}
-          {activityTotal > activities.length ? (
-            <div className="flex items-center gap-3 text-sm">
-              <Button asChild variant="outline" size="sm">
-                <Link href={`/leads/${l.id}?activity=${activityWindow + 50}`} scroll={false}>
-                  Show older activity
-                </Link>
-              </Button>
-              <span className="text-muted-foreground">
-                Showing {activities.length} of {activityTotal}
-              </span>
-            </div>
-          ) : null}
         </CardContent>
       </Card>
     </>

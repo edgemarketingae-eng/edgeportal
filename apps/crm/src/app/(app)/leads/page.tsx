@@ -2,10 +2,11 @@ import { crmRoutes } from "@edge/contracts";
 import { LEAD_SOURCES, LEAD_STAGES, LEAD_TEMPERATURES } from "@edge/domain/crm/enums";
 import { LEAD_SOURCE_LABELS, LEAD_STAGE_LABELS, LEAD_TEMPERATURE_LABELS } from "@edge/domain/crm/labels";
 import { FilterBar, FilterLink, FilterResults, FilterScope, FilterSelect } from "@edge/ui/blocks/filter-bar";
+import { Alert, AlertDescription } from "@edge/ui/components/alert";
 import { Button } from "@edge/ui/components/button";
 import { PageHeader } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
-import { Download } from "lucide-react";
+import { CircleCheck, Download, SearchX, UsersRound } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Pagination } from "@edge/ui/blocks/pagination";
@@ -111,7 +112,10 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
         }
       />
       {sp.deleted ? (
-        <p className="border-edge-emerald/30 bg-edge-mint/40 text-edge-emerald mb-4 rounded-md border px-3 py-2 text-sm">Lead deleted.</p>
+        <Alert variant="success" className="mb-4">
+          <CircleCheck aria-hidden />
+          <AlertDescription>Lead deleted.</AlertDescription>
+        </Alert>
       ) : null}
       <div className="mb-3 flex flex-wrap gap-1.5">
         {views.map((x) => {
@@ -157,10 +161,46 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
         <FilterSelect name="batch" label="Batch" value={f.batch} options={options.batches.map((b) => [b.id, b.label])} />
         <FilterSelect name="due" label="Follow-up" value={f.due} options={DUE_OPTIONS} />
         <FilterSelect name="created" label="Created" value={f.created} options={CREATED_OPTIONS} />
-        <FilterSelect name="sort" label="Sort" value={f.sort} options={SORT_OPTIONS} />
+        <FilterSelect name="sort" label="Sort" allLabel="Sort: recent activity" value={f.sort} options={SORT_OPTIONS} />
       </FilterBar>
       <FilterResults>
-        <LeadsTable rows={rows} total={total} filters={qs.toString()} assignees={assignable} canDelete={can(v, "crm.leads.delete")} />
+        <LeadsTable
+          rows={rows}
+          total={total}
+          filters={qs.toString()}
+          assignees={assignable}
+          canDelete={can(v, "crm.leads.delete")}
+          empty={
+            qs.toString()
+              ? {
+                  icon: <SearchX />,
+                  title: "No leads match these filters.",
+                  children: "Try another view, or clear the filters.",
+                  action: (
+                    <Button asChild size="sm" variant="outline">
+                      <Link href="/leads">Clear filters</Link>
+                    </Button>
+                  ),
+                }
+              : {
+                  icon: <UsersRound />,
+                  title: "No open leads",
+                  children: "New leads from the website, landing pages, imports and quick add show up here.",
+                  action: (
+                    <>
+                      {canWrite ? (
+                        <Button asChild size="sm">
+                          <Link href="/leads/new">Add a lead</Link>
+                        </Button>
+                      ) : null}
+                      <Button asChild size="sm" variant="outline">
+                        <Link href="/leads?view=all">See all leads</Link>
+                      </Button>
+                    </>
+                  ),
+                }
+          }
+        />
         <Pagination page={page} pageSize={pageSize} total={total} noun="leads" />
       </FilterResults>
     </FilterScope>

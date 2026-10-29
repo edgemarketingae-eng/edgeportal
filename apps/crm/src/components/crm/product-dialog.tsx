@@ -7,9 +7,9 @@ import { ActionDialog } from "@edge/ui/blocks/action-dialog";
 import { Button } from "@edge/ui/components/button";
 import { Checkbox } from "@edge/ui/components/checkbox";
 import { Label } from "@edge/ui/components/label";
-import { NativeSelect } from "@edge/ui/components/native-select";
 import { Textarea } from "@edge/ui/components/textarea";
 import { Field } from "@edge/ui/forms/field";
+import { SegmentedControl } from "@edge/ui/forms/segmented-control";
 import { Plus } from "lucide-react";
 import { saveProductAction } from "@/lib/actions/products";
 
@@ -49,16 +49,12 @@ export function ProductDialog({ product }: { product?: ProductDto }) {
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Order in lists" name="sortOrder" type="number" min={0} defaultValue={String(product?.sortOrder ?? 50)} />
         {product ? (
-          <div className="grid content-start gap-2">
-            <Label htmlFor="product-status">Status</Label>
-            <NativeSelect id="product-status" name="status" defaultValue={product.status}>
-              {PRODUCT_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {PRODUCT_STATUS_LABELS[s]}
-                </option>
-              ))}
-            </NativeSelect>
-          </div>
+          <SegmentedControl
+            name="status"
+            label="Status"
+            defaultValue={product.status}
+            options={PRODUCT_STATUSES.map((s) => ({ value: s, label: PRODUCT_STATUS_LABELS[s] }))}
+          />
         ) : null}
       </div>
       <label className="flex items-start gap-2 text-sm">

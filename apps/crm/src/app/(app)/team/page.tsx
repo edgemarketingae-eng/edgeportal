@@ -1,4 +1,5 @@
 import { crmRoutes } from "@edge/contracts";
+import { TableEmpty } from "@edge/ui/blocks/empty-state";
 import { AvailabilitySwitch, OffBadge } from "@edge/ui/blocks/availability";
 import { StaffStatus } from "@edge/ui/blocks/secret-reveal";
 import { Badge } from "@edge/ui/components/badge";
@@ -49,11 +50,7 @@ export default async function TeamPage() {
           </TableHeader>
           <TableBody>
             {staff.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} className="text-muted-foreground py-10 text-center">
-                  No CRM staff yet. Add the first account below.
-                </TableCell>
-              </TableRow>
+              <TableEmpty colSpan={7} title="No CRM staff yet. Add the first account below." />
             ) : (
               staff.map((s) => (
                 <TableRow key={s.id}>
@@ -66,7 +63,9 @@ export default async function TeamPage() {
                   <TableCell className="hidden md:table-cell">
                     {s.email}
                     {s.contactChannel === "TELEGRAM" ? (
-                      <div className="text-muted-foreground text-xs">Telegram {s.telegramUsername ? `@${s.telegramUsername}` : "(no username)"}</div>
+                      <div className="text-muted-foreground text-xs">
+                        Telegram {s.telegramUsername ? `@${s.telegramUsername}` : "(no username)"}
+                      </div>
                     ) : s.phone ? (
                       <div className="text-muted-foreground text-xs">{s.phone}</div>
                     ) : null}

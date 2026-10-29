@@ -30,8 +30,8 @@ export function QualificationForm({ leadId, answers }: { leadId: string; answers
           </div>
         ))}
       </div>
-      <Button size="sm" className="w-fit" disabled={pending}>
-        {pending ? "Saving…" : "Save answers"}
+      <Button size="sm" className="w-fit" pending={pending}>
+        Save answers
       </Button>
     </form>
   );

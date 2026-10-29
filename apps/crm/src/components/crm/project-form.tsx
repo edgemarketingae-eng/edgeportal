@@ -6,9 +6,9 @@ import { Button } from "@edge/ui/components/button";
 import { Checkbox } from "@edge/ui/components/checkbox";
 import { Label } from "@edge/ui/components/label";
 import { Textarea } from "@edge/ui/components/textarea";
-import { NativeSelect } from "@edge/ui/components/native-select";
+import { Select } from "@edge/ui/components/select";
 import { Field, FormError, type ActionState } from "@edge/ui/forms/field";
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { saveProjectAction } from "@/lib/actions/projects";
 
@@ -113,6 +113,14 @@ export function ProjectForm({
   const fe = state.fieldErrors ?? {};
   const v = restore(values, state.values);
   const creating = !values.id;
+  // The batch list follows the chosen course; a failed save brings back the submitted course.
+  const [courseId, setCourseId] = useState(v.courseId);
+  const [seenCourse, setSeenCourse] = useState(v.courseId);
+  if (v.courseId !== seenCourse) {
+    setSeenCourse(v.courseId);
+    setCourseId(v.courseId);
+  }
+  const courseBatches = courseId ? batches.filter((b) => b.courseId === courseId) : batches;
   return (
     <form key={JSON.stringify(state.values ?? {})} action={action} className="grid gap-4">
       {values.id ? <input type="hidden" name="id" value={values.id} /> : null}
@@ -135,14 +143,19 @@ export function ProjectForm({
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="grid content-start gap-2">
           <Label htmlFor="status">Status</Label>
-          <NativeSelect id="status" name="status" defaultValue={v.status} disabled={!canSetManagers}>
+          <Select id="status" name="status" defaultValue={v.status} disabled={!canSetManagers}>
             {PROJECT_STATUSES.map((s) => (
               <option key={s} value={s}>
                 {PROJECT_STATUS_LABELS[s]}
               </option>
             ))}
-          </NativeSelect>
-          {!canSetManagers ? <input type="hidden" name="status" value={v.status} /> : null}
+          </Select>
+          {!canSetManagers ? (
+            <>
+              <input type="hidden" name="status" value={v.status} />
+              <p className="text-muted-foreground text-xs">Only CRM managers and admins change it.</p>
+            </>
+          ) : null}
         </div>
         <Field label="Start date" name="startDate" type="date" defaultValue={v.startDate} error={fe.startDate} />
         <Field label="End date" name="endDate" type="date" defaultValue={v.endDate} error={fe.endDate} />
@@ -150,25 +163,25 @@ export function ProjectForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="grid content-start gap-2">
           <Label htmlFor="courseId">Target course</Label>
-          <NativeSelect id="courseId" name="courseId" defaultValue={v.courseId}>
+          <Select id="courseId" name="courseId" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
             <option value="">Not set</option>
             {courses.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.title}
               </option>
             ))}
-          </NativeSelect>
+          </Select>
         </div>
         <div className="grid content-start gap-2">
           <Label htmlFor="batchId">Target batch</Label>
-          <NativeSelect id="batchId" name="batchId" defaultValue={v.batchId}>
+          <Select key={courseId} id="batchId" name="batchId" defaultValue={v.batchId}>
             <option value="">Not set</option>
-            {batches.map((b) => (
+            {courseBatches.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.label}
               </option>
             ))}
-          </NativeSelect>
+          </Select>
         </div>
         <Field label="Target leads" name="targetLeads" type="number" min={0} defaultValue={v.targetLeads} error={fe.targetLeads} />
         <Field
@@ -186,8 +199,8 @@ export function ProjectForm({
           <People name="memberIds" legend="Sales executives (team members)" staff={staff} selected={v.memberIds} />
         </>
       ) : null}
-      <Button type="submit" className="w-fit" disabled={pending}>
-        {pending ? "Saving…" : creating ? "Create project" : "Save project"}
+      <Button type="submit" className="w-fit" pending={pending}>
+        {creating ? "Create project" : "Save project"}
       </Button>
     </form>
   );

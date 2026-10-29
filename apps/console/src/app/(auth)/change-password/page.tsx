@@ -1,5 +1,7 @@
 import { getViewer } from "@edge/web/server";
+import { ChevronLeft } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { ChangePasswordForm } from "./change-password-form";
@@ -22,9 +24,19 @@ async function Body() {
   const temporary = viewer.user.mustChangePassword;
   return (
     <>
+      {!temporary ? (
+        <Link
+          href="/"
+          className="text-muted-foreground hover:text-foreground -mb-2 inline-flex w-fit items-center gap-0.5 text-sm font-medium"
+        >
+          <ChevronLeft aria-hidden className="size-4" /> Back to the console
+        </Link>
+      ) : null}
       <div>
         <h2 className="font-display text-2xl uppercase">Set your password</h2>
-        <p className="text-muted-foreground mt-1 text-sm">{temporary ? "Replace the temporary password you received before continuing." : "Change your account password."}</p>
+        <p className="text-muted-foreground mt-1 text-sm">
+          {temporary ? "Replace the temporary password you received before continuing." : "Change your account password."}
+        </p>
       </div>
       <ChangePasswordForm temporary={temporary} />
     </>

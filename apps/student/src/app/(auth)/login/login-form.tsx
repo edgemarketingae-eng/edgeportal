@@ -10,6 +10,7 @@ import { hardNavigate, postAuth } from "@edge/web/auth-client";
 import Link from "next/link";
 import { useActionState } from "react";
 import { ChannelPicker } from "@/components/channel-picker";
+import { resendLabel, useCooldown } from "@/lib/use-cooldown";
 
 const initial: ActionState = {};
 const str = (form: FormData, k: string) => String(form.get(k) ?? "").trim();
@@ -53,8 +54,8 @@ function PasswordForm() {
           Forgot password?
         </Link>
       </div>
-      <Button type="submit" size="lg" disabled={pending}>
-        {pending ? "Signing in…" : "Sign in"}
+      <Button type="submit" size="lg" pending={pending}>
+        Sign in
       </Button>
     </form>
   );
@@ -65,7 +66,7 @@ function OtpForm() {
     const values = { phone: str(form, "phone") };
     try {
       const res = await postAuth(authRoutes.sendLoginOtp, { phone: values.phone, channel: str(form, "channel") || "sms" });
-      return { step: "code", message: res.message, values: { phone: res.phone } };
+      return { step: "code", message: res.message, values: { phone: res.phone, sentAt: String(Date.now()) } };
     } catch (e) {
       return toActionState(e, values);
     }
@@ -81,6 +82,7 @@ function OtpForm() {
   }, initial);
   const onCodeStep = sendState.step === "code" || verifyState.step === "code";
   const phone = verifyState.values?.phone ?? sendState.values?.phone ?? "";
+  const cooldown = useCooldown(30, sendState.values?.sentAt);
 
   if (!onCodeStep) {
     return (
@@ -96,8 +98,8 @@ function OtpForm() {
           required
         />
         <ChannelPicker />
-        <Button type="submit" size="lg" disabled={sending}>
-          {sending ? "Sending…" : "Send code"}
+        <Button type="submit" size="lg" pending={sending}>
+          Send code
         </Button>
       </form>
     );
@@ -113,15 +115,15 @@ function OtpForm() {
           <OtpInput />
           {verifyState.fieldErrors?.code ? <p className="text-destructive text-xs">{verifyState.fieldErrors.code}</p> : null}
         </div>
-        <Button type="submit" size="lg" disabled={verifying}>
-          {verifying ? "Verifying…" : "Verify and sign in"}
+        <Button type="submit" size="lg" pending={verifying}>
+          Verify and sign in
         </Button>
       </form>
       <form action={sendAction}>
         <input type="hidden" name="phone" value={phone} />
         <input type="hidden" name="channel" value="sms" />
-        <Button type="submit" variant="link" className="w-full" disabled={sending}>
-          Resend code
+        <Button type="submit" variant="link" className="w-full tabular-nums" disabled={sending || cooldown > 0}>
+          {resendLabel(cooldown, "Resend code")}
         </Button>
       </form>
     </div>

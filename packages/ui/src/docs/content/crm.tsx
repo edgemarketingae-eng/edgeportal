@@ -131,8 +131,8 @@ export const crmDocs: DocModule[] = [
                   "CRM admin",
                   <>
                     Everything in the CRM. Sees every project and every lead. Also adds and manages CRM staff, edits CRM roles, changes CRM
-                    settings, imports leads, merges duplicates and can delete leads. The only CRM role that sets commission rates, verifies
-                    JetaFX deposits and sees everyone&apos;s commission. Must use two-factor sign-in.
+                    settings, imports leads, merges duplicates and can delete leads and empty projects. The only CRM role that sets
+                    commission rates, verifies JetaFX deposits and sees everyone&apos;s commission. Must use two-factor sign-in.
                   </>,
                 ],
                 [
@@ -1061,15 +1061,24 @@ export const crmDocs: DocModule[] = [
           <>
             <List>
               <>
-                Commission is a percent of each <b>verified</b> deposit. A lead&apos;s 1st deposit has its own rate; a later deposit earns
-                the rate of the slab its amount reaches (for example 2% from $10,000, 2.5% from $25,000), on the whole amount. CRM admins
-                set the rates in Settings.
+                Commission is a percent of each <b>verified</b> deposit. A lead&apos;s 1st deposit has its own rate. Later deposits are
+                rated <b>by the month</b>: add up all your verified later deposits with a deposit date in that month, from every lead (1st
+                deposits don&apos;t count). That total picks the slab (for example 2% from $10,000, 2.5% from $25,000), and every later
+                deposit of yours that month earns that rate on its whole amount. CRM admins set the rates in Settings.
+              </>
+              <>
+                So your commission on earlier deposits goes up when a new one lifts the month into a higher slab, and down if a verified one
+                is rejected. <To href="/deposits">Deposits</To> shows this month&apos;s total, its rate and how much more reaches the next
+                slab.
               </>
               <>
                 It goes to the person who <b>owned the lead when the deposit was logged</b> (whoever logged it, if the lead was unassigned).
                 Reassigning the lead later doesn&apos;t move it.
               </>
-              <>The rate is fixed when the deposit is verified. You get a notification with the amount.</>
+              <>
+                A 1st deposit&apos;s rate is fixed when it is verified. You get a notification with the amount (for a later deposit, also
+                the month&apos;s new total and rate).
+              </>
               <>A rejected deposit earns nothing; you are told why.</>
             </List>
             <P>
@@ -1090,11 +1099,13 @@ export const crmDocs: DocModule[] = [
               </>
               <>Compare each one with the JetaFX report: client ID, amount and date.</>
               <>
-                Press <Ui>Verify</Ui> and confirm. The commission is calculated with today&apos;s rate.
+                Press <Ui>Verify</Ui> and confirm. A 1st deposit gets today&apos;s first-deposit rate. A later deposit joins its
+                person&apos;s month (by deposit date), and all their later deposits that month are recalculated with the slab the new total
+                reaches, even for a past month.
               </>
               <>
                 If it isn&apos;t in the report, press <Ui>Reject</Ui> and give a <Ui>Reason</Ui>. A verified deposit that the broker
-                reversed can be rejected too; its commission is removed.
+                reversed can be rejected too; its commission is removed and its month is recalculated.
               </>
             </Steps>
             <P>
@@ -1522,6 +1533,31 @@ export const crmDocs: DocModule[] = [
         ),
       },
       {
+        id: "delete",
+        title: "Deleting a project (CRM admins)",
+        body: (
+          <>
+            <P>
+              A project made by mistake or for testing can be deleted once it is empty. Usually you archive a finished project instead,
+              which keeps its history.
+            </P>
+            <Steps>
+              <>
+                Move its leads to another project (<Ui>Move to project</Ui> on each lead&apos;s page) and take everyone off its{" "}
+                <Ui>Team</Ui>.
+              </>
+              <>
+                At the bottom of the project page, press <Ui>Delete project</Ui>, type <i>DELETE</i> and confirm.
+              </>
+            </Steps>
+            <P>
+              Its tasks without a lead are deleted with it; tasks of leads that moved away go with their lead. The General project
+              can&apos;t be deleted.
+            </P>
+          </>
+        ),
+      },
+      {
         id: "status",
         title: "Project status",
         body: (
@@ -1846,18 +1882,20 @@ export const crmDocs: DocModule[] = [
                 <Ui>First deposit (%)</Ui>: every new customer&apos;s first deposit.
               </>
               <>
-                <Ui>Later deposits</Ui>: a <Ui>Base rate</Ui> for any amount, plus slabs from an amount. Press <Ui>Add slab</Ui>, enter the
-                starting amount in USD and its percent. A deposit earns the rate of the highest slab it reaches, on the whole amount: with
-                1% base, 2% from $10,000, 2.5% from $25,000 and 3% from $40,000, a $30,000 deposit earns 2.5% ($750) and a $5,000 one 1%
-                ($50).
+                <Ui>Later deposits</Ui>: a <Ui>Base rate</Ui> for any total, plus slabs from a <b>monthly total</b>. Press <Ui>Add slab</Ui>
+                , enter the starting total in USD and its percent. Each person&apos;s verified later deposits in a month (by deposit date,
+                from all their leads, 1st deposits excluded) are added up, and all of them earn the rate of the highest slab the total
+                reaches, on their whole amounts. With 1% base, 2% from $10,000, 2.5% from $25,000 and 3% from $40,000, later deposits of
+                $8,000, $6,000 and $15,000 in October ($29,000) all earn 2.5%: $200, $150 and $375.
               </>
             </List>
             <P>
               Press <Ui>Save commission rates</Ui>.
             </P>
             <Note kind="info">
-              A new rate applies to deposits verified from then on. Deposits that are already verified keep the rate they were verified
-              with.
+              A new first-deposit rate applies to 1st deposits verified from then on. New slabs apply to the current month straight away:
+              everyone&apos;s later deposits this month are recalculated when you save. Past months keep their rates unless one of their
+              deposits is verified or rejected later.
             </Note>
           </>
         ),

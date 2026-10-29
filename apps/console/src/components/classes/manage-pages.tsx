@@ -1,6 +1,7 @@
 import { classRoutes, type ClassSessionDto } from "@edge/contracts";
 import { dubaiParts } from "@edge/domain/classes/window";
 import { formatDate, formatDateTime } from "@edge/domain/dates";
+import { TableEmpty } from "@edge/ui/blocks/empty-state";
 import { Pagination } from "@edge/ui/blocks/pagination";
 import { Badge } from "@edge/ui/components/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@edge/ui/components/card";
@@ -61,11 +62,7 @@ export async function ClassesManager({ page = 1 }: { page?: number }) {
           </TableHeader>
           <TableBody>
             {upcoming.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-muted-foreground py-6 text-center">
-                  Nothing scheduled.
-                </TableCell>
-              </TableRow>
+              <TableEmpty colSpan={5} title="Nothing scheduled." />
             ) : (
               upcoming.map((s) => (
                 <TableRow key={s.id}>
@@ -116,6 +113,7 @@ export async function ClassesManager({ page = 1 }: { page?: number }) {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {past.rows.length === 0 ? <TableEmpty colSpan={4} title="No past or cancelled classes yet." /> : null}
             {past.rows.map((s) => (
               <TableRow key={s.id}>
                 <TableCell>
@@ -179,11 +177,7 @@ export async function RecordingsManager({ page = 1 }: { page?: number }) {
           </TableHeader>
           <TableBody>
             {recordings.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground py-6 text-center">
-                  No recordings yet.
-                </TableCell>
-              </TableRow>
+              <TableEmpty colSpan={6} title="No recordings yet." />
             ) : (
               recordings.map((r) => (
                 <TableRow key={r.id}>

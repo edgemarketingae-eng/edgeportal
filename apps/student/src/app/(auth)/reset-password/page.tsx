@@ -1,3 +1,4 @@
+import { Alert, AlertDescription } from "@edge/ui/components/alert";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -21,12 +22,14 @@ async function Body({ searchParams }: { searchParams: PageProps<"/reset-password
   const token = typeof sp.token === "string" ? sp.token : null;
   if (token && !sp.error) return <ResetPasswordForm token={token} />;
   return (
-    <p className="bg-destructive/10 text-destructive rounded-md px-3 py-2 text-sm">
-      This reset link is invalid or has expired.{" "}
-      <Link href="/forgot-password" className="underline">
-        Request a new one
-      </Link>
-      .
-    </p>
+    <Alert variant="destructive">
+      <AlertDescription>
+        This reset link is invalid or has expired.{" "}
+        <Link href="/forgot-password" className="underline">
+          Request a new one
+        </Link>
+        .
+      </AlertDescription>
+    </Alert>
   );
 }

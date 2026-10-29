@@ -34,6 +34,8 @@ const staffProfileSchema = new Schema(
     roleIds: { type: [ObjectId], default: [] },
     /** The current temporary password, encrypted; kept only until the person sets their own. */
     tempPasswordEnc: { type: String, default: null },
+    /** Bumped whenever this person's monthly commission is re-rated, so two re-rates can't interleave. */
+    commissionRev: { type: Number, default: 0 },
   },
   { ...timestamps, collection: "staffProfiles" },
 );

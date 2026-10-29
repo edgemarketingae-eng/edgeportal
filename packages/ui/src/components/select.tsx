@@ -1,155 +1,154 @@
 "use client";
 
-import * as React from "react";
+import { Children, Fragment, isValidElement, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { cn } from "cn";
-import { Select as SelectPrimitive } from "radix-ui";
-import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react";
+import { Combobox, type ComboboxOption } from "./combobox";
 
-function Select({ ...props }: React.ComponentProps<typeof SelectPrimitive.Root>) {
-  return <SelectPrimitive.Root data-slot="select" {...props} />;
-}
+/** Lists longer than this get a search box. */
+const SEARCH_ABOVE = 8;
 
-function SelectGroup({ className, ...props }: React.ComponentProps<typeof SelectPrimitive.Group>) {
-  return <SelectPrimitive.Group data-slot="select-group" className={cn("scroll-my-1 p-1", className)} {...props} />;
-}
+export type SelectProps = Omit<ComponentProps<"select">, "size" | "multiple"> & {
+  size?: "sm" | "md";
+  wrapperClassName?: string;
+  /** A search box above the list; on by default for lists of more than 8 options. */
+  searchable?: boolean;
+  /** Values matching a search, best first; the option labels are matched by default. */
+  filter?: (query: string) => readonly string[];
+  searchLabel?: string;
+  searchPlaceholder?: string;
+  /** What the closed button shows for the selected option; its label by default. */
+  renderValue?: (option: ComboboxOption) => ReactNode;
+};
 
-function SelectValue({ ...props }: React.ComponentProps<typeof SelectPrimitive.Value>) {
-  return <SelectPrimitive.Value data-slot="select-value" {...props} />;
-}
-
-function SelectTrigger({
+/**
+ * A custom dropdown written like a native <select>: the same props, with <option> and <optgroup> children. A hidden
+ * native select underneath holds the value, so it posts with FormData, goes back to `defaultValue` when its form
+ * resets, and `onChange` gets a real change event that bubbles (filter bars listen for those).
+ */
+function Select({
   className,
-  size = "default",
+  size = "md",
+  wrapperClassName,
   children,
+  value,
+  defaultValue,
+  onChange,
+  id,
+  disabled,
+  required,
+  searchable,
+  filter,
+  searchLabel,
+  searchPlaceholder,
+  renderValue,
+  "aria-label": ariaLabel,
+  "aria-invalid": ariaInvalid,
+  "aria-describedby": ariaDescribedBy,
   ...props
-}: React.ComponentProps<typeof SelectPrimitive.Trigger> & {
-  size?: "sm" | "default";
-}) {
-  return (
-    <SelectPrimitive.Trigger
-      data-slot="select-trigger"
-      data-size={size}
-      className={cn(
-        "border-input focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 data-placeholder:text-muted-foreground dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 flex w-fit items-center justify-between gap-1.5 rounded-lg border bg-transparent py-2 pr-2 pl-2.5 text-sm whitespace-nowrap transition-colors outline-none select-none focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:ring-3 data-[size=default]:h-8 data-[size=sm]:h-7 data-[size=sm]:rounded-[min(var(--radius-md),10px)] *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        className,
-      )}
-      {...props}
-    >
-      {children}
-      <SelectPrimitive.Icon asChild>
-        <ChevronDownIcon className="text-muted-foreground pointer-events-none size-4" />
-      </SelectPrimitive.Icon>
-    </SelectPrimitive.Trigger>
-  );
-}
+}: SelectProps) {
+  const options = collectOptions(children);
+  const native = useRef<HTMLSelectElement>(null);
+  const controlled = value !== undefined;
+  const [initial] = useState(defaultValue === undefined ? undefined : String(defaultValue));
+  const [own, setOwn] = useState(initial);
+  const [, setResets] = useState(0);
+  const wanted = controlled ? String(value) : own;
+  // Like a native select, a value that is not among the options shows (and posts) the first enabled option.
+  const selected = options.find((o) => o.value === wanted) ?? options.find((o) => !o.disabled) ?? options[0];
+  const current = selected?.value ?? "";
 
-function SelectContent({
-  className,
-  children,
-  position = "item-aligned",
-  align = "center",
-  ...props
-}: React.ComponentProps<typeof SelectPrimitive.Content>) {
+  useEffect(() => {
+    const form = native.current?.form;
+    if (!form) return;
+    // The reset event comes before the form resets. Afterwards the hidden select (controlled, so the browser just
+    // picked its first option) is rendered again, back on the default value or the parent's value.
+    const onReset = () =>
+      setTimeout(() => {
+        if (!controlled) setOwn(initial);
+        setResets((n) => n + 1);
+      });
+    form.addEventListener("reset", onReset);
+    return () => form.removeEventListener("reset", onReset);
+  }, [controlled, initial]);
+
+  /** Sets the hidden select as a person would, so React and the form both see a change event. */
+  function pick(next: string) {
+    const el = native.current;
+    if (!el || el.value === next) return;
+    el.value = next;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
   return (
-    <SelectPrimitive.Portal>
-      <SelectPrimitive.Content
-        data-slot="select-content"
-        data-align-trigger={position === "item-aligned"}
-        className={cn(
-          "bg-popover text-popover-foreground ring-foreground/10 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 relative z-50 max-h-(--radix-select-content-available-height) min-w-36 origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-lg shadow-md ring-1 duration-100 data-[align-trigger=true]:animate-none",
-          position === "popper" &&
-            "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
-          className,
-        )}
-        position={position}
-        align={align}
+    <div data-slot="select" className={cn("relative w-full", wrapperClassName)}>
+      {/* Under the button, so the browser's "please select" bubble points at it. */}
+      <select
+        ref={native}
+        aria-hidden
+        tabIndex={-1}
+        value={current}
+        disabled={disabled}
+        required={required}
+        onChange={(e) => {
+          if (!controlled) setOwn(e.target.value);
+          onChange?.(e);
+        }}
+        className="pointer-events-none absolute inset-0 size-full opacity-0"
         {...props}
       >
-        <SelectScrollUpButton />
-        <SelectPrimitive.Viewport
-          data-position={position}
-          className={cn(
-            "data-[position=popper]:h-(--radix-select-trigger-height) data-[position=popper]:w-full data-[position=popper]:min-w-(--radix-select-trigger-width)",
-            position === "popper" && "",
-          )}
-        >
-          {children}
-        </SelectPrimitive.Viewport>
-        <SelectScrollDownButton />
-      </SelectPrimitive.Content>
-    </SelectPrimitive.Portal>
+        {children}
+      </select>
+      <Combobox
+        id={id}
+        value={current}
+        onChange={pick}
+        options={options}
+        searchable={searchable ?? options.length > SEARCH_ABOVE}
+        filter={filter}
+        searchLabel={searchLabel}
+        searchPlaceholder={searchPlaceholder}
+        disabled={disabled}
+        size={size}
+        className={className}
+        aria-label={ariaLabel}
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
+        aria-required={required || undefined}
+      >
+        <span className={cn("min-w-0 truncate", !current && "text-muted-foreground")}>
+          {selected ? (renderValue ? renderValue(selected) : selected.label) : null}
+        </span>
+      </Combobox>
+    </div>
   );
 }
 
-function SelectLabel({ className, ...props }: React.ComponentProps<typeof SelectPrimitive.Label>) {
-  return (
-    <SelectPrimitive.Label data-slot="select-label" className={cn("text-muted-foreground px-1.5 py-1 text-xs", className)} {...props} />
-  );
+interface OptionProps {
+  value?: string | number | readonly string[];
+  label?: string;
+  disabled?: boolean;
+  children?: ReactNode;
 }
 
-function SelectItem({ className, children, ...props }: React.ComponentProps<typeof SelectPrimitive.Item>) {
-  return (
-    <SelectPrimitive.Item
-      data-slot="select-item"
-      className={cn(
-        "focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground relative flex w-full cursor-default items-center gap-1.5 rounded-md py-1 pr-8 pl-1.5 text-sm outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
-        className,
-      )}
-      {...props}
-    >
-      <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center">
-        <SelectPrimitive.ItemIndicator>
-          <CheckIcon className="pointer-events-none" />
-        </SelectPrimitive.ItemIndicator>
-      </span>
-      <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
-    </SelectPrimitive.Item>
-  );
+/** The <option>s among the children, through arrays, fragments and <optgroup>s. */
+function collectOptions(children: ReactNode, group?: string, out: ComboboxOption[] = []) {
+  Children.forEach(children, (child) => {
+    if (!isValidElement<OptionProps>(child)) return;
+    if (child.type === Fragment) collectOptions(child.props.children, group, out);
+    else if (child.type === "optgroup") collectOptions(child.props.children, child.props.label, out);
+    else if (child.type === "option") {
+      const label = child.props.label ?? textOf(child.props.children);
+      out.push({ value: String(child.props.value ?? label), label, disabled: child.props.disabled, group });
+    }
+  });
+  return out;
 }
 
-function SelectSeparator({ className, ...props }: React.ComponentProps<typeof SelectPrimitive.Separator>) {
-  return (
-    <SelectPrimitive.Separator
-      data-slot="select-separator"
-      className={cn("bg-border pointer-events-none -mx-1 my-1 h-px", className)}
-      {...props}
-    />
-  );
+function textOf(node: ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join("");
+  if (isValidElement<{ children?: ReactNode }>(node)) return textOf(node.props.children);
+  return "";
 }
 
-function SelectScrollUpButton({ className, ...props }: React.ComponentProps<typeof SelectPrimitive.ScrollUpButton>) {
-  return (
-    <SelectPrimitive.ScrollUpButton
-      data-slot="select-scroll-up-button"
-      className={cn("bg-popover z-10 flex cursor-default items-center justify-center py-1 [&_svg:not([class*='size-'])]:size-4", className)}
-      {...props}
-    >
-      <ChevronUpIcon />
-    </SelectPrimitive.ScrollUpButton>
-  );
-}
-
-function SelectScrollDownButton({ className, ...props }: React.ComponentProps<typeof SelectPrimitive.ScrollDownButton>) {
-  return (
-    <SelectPrimitive.ScrollDownButton
-      data-slot="select-scroll-down-button"
-      className={cn("bg-popover z-10 flex cursor-default items-center justify-center py-1 [&_svg:not([class*='size-'])]:size-4", className)}
-      {...props}
-    >
-      <ChevronDownIcon />
-    </SelectPrimitive.ScrollDownButton>
-  );
-}
-
-export {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectScrollDownButton,
-  SelectScrollUpButton,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-};
+export { Select };

@@ -4,9 +4,9 @@ import { Button } from "@edge/ui/components/button";
 import { Checkbox } from "@edge/ui/components/checkbox";
 import { Label } from "@edge/ui/components/label";
 import { Textarea } from "@edge/ui/components/textarea";
-import { NativeSelect } from "@edge/ui/components/native-select";
+import { Select } from "@edge/ui/components/select";
 import { Field, FormError, type ActionState } from "@edge/ui/forms/field";
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { addRecordingAction, scheduleClassAction } from "@/app/staff/class-actions";
 
@@ -42,23 +42,23 @@ export function ScheduleClassForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="grid content-start gap-2">
           <Label htmlFor="batchId">Batch</Label>
-          <NativeSelect id="batchId" name="batchId" defaultValue={v?.batchId} required>
+          <Select id="batchId" name="batchId" defaultValue={v?.batchId} required>
             {batches.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
               </option>
             ))}
-          </NativeSelect>
+          </Select>
         </div>
         <div className="grid content-start gap-2">
           <Label htmlFor="hostId">Host (Meet organizer)</Label>
-          <NativeSelect id="hostId" name="hostId" defaultValue={v?.hostId ?? defaultHostId}>
+          <Select id="hostId" name="hostId" defaultValue={v?.hostId ?? defaultHostId}>
             {hosts.map((h) => (
               <option key={h.id} value={h.id}>
                 {h.name}
               </option>
             ))}
-          </NativeSelect>
+          </Select>
         </div>
       </div>
       <Field label="Title" name="title" placeholder="Session 4: Supply and demand zones" defaultValue={v?.title} required />
@@ -95,8 +95,8 @@ export function ScheduleClassForm({
           <Checkbox name="notify" defaultChecked={v ? v.notify === "on" : true} /> Email the batch
         </label>
       </div>
-      <Button className="w-fit" disabled={pending}>
-        {pending ? "Scheduling…" : "Schedule class"}
+      <Button className="w-fit" pending={pending}>
+        Schedule class
       </Button>
     </form>
   );
@@ -112,30 +112,40 @@ export function AddRecordingForm({
   const [state, action, pending] = useActionState(addRecordingAction, {} as ActionState);
   const ref = useResetOnOk(state);
   const v = state.values;
+  // The class list shows the chosen batch's classes; a failed save brings back the submitted batch.
+  const initialBatch = v?.batchId ?? batches[0]?.id ?? "";
+  const [batchId, setBatchId] = useState(initialBatch);
+  const [seenBatch, setSeenBatch] = useState(initialBatch);
+  if (initialBatch !== seenBatch) {
+    setSeenBatch(initialBatch);
+    setBatchId(initialBatch);
+  }
   return (
     <form key={formKey(state)} ref={ref} action={action} className="grid gap-4">
       <FormError state={state} />
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="grid content-start gap-2">
           <Label htmlFor="rec-batch">Batch</Label>
-          <NativeSelect id="rec-batch" name="batchId" defaultValue={v?.batchId} required>
+          <Select id="rec-batch" name="batchId" value={batchId} onChange={(e) => setBatchId(e.target.value)} required>
             {batches.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
               </option>
             ))}
-          </NativeSelect>
+          </Select>
         </div>
         <div className="grid content-start gap-2">
           <Label htmlFor="classSessionId">Class (optional)</Label>
-          <NativeSelect id="classSessionId" name="classSessionId" defaultValue={v?.classSessionId ?? ""}>
+          <Select key={batchId} id="classSessionId" name="classSessionId" defaultValue={v?.classSessionId ?? ""}>
             <option value="">Not linked to a class</option>
-            {sessions.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.label}
-              </option>
-            ))}
-          </NativeSelect>
+            {sessions
+              .filter((s) => s.batchId === batchId)
+              .map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
+          </Select>
         </div>
       </div>
       <Field
@@ -154,8 +164,8 @@ export function AddRecordingForm({
       <label className="flex items-center gap-2 text-sm">
         <Checkbox name="publish" defaultChecked={v ? v.publish === "on" : true} /> Publish to students now
       </label>
-      <Button className="w-fit" disabled={pending}>
-        {pending ? "Adding…" : "Add recording"}
+      <Button className="w-fit" pending={pending}>
+        Add recording
       </Button>
     </form>
   );

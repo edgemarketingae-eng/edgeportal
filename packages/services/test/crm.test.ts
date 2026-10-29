@@ -42,6 +42,7 @@ import {
   createStaff,
   createTask,
   deleteLead,
+  deleteProject,
   deliverEmail,
   dueTaskCount,
   getBoard,
@@ -368,6 +369,45 @@ describe("moving leads between projects", () => {
     await expect(moveLeadToProject(theirs, g, a.actor, await a.scope())).rejects.toBeInstanceOf(NotFoundError);
     await moveLeadToProject(pool, g, pm.actor, await pm.scope());
     expect(String((await Lead.findById(pool).lean())!.projectId)).toBe(g);
+  });
+});
+
+describe("deleting projects", () => {
+  it("lets CRM admins delete an empty project (no leads, no team, never General), its loose tasks with it", async () => {
+    const admin = await staff("crm_admin");
+    const mgr = await staff("crm_manager");
+    const a = await staff("sales_executive");
+    const g = await general();
+    const as = async () => admin.scope();
+    const P = await createProject({ name: "Test drive", memberIds: [a.id] }, admin.actor, await as());
+    const lead = await createLead({ projectId: P, name: "Stray", phone: "+971503200001", source: "WEBSITE" }, admin.actor, await as());
+    const dup = await createLead({ projectId: P, name: "Stray again", phone: "+971503200002", source: "WEBSITE" }, admin.actor, await as());
+    const loose = await createTask({ projectId: P, title: "Plan the drive" }, admin.actor, await as());
+    await addTaskComment(loose, "Draft ready", admin.actor, await as());
+    const done = await createTask({ leadId: lead, title: "Call" }, admin.actor, await as());
+    await completeTask(done, {}, admin.actor, await as());
+
+    await expect(deleteProject(P, mgr.actor, await mgr.scope())).rejects.toBeInstanceOf(NotFoundError); // CRM admins only
+    await expect(deleteProject(g, admin.actor, await as())).rejects.toThrow(/General/);
+    await expect(deleteProject(P, admin.actor, await as())).rejects.toThrow(/1 person on its team/);
+    await removeProjectMember(P, a.id, admin.actor, await as());
+    await expect(deleteProject(P, admin.actor, await as())).rejects.toThrow(/Move its 2 leads/);
+
+    // A merged duplicate stays filed under the project; a moved lead leaves its closed task behind.
+    await mergeLeads(lead, dup, admin.actor, await as());
+    await moveLeadToProject(lead, g, admin.actor, await as());
+    expect(String((await CrmTask.findById(done).lean())!.projectId)).toBe(P);
+    expect((await getProject(P, await as())).project.stats.team).toBe(0);
+    await deleteProject(P, admin.actor, await as());
+
+    expect(await Project.exists({ _id: P })).toBeNull();
+    expect(await CrmTask.exists({ _id: loose })).toBeNull();
+    expect(await TaskComment.countDocuments({ taskId: loose })).toBe(0);
+    // Both follow their lead.
+    expect(String((await CrmTask.findById(done).lean())!.projectId)).toBe(g);
+    expect(String((await Lead.findById(dup).lean())!.projectId)).toBe(g);
+    expect(await AuditLog.countDocuments({ action: "project.delete", entityId: P })).toBe(1);
+    await expect(getProject(P, await as())).rejects.toBeInstanceOf(NotFoundError);
   });
 });
 

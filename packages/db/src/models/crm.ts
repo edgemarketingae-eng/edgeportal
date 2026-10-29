@@ -257,7 +257,9 @@ leadConversionSchema.index({ convertedAt: -1 });
 
 /**
  * A deposit the lead made at the affiliate broker, logged by sales and verified by a commission
- * manager. Commission (rate snapshot + amount) is fixed when the deposit is verified.
+ * manager. A first deposit's commission is fixed when it is verified. Later deposits are rated by the
+ * month: all verified later deposits credited to one person with a deposit date in one month earn the
+ * slab rate their total reaches, re-rated whenever one of them is verified or rejected.
  */
 const leadDepositSchema = new Schema(
   {
@@ -278,12 +280,15 @@ const leadDepositSchema = new Schema(
     rejectReason: { type: String, default: null },
     commissionPct: { type: String, default: null },
     commissionMinor: { ...money(false), default: null },
+    /** A verified later deposit: the month's later-deposit total its rate was picked by (null = not month-rated yet). */
+    slabBaseMinor: { ...money(false), default: null },
   },
   { ...timestamps, collection: "leadDeposits" },
 );
 leadDepositSchema.index({ leadId: 1, depositedAt: -1 });
 leadDepositSchema.index({ status: 1, createdAt: -1 });
 leadDepositSchema.index({ creditedToId: 1, status: 1, depositedAt: -1 });
+leadDepositSchema.index({ creditedToId: 1, sequence: 1, status: 1, depositedAt: 1 });
 
 export const Project = model("Project", projectSchema);
 export const Lead = model("Lead", leadSchema);

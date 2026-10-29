@@ -6,12 +6,14 @@ import { formatDate } from "@edge/domain/dates";
 import { formatMoney } from "@edge/domain/money";
 import { FilterBar, FilterResults, FilterScope, FilterSelect } from "@edge/ui/blocks/filter-bar";
 import { Pagination } from "@edge/ui/blocks/pagination";
+import { TableEmpty } from "@edge/ui/blocks/empty-state";
 import { StatCard } from "@edge/ui/blocks/stat-card";
 import { DepositStatusBadge } from "@edge/ui/blocks/status-badges";
 import { Card } from "@edge/ui/components/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@edge/ui/components/table";
 import { PageHeader } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
+import { Wallet } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DeleteDepositButton, RejectDepositDialog, VerifyDepositDialog } from "@/components/crm/deposit-actions";
@@ -60,7 +62,7 @@ export default async function DepositsPage(props: PageProps<"/deposits">) {
         ) : null}
       </FilterBar>
       <FilterResults>
-        <div className="mb-6 grid gap-4 sm:grid-cols-3">
+        <div className={`mb-6 grid gap-4 ${s.month ? "sm:grid-cols-2 xl:grid-cols-4" : "sm:grid-cols-3"}`}>
           <StatCard
             label="Waiting for verification"
             value={s.pendingCount}
@@ -74,44 +76,55 @@ export default async function DepositsPage(props: PageProps<"/deposits">) {
             hint={`${s.verifiedCount} deposit${s.verifiedCount === 1 ? "" : "s"}`}
           />
           <StatCard label={d.manage ? "Commission earned" : "My commission"} value={usd(s.commissionMinor)} hint="on verified deposits" />
+          {s.month ? (
+            <StatCard
+              label="Later deposits this month"
+              value={usd(s.month.laterMinor)}
+              hint={
+                `${fractionToPercent(s.month.pct)}% on all of them` +
+                (s.month.next
+                  ? ` · ${usd(s.month.next.fromMinor - s.month.laterMinor)} more for ${fractionToPercent(s.month.next.pct)}%`
+                  : " · top slab")
+              }
+            />
+          ) : null}
         </div>
         <Card className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Date</TableHead>
+                <TableHead className="hidden md:table-cell">Date</TableHead>
                 <TableHead>Lead</TableHead>
-                <TableHead>Deposit</TableHead>
+                <TableHead className="hidden lg:table-cell">Deposit</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
-                <TableHead>Counts for</TableHead>
+                <TableHead className="hidden md:table-cell">Counts for</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">Commission</TableHead>
+                <TableHead className="hidden text-right sm:table-cell">Commission</TableHead>
                 <TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
               {d.rows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-muted-foreground py-6 text-center">
-                    No deposits match.
-                  </TableCell>
-                </TableRow>
+                <TableEmpty colSpan={8} icon={<Wallet />} title="No deposits match.">
+                  Deposits are logged on the lead page, from its Deposits card.
+                </TableEmpty>
               ) : (
                 d.rows.map((x) => (
                   <TableRow key={x.id}>
-                    <TableCell className="whitespace-nowrap">{formatDate(x.depositedAt)}</TableCell>
+                    <TableCell className="hidden whitespace-nowrap md:table-cell">{formatDate(x.depositedAt)}</TableCell>
                     <TableCell>
                       <Link href={`/leads/${x.lead.id}`} className="text-edge-emerald font-semibold hover:underline">
                         {x.lead.name}
                       </Link>
                       <span className="text-muted-foreground block text-xs">
+                        <span className="md:hidden">{formatDate(x.depositedAt)} · </span>
                         JetaFX {x.jetaFxClientId ?? "–"}
                         {x.reference ? ` · ref ${x.reference}` : ""}
                       </span>
                     </TableCell>
-                    <TableCell>{DEPOSIT_SEQUENCE_LABELS[x.sequence]}</TableCell>
+                    <TableCell className="hidden lg:table-cell">{DEPOSIT_SEQUENCE_LABELS[x.sequence]}</TableCell>
                     <TableCell className="text-right font-semibold tabular-nums">{formatMoney(x.amountMinor, x.currency)}</TableCell>
-                    <TableCell>
+                    <TableCell className="hidden md:table-cell">
                       {x.creditedTo?.name ?? "–"}
                       {x.loggedBy && x.loggedBy.id !== x.creditedTo?.id ? (
                         <span className="text-muted-foreground block text-xs">logged by {x.loggedBy.name}</span>
@@ -126,12 +139,14 @@ export default async function DepositsPage(props: PageProps<"/deposits">) {
                         <span className="text-muted-foreground block text-xs">by {x.reviewedBy.name}</span>
                       ) : null}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">
+                    <TableCell className="hidden text-right tabular-nums sm:table-cell">
                       {x.commissionMinor != null ? (
                         <>
                           {formatMoney(x.commissionMinor, x.currency)}
                           {x.commissionPct ? (
-                            <span className="text-muted-foreground block text-xs">{fractionToPercent(x.commissionPct)}%</span>
+                            <span className="text-muted-foreground block text-xs">
+                              {fractionToPercent(x.commissionPct)}%{x.slabBaseMinor != null ? ` · month ${usd(x.slabBaseMinor)}` : ""}
+                            </span>
                           ) : null}
                         </>
                       ) : (

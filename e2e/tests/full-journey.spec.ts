@@ -29,7 +29,7 @@ test("1. student signs up, verifies phone and pays an advance", async ({ page })
   await expect(page).toHaveURL(/dashboard/);
   await page.getByRole("link", { name: "Choose a payment plan" }).first().click();
   await page.getByRole("button", { name: /Pay an advance/ }).click();
-  await page.getByRole("button", { name: "AED 300.00" }).click();
+  await page.getByRole("radio", { name: "AED 300.00" }).click();
   await page.getByText("Tabby", { exact: true }).click();
   await expect(page.getByText("VAT (5%)")).toBeVisible();
   await page.getByRole("button", { name: /^Pay AED/ }).click();

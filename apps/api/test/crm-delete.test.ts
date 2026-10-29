@@ -125,4 +125,17 @@ describe("deleting leads and temporary passwords", () => {
     await request(app).post("/api/auth/reset-password").set("Origin", CRM).send({ token, newPassword: "AnotherPass!2026" }).expect(200);
     expect((await StaffProfile.findById(id).lean())!.tempPasswordEnc).toBeNull();
   });
+
+  it("only CRM admins delete projects, and only empty ones", async () => {
+    const mgr = await staffAgent("crm_manager");
+    const admin = await staffAgent("crm_admin");
+    const P = (await mgr.agent.post("/api/v1/crm/projects").set(INTERNAL).send({ name: "Mistake" }).expect(200)).body.id as string;
+    await mgr.agent.post(`/api/v1/crm/projects/${P}/delete`).set(INTERNAL).expect(403);
+    await admin.agent
+      .post(`/api/v1/crm/projects/${await generalId(admin.agent)}/delete`)
+      .set(INTERNAL)
+      .expect(422);
+    await admin.agent.post(`/api/v1/crm/projects/${P}/delete`).set(INTERNAL).expect(200);
+    await admin.agent.get(`/api/v1/crm/projects/${P}`).set(INTERNAL).expect(404);
+  });
 });

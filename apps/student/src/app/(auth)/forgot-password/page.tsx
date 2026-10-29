@@ -8,7 +8,9 @@ import { useActionState } from "react";
 
 export default function ForgotPasswordPage() {
   const [state, action, pending] = useActionState(async (_prev: ActionState, form: FormData): Promise<ActionState> => {
-    const email = String(form.get("email") ?? "").trim().toLowerCase();
+    const email = String(form.get("email") ?? "")
+      .trim()
+      .toLowerCase();
     if (!email.includes("@")) return { fieldErrors: { email: "Enter a valid email" }, values: { email } };
     const { error } = await authClient.requestPasswordReset({ email, redirectTo: "/reset-password" });
     if (error) return { error: authErrorMessage(error), values: { email } };
@@ -18,16 +20,26 @@ export default function ForgotPasswordPage() {
     <div className="grid gap-6">
       <div>
         <h2 className="font-display text-2xl uppercase">Reset password</h2>
-        <p className="text-muted-foreground mt-1 text-sm">We will email you a link to choose a new password. You can also sign in with a one-time code to your mobile.</p>
+        <p className="text-muted-foreground mt-1 text-sm">
+          We will email you a link to choose a new password. You can also sign in with a one-time code to your mobile.
+        </p>
       </div>
       {state.ok ? (
         <FormMessage state={state} />
       ) : (
         <form action={action} className="grid gap-4">
           <FormError state={state} />
-          <Field label="Email" name="email" type="email" autoComplete="email" defaultValue={state.values?.email} error={state.fieldErrors?.email} required />
-          <Button type="submit" size="lg" disabled={pending}>
-            {pending ? "Sending…" : "Send reset link"}
+          <Field
+            label="Email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            defaultValue={state.values?.email}
+            error={state.fieldErrors?.email}
+            required
+          />
+          <Button type="submit" size="lg" pending={pending}>
+            Send reset link
           </Button>
         </form>
       )}

@@ -4,6 +4,7 @@ import { useOptimistic, useTransition } from "react";
 import { toast } from "sonner";
 import { Badge } from "../components/badge";
 import { Switch } from "../components/switch";
+import { tone } from "../lib/tones";
 import type { ActionState } from "../forms/field";
 
 type Action = (prev: ActionState, form: FormData) => Promise<ActionState>;
@@ -45,14 +46,16 @@ export function AvailabilitySwitch({
           })
         }
       />
-      {showLabel ? <span className={on ? "text-edge-emerald" : "text-amber-700"}>{on ? "Receiving leads" : "Off"}</span> : null}
+      {showLabel ? (
+        <span className={on ? "text-edge-emerald" : "text-amber-700 dark:text-amber-300"}>{on ? "Receiving leads" : "Off"}</span>
+      ) : null}
     </label>
   );
 }
 
 export function OffBadge() {
   return (
-    <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800" title="No new leads are assigned automatically">
+    <Badge variant="outline" className={tone.warning} title="No new leads are assigned automatically">
       Off
     </Badge>
   );

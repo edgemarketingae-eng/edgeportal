@@ -2,10 +2,12 @@ import { crmRoutes } from "@edge/contracts";
 import { LEAD_STAGES } from "@edge/domain/crm/enums";
 import { LEAD_STAGE_LABELS, PROJECT_STATUS_LABELS } from "@edge/domain/crm/labels";
 import { formatDate } from "@edge/domain/dates";
+import { TableEmpty } from "@edge/ui/blocks/empty-state";
+import { Alert, AlertDescription } from "@edge/ui/components/alert";
 import { StatCard } from "@edge/ui/blocks/stat-card";
 import { Badge } from "@edge/ui/components/badge";
 import { Button } from "@edge/ui/components/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@edge/ui/components/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@edge/ui/components/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@edge/ui/components/table";
 import { PageHeader } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
@@ -15,7 +17,7 @@ import Link from "next/link";
 import { FollowUpDue } from "@/components/crm/due";
 import { LeadsTable } from "@/components/crm/leads-table";
 import { ProjectForm } from "@/components/crm/project-form";
-import { AddMemberDialog, RemoveMemberButton } from "@/components/crm/project-team";
+import { AddMemberDialog, DeleteProjectDialog, RemoveMemberButton } from "@/components/crm/project-team";
 import { can, load, requireCrm } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Project" };
@@ -29,9 +31,18 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
   const canSetManagers = can(v, "crm.projects.manage");
   const max = Math.max(1, ...FUNNEL.map((s) => byStage[s] ?? 0));
   const notOnTeam = options.staff.filter((s) => !team.some((t) => t.id === s.id));
+  const leadCount = Object.values(byStage).reduce((sum, n) => sum + n, 0);
+  const canDelete = can(v, "crm.projects.delete") && !p.isDefault;
+  const deleteBlockers = [
+    leadCount ? `move its ${leadCount} lead${leadCount === 1 ? "" : "s"} to another project` : null,
+    p.stats.team ? `remove ${p.stats.team === 1 ? "the 1 person" : `the ${p.stats.team} people`} on its team` : null,
+  ]
+    .filter(Boolean)
+    .join(" and ");
   return (
     <>
       <PageHeader
+        back={{ href: "/projects", label: "Projects" }}
         help="/docs/projects"
         title={p.name}
         description={
@@ -64,9 +75,9 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
         }
       />
       {sp.created ? (
-        <p className="border-edge-emerald/30 bg-edge-mint/40 text-edge-emerald mb-4 rounded-md border px-3 py-2 text-sm">
-          Project created.
-        </p>
+        <Alert variant="success" className="mb-4">
+          <AlertDescription>Project created.</AlertDescription>
+        </Alert>
       ) : null}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
@@ -154,11 +165,7 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
               </TableHeader>
               <TableBody>
                 {team.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-muted-foreground py-6 text-center">
-                      Nobody on the team yet.
-                    </TableCell>
-                  </TableRow>
+                  <TableEmpty colSpan={5} title="Nobody on the team yet." />
                 ) : (
                   team.map((m) => (
                     <TableRow key={m.id}>
@@ -180,7 +187,9 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
                       </TableCell>
                       {p.canManage ? (
                         <TableCell className="text-right">
-                          {m.role === "member" || canSetManagers ? <RemoveMemberButton projectId={p.id} userId={m.id} /> : null}
+                          {m.role === "member" || canSetManagers ? (
+                            <RemoveMemberButton projectId={p.id} userId={m.id} name={m.name} />
+                          ) : null}
                         </TableCell>
                       ) : null}
                     </TableRow>
@@ -254,6 +263,24 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
               isDefault={p.isDefault}
             />
           </CardContent>
+        </Card>
+      ) : null}
+
+      {canDelete ? (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Delete project</CardTitle>
+            <CardDescription>
+              {deleteBlockers
+                ? `Only an empty project can be deleted: ${deleteBlockers} first.`
+                : "Nothing is left in this project: no leads and no team."}
+            </CardDescription>
+          </CardHeader>
+          {deleteBlockers ? null : (
+            <CardContent>
+              <DeleteProjectDialog projectId={p.id} name={p.name} />
+            </CardContent>
+          )}
         </Card>
       ) : null}
     </>

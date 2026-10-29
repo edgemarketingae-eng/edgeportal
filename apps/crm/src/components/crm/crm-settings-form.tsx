@@ -55,8 +55,8 @@ export function CrmSettingsForm({ s }: { s: CrmSettingsDto }) {
         <Label htmlFor="lostReasons">Lost reasons (one per line)</Label>
         <Textarea id="lostReasons" name="lostReasons" rows={6} defaultValue={v?.lostReasons ?? s.lostReasons.join("\n")} />
       </div>
-      <Button className="w-fit" disabled={pending}>
-        {pending ? "Saving…" : "Save CRM settings"}
+      <Button className="w-fit" pending={pending}>
+        Save CRM settings
       </Button>
     </form>
   );

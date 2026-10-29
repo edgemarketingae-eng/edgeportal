@@ -14,7 +14,10 @@ export default function TwoFactorPage() {
   const [state, action, pending] = useActionState(async (_prev: ActionState, form: FormData): Promise<ActionState> => {
     const code = String(form.get("code") ?? "").replace(/\s/g, "");
     const trustDevice = form.get("trustDevice") === "on";
-    const { error } = mode === "totp" ? await authClient.twoFactor.verifyTotp({ code, trustDevice }) : await authClient.twoFactor.verifyBackupCode({ code, trustDevice });
+    const { error } =
+      mode === "totp"
+        ? await authClient.twoFactor.verifyTotp({ code, trustDevice })
+        : await authClient.twoFactor.verifyBackupCode({ code, trustDevice });
     if (error) return { error: authErrorMessage(error, "That code did not work. Try again.") };
     return hardNavigate("/");
   }, {});
@@ -37,8 +40,8 @@ export default function TwoFactorPage() {
         <label className="flex items-center gap-2 text-sm">
           <Checkbox name="trustDevice" /> Trust this device for 30 days
         </label>
-        <Button size="lg" disabled={pending}>
-          {pending ? "Verifying…" : "Verify"}
+        <Button size="lg" pending={pending}>
+          Verify
         </Button>
         <Button type="button" variant="link" onClick={() => setMode(mode === "totp" ? "backup" : "totp")}>
           {mode === "totp" ? "Use a backup code instead" : "Use the authenticator app"}

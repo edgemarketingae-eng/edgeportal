@@ -4,17 +4,18 @@ import type { LeadListItem } from "@edge/contracts";
 import { ROUND_ROBIN } from "@edge/domain/crm/enums";
 import { LEAD_SOURCE_LABELS } from "@edge/domain/crm/labels";
 import { whatsappDigits } from "@edge/domain/crm/machine";
+import { TableEmpty } from "@edge/ui/blocks/empty-state";
 import { LeadStageBadge, TemperatureBadge } from "@edge/ui/blocks/status-badges";
 import { Button } from "@edge/ui/components/button";
 import { Card } from "@edge/ui/components/card";
 import { Checkbox } from "@edge/ui/components/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@edge/ui/components/dialog";
-import { NativeSelect } from "@edge/ui/components/native-select";
+import { Select } from "@edge/ui/components/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@edge/ui/components/table";
 import { FormError, type ActionState } from "@edge/ui/forms/field";
-import { MessageCircle, Phone, Trash2, X } from "lucide-react";
+import { MessageCircle, Phone, SearchX, Trash2, X } from "lucide-react";
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useActionState, useState, type ComponentProps } from "react";
 import { toast } from "sonner";
 import { bulkAssignAction, bulkDeleteLeadsAction } from "@/lib/actions/leads";
 import { UNASSIGN } from "@/lib/bulk";
@@ -83,8 +84,8 @@ function BulkDelete({ target, onDone }: { target: Target; onDone: () => void }) 
               <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" variant="destructive" disabled={pending}>
-                {pending ? "Working…" : "Delete leads"}
+              <Button type="submit" variant="destructive" pending={pending}>
+                Delete leads
               </Button>
             </DialogFooter>
           </form>
@@ -115,7 +116,7 @@ function BulkAssign({
   return (
     <form action={formAction} className="flex flex-wrap items-center gap-2">
       <TargetFields t={target} />
-      <NativeSelect size="sm" wrapperClassName="w-auto min-w-48" name="ownerId" aria-label="Assign to" defaultValue="" required>
+      <Select size="sm" wrapperClassName="w-auto min-w-48" name="ownerId" aria-label="Assign to" defaultValue="" required>
         <option value="" disabled>
           Assign to…
         </option>
@@ -127,9 +128,9 @@ function BulkAssign({
           </option>
         ))}
         <option value={UNASSIGN}>Unassign (back to the pool)</option>
-      </NativeSelect>
-      <Button type="submit" size="sm" variant="outline" disabled={pending}>
-        {pending ? "Working…" : "Assign"}
+      </Select>
+      <Button type="submit" size="sm" variant="outline" pending={pending}>
+        Assign
       </Button>
     </form>
   );
@@ -146,12 +147,15 @@ export function LeadsTable({
   filters,
   assignees,
   canDelete = false,
+  empty,
 }: {
   rows: LeadListItem[];
   total: number;
   filters: string;
   assignees: { id: string; name: string; available?: boolean }[];
   canDelete?: boolean;
+  /** What an empty list says; "no leads match these filters" by default. */
+  empty?: Omit<ComponentProps<typeof TableEmpty>, "colSpan">;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [allMatching, setAllMatching] = useState(false);
@@ -245,11 +249,14 @@ export function LeadsTable({
           </TableHeader>
           <TableBody>
             {rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={selectable ? 9 : 8} className="text-muted-foreground py-10 text-center">
-                  No leads match these filters.
-                </TableCell>
-              </TableRow>
+              <TableEmpty
+                colSpan={selectable ? 9 : 8}
+                {...(empty ?? {
+                  icon: <SearchX />,
+                  title: "No leads match these filters.",
+                  children: "Try another view, or clear the filters.",
+                })}
+              />
             ) : (
               rows.map((l) => (
                 <TableRow key={l.id} data-state={selected.has(l.id) ? "selected" : undefined}>

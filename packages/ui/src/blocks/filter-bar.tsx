@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -15,7 +15,7 @@ import {
   type ReactNode,
 } from "react";
 import { Input } from "../components/input";
-import { NativeSelect } from "../components/native-select";
+import { Select } from "../components/select";
 import { cn } from "../lib/utils";
 
 /**
@@ -179,10 +179,20 @@ export function FilterBar({
     navigate(qs ? `${pathname}?${qs}` : pathname, { replace });
   }
 
+  /** Back to the unfiltered list, keeping only what the page fixes with hidden fields (e.g. the current view). */
+  function clear() {
+    const params = new URLSearchParams();
+    for (const el of form.current?.querySelectorAll<HTMLInputElement>('input[type="hidden"]') ?? [])
+      if (el.name && el.value) params.append(el.name, el.value);
+    const qs = params.toString();
+    navigate(qs ? `${pathname}?${qs}` : pathname);
+  }
+
   return (
     <form
       ref={form}
       method="get"
+      data-slot="filter-bar"
       className={cn("mb-4 flex flex-wrap items-center gap-2", className)}
       onSubmit={(e) => {
         e.preventDefault();
@@ -197,6 +207,15 @@ export function FilterBar({
     >
       {search ? <SearchInput q={q ?? ""} placeholder={placeholder} onSearch={() => form.current && apply(form.current, true)} /> : null}
       {children}
+      {/* Shown (by globals.css) only while a filter or the search box is set. */}
+      <button
+        type="button"
+        data-slot="filter-clear"
+        onClick={clear}
+        className="text-muted-foreground hover:text-foreground hover:bg-muted inline-flex h-9 items-center gap-1 rounded-lg px-2.5 text-sm font-medium"
+      >
+        <X aria-hidden className="size-3.5" /> Clear filters
+      </button>
       <button type="submit" className="sr-only">
         Apply filters
       </button>
@@ -223,18 +242,37 @@ export function FilterSelect({
   value?: string;
   options: [string, string][];
   label: string;
-  /** Text of the "no filter" option; defaults to "<label>: all". */
+  /** Text of the "no filter" option (always the first); defaults to "<label>: all". */
   allLabel?: string;
 }) {
   return (
     // Keyed by the value so it shows the new one when the URL changes without this select (a link, Back).
-    <NativeSelect size="sm" wrapperClassName="w-auto" key={value ?? ""} name={name} defaultValue={value ?? ""} aria-label={label}>
+    <Select
+      size="sm"
+      wrapperClassName="w-auto"
+      key={value ?? ""}
+      name={name}
+      defaultValue={value ?? ""}
+      aria-label={label}
+      searchLabel={`Search ${label.toLowerCase()}`}
+      // A set filter keeps its name on the button ("Stage: Contacted") and stands out from the unset ones.
+      renderValue={(o) =>
+        o.value ? (
+          <>
+            <span className="text-muted-foreground">{label}:</span> {o.label}
+          </>
+        ) : (
+          o.label
+        )
+      }
+      className={value ? "border-edge-emerald/45 bg-edge-mint/25" : undefined}
+    >
       <option value="">{allLabel ?? `${label}: all`}</option>
       {options.map(([v, l]) => (
         <option key={v} value={v}>
           {l}
         </option>
       ))}
-    </NativeSelect>
+    </Select>
   );
 }

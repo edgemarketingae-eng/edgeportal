@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { E2E } from "../config";
-import { crmSignIn, expectNoReload } from "./helpers";
+import { crmSignIn, expectNoReload, pickOption } from "./helpers";
 
 /**
  * Students from outside the UAE, paged lists with select-all and round-robin, project teams, pointer cursors.
@@ -16,8 +16,8 @@ test("a student from India signs up with their country and only sees internation
   await page.getByLabel("Email", { exact: true }).fill(`e2e.in.${uniq}@example.com`);
   await page.getByLabel("Mobile number (WhatsApp)").fill(`+91 98${uniq.slice(0, 3)} ${uniq.slice(3)}0`);
   // The residence follows the number's country until the person picks one.
-  await expect(page.getByLabel("Country of residence")).toHaveValue("IN");
-  await expect(page.getByLabel("Country code")).toHaveValue("IN");
+  await expect(page.getByLabel("Country of residence")).toContainText("India");
+  await expect(page.getByLabel("Country code")).toContainText("+91");
   await page.getByLabel("Password", { exact: true }).fill("Sup3rSecret!");
   await page.getByLabel("I agree to the academy terms").check();
   await page.getByRole("button", { name: "Create account" }).click();
@@ -69,8 +69,8 @@ test("the CRM admin builds a project team, imports leads round-robin, pages thro
   ].join("\n");
   await page.goto(`${E2E.crm}/import`);
   await page.locator('textarea[name="csv"]').fill(csv);
-  await page.getByLabel("Project", { exact: true }).selectOption({ label: project.name });
-  await page.getByLabel("Owner", { exact: true }).selectOption("ROUND_ROBIN");
+  await pickOption(page, "Project", project.name);
+  await pickOption(page, "Owner", /^Round-robin/);
   await page.getByRole("button", { name: "Check the file" }).click();
   await page.getByRole("button", { name: "Import 60 leads" }).click();
   await expect(page.getByText(/60 created/).first()).toBeVisible();
@@ -94,14 +94,14 @@ test("the CRM admin builds a project team, imports leads round-robin, pages thro
   await expect(page.getByText("50 selected")).toBeVisible();
   await page.getByRole("button", { name: "Select all 60 leads matching these filters" }).click();
   await expect(page.getByText("All 60 leads matching")).toBeVisible();
-  await page.getByLabel("Assign to").selectOption({ label: "Demo Project Manager" });
+  await pickOption(page, "Assign to", "Demo Project Manager");
   await page.getByRole("button", { name: "Assign", exact: true }).click();
   await expect(page.getByText("60 leads assigned.")).toBeVisible();
 
   // And back to the sales executives, round-robin.
   await page.getByRole("checkbox", { name: "Select all leads on this page" }).check();
   await page.getByRole("button", { name: "Select all 60 leads matching these filters" }).click();
-  await page.getByLabel("Assign to").selectOption("ROUND_ROBIN");
+  await pickOption(page, "Assign to", "Round-robin to sales executives");
   await page.getByRole("button", { name: "Assign", exact: true }).click();
   await expect(page.getByText("60 leads shared out round-robin.")).toBeVisible();
 

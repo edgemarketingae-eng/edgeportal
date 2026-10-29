@@ -1,4 +1,5 @@
 import { settingsRoutes } from "@edge/contracts";
+import { tone } from "@edge/ui/lib/tones";
 import { Badge } from "@edge/ui/components/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@edge/ui/components/card";
 import { PageHeader } from "@edge/ui/shell/app-shell";
@@ -25,14 +26,37 @@ export default async function SettingsPage() {
   return (
     <>
       <PageHeader help="/admin/docs/settings" title="Settings" />
-      <div className="grid gap-6">
+      {/* Jump links: the page is a stack of long cards. */}
+      <nav aria-label="Settings sections" className="mb-4 flex flex-wrap gap-1.5">
+        {[
+          ...(fees
+            ? [
+                ["#fees", "Payment methods and fees"],
+                ["#general", "General"],
+                ["#free-class", "Free live class"],
+              ]
+            : []),
+          ["#odoo", "Odoo invoicing"],
+          ["#integrations", "Integrations"],
+        ].map(([href, label]) => (
+          <a
+            key={href}
+            href={href}
+            className="bg-card text-muted-foreground hover:text-foreground rounded-full border px-3 py-1 text-xs font-semibold"
+          >
+            {label}
+          </a>
+        ))}
+      </nav>
+      <div className="grid gap-6 [&>[id]]:scroll-mt-20">
         {fees ? (
-          <Card>
+          <Card id="fees">
             <CardHeader>
               <CardTitle>Payment methods and fees</CardTitle>
               <CardDescription>
                 The student pays the course fee, VAT where it applies, and a processing fee grossed up so the academy receives the full
-                amount. Rates must match each provider&apos;s contract. Countries empty = all.
+                amount. Rates must match each provider&apos;s contract. &ldquo;Only in&rdquo; and &ldquo;Not in&rdquo; take 2-letter country
+                codes, comma separated (AE, SA); an empty &ldquo;Only in&rdquo; means every country.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-2">
@@ -57,7 +81,7 @@ export default async function SettingsPage() {
           </Card>
         ) : null}
         {fees ? (
-          <Card>
+          <Card id="general">
             <CardHeader>
               <CardTitle>General</CardTitle>
             </CardHeader>
@@ -76,7 +100,7 @@ export default async function SettingsPage() {
           </Card>
         ) : null}
         {fees ? (
-          <Card>
+          <Card id="free-class">
             <CardHeader>
               <CardTitle>Free live class (landing page)</CardTitle>
               <CardDescription>
@@ -97,7 +121,7 @@ export default async function SettingsPage() {
             </CardContent>
           </Card>
         ) : null}
-        <Card>
+        <Card id="odoo">
           <CardHeader>
             <CardTitle>Odoo invoicing</CardTitle>
             <CardDescription>
@@ -118,7 +142,7 @@ export default async function SettingsPage() {
             />
           </CardContent>
         </Card>
-        <Card>
+        <Card id="integrations">
           <CardHeader>
             <CardTitle>Integrations</CardTitle>
             <CardDescription>
@@ -130,14 +154,7 @@ export default async function SettingsPage() {
               {Object.entries(s.modes).map(([label, mode]) => (
                 <li key={label} className="flex items-center justify-between rounded-lg border px-3 py-2">
                   {label}
-                  <Badge
-                    variant="outline"
-                    className={
-                      mode === "live" || mode === "mailersend"
-                        ? "border-edge-green/40 bg-edge-green/20 text-edge-emerald"
-                        : "border-amber-300 bg-amber-50 text-amber-800"
-                    }
-                  >
+                  <Badge variant="outline" className={mode === "live" || mode === "mailersend" ? tone.success : tone.warning}>
                     {mode}
                   </Badge>
                 </li>

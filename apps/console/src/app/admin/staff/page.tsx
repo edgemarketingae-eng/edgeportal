@@ -1,4 +1,5 @@
 import { staffRoutes } from "@edge/contracts";
+import { TableEmpty } from "@edge/ui/blocks/empty-state";
 import { OffBadge } from "@edge/ui/blocks/availability";
 import { StaffStatus } from "@edge/ui/blocks/secret-reveal";
 import { Badge } from "@edge/ui/components/badge";
@@ -40,6 +41,7 @@ export default async function StaffPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {staff.length === 0 ? <TableEmpty colSpan={5} title="No staff accounts yet." /> : null}
             {staff.map((s) => (
               <TableRow key={s.id}>
                 <TableCell>

@@ -7,11 +7,30 @@ import { nextStage, whatsappDigits } from "@edge/domain/crm/machine";
 import { ActionButton, ActionDialog } from "@edge/ui/blocks/action-dialog";
 import { Button } from "@edge/ui/components/button";
 import { Checkbox } from "@edge/ui/components/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@edge/ui/components/dropdown-menu";
 import { Label } from "@edge/ui/components/label";
 import { Textarea } from "@edge/ui/components/textarea";
 import { Input } from "@edge/ui/components/input";
-import { NativeSelect } from "@edge/ui/components/native-select";
-import { ArrowRight, Hand, Mail, MessageCircle, Phone, Trash2 } from "lucide-react";
+import { Select } from "@edge/ui/components/select";
+import {
+  ArrowRight,
+  Ellipsis,
+  FolderInput,
+  GitMerge,
+  Hand,
+  Mail,
+  MailCheck,
+  MessageCircle,
+  Phone,
+  Trash2,
+  UserRoundCog,
+} from "lucide-react";
 import { useState } from "react";
 import {
   assignAction,
@@ -40,24 +59,27 @@ function StageFields({ current, lostReasons }: { current: string; lostReasons: s
     <>
       <div className="grid content-start gap-2">
         <Label htmlFor="stage">New stage</Label>
-        <NativeSelect id="stage" name="stage" value={stage} onChange={(e) => setStage(e.target.value)}>
+        <Select id="stage" name="stage" value={stage} onChange={(e) => setStage(e.target.value)}>
           {choices.map((s) => (
             <option key={s} value={s}>
               {LEAD_STAGE_LABELS[s]}
             </option>
           ))}
-        </NativeSelect>
+        </Select>
       </div>
       {stage === "LOST" ? (
         <div className="grid content-start gap-2">
           <Label htmlFor="lostReason">Reason</Label>
-          <NativeSelect id="lostReason" name="lostReason" required>
+          <Select id="lostReason" name="lostReason" defaultValue="" required>
+            <option value="" disabled>
+              Choose a reason
+            </option>
             {lostReasons.map((r) => (
               <option key={r} value={r}>
                 {r}
               </option>
             ))}
-          </NativeSelect>
+          </Select>
         </div>
       ) : null}
       <div className="grid content-start gap-2">
@@ -68,7 +90,11 @@ function StageFields({ current, lostReasons }: { current: string; lostReasons: s
   );
 }
 
+/** The dialogs opened from the "More" menu. */
+type MoreDialog = "assign" | "move" | "resend" | "merge" | "delete";
+
 export function LeadControls({ lead, options, matchingStudent, duplicates, can }: LeadControlsProps) {
+  const [dialog, setDialog] = useState<MoreDialog | null>(null);
   const hid = { id: lead.id };
   const first = lead.name.split(/\s+/)[0] ?? lead.name;
   const waText = encodeURIComponent(
@@ -79,6 +105,16 @@ export function LeadControls({ lead, options, matchingStudent, duplicates, can }
   const team = options.teams[lead.project.id] ?? [];
   // Any active project the viewer is part of (the options list only has those).
   const otherProjects = options.projects.filter((p) => p.id !== lead.project.id);
+  const live = !lead.mergedIntoId;
+  const show = {
+    assign: can.assign && live,
+    move: can.moveProject && otherProjects.length > 0 && live,
+    resend: can.convert && !!lead.studentId,
+    merge: can.manage && duplicates.length > 0 && live,
+    delete: can.delete && !lead.studentId,
+  };
+  /** Opens and closes one of the menu's dialogs. */
+  const controlled = (d: MoreDialog) => ({ open: dialog === d, onOpenChange: (o: boolean) => setDialog(o ? d : null) });
   return (
     <div className="flex flex-wrap gap-2">
       {lead.phone ? (
@@ -131,59 +167,7 @@ export function LeadControls({ lead, options, matchingStudent, duplicates, can }
           <StageFields current={lead.stage} lostReasons={options.lostReasons} />
         </ActionDialog>
       ) : null}
-      {can.assign && !lead.mergedIntoId ? (
-        <ActionDialog
-          action={assignAction}
-          hidden={hid}
-          title="Assign lead"
-          description={`Team of ${lead.project.name}.`}
-          trigger={
-            <Button size="sm" variant="outline">
-              Assign
-            </Button>
-          }
-          submitLabel="Assign"
-        >
-          <div className="grid content-start gap-2">
-            <Label htmlFor="ownerId">Owner</Label>
-            <NativeSelect id="ownerId" name="ownerId" defaultValue={lead.ownerId ?? ""}>
-              <option value="">Unassigned (pool)</option>
-              {team.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name}
-                  {o.available === false ? " (Off)" : ""}
-                </option>
-              ))}
-            </NativeSelect>
-          </div>
-        </ActionDialog>
-      ) : null}
-      {can.moveProject && otherProjects.length && !lead.mergedIntoId ? (
-        <ActionDialog
-          action={moveProjectAction}
-          hidden={hid}
-          title="Move to another project"
-          description="Choose one of your projects. Open tasks move along. The owner stays only if they are on the new project's team."
-          trigger={
-            <Button size="sm" variant="outline">
-              Move project
-            </Button>
-          }
-          submitLabel="Move"
-        >
-          <div className="grid content-start gap-2">
-            <Label htmlFor="move-project">Project</Label>
-            <NativeSelect id="move-project" name="projectId">
-              {otherProjects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </NativeSelect>
-          </div>
-        </ActionDialog>
-      ) : null}
-      {can.convert && !lead.mergedIntoId && !lead.studentId && !matchingStudent ? (
+      {can.convert && live && !lead.studentId && !matchingStudent ? (
         <ActionDialog
           action={convertAction}
           hidden={hid}
@@ -194,21 +178,21 @@ export function LeadControls({ lead, options, matchingStudent, duplicates, can }
         >
           <div className="grid content-start gap-2">
             <Label htmlFor="batchId">Enroll in batch</Label>
-            <NativeSelect id="batchId" name="batchId" defaultValue="">
+            <Select id="batchId" name="batchId" defaultValue="">
               <option value="">No batch yet (placed in the current batch after phone verification)</option>
               {options.batches.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.label}
                 </option>
               ))}
-            </NativeSelect>
+            </Select>
           </div>
           <label className="flex items-center gap-2 text-sm">
             <Checkbox name="sendSetPassword" defaultChecked /> Email the set-password link now
           </label>
         </ActionDialog>
       ) : null}
-      {can.convert && !lead.mergedIntoId && !lead.studentId && matchingStudent ? (
+      {can.convert && live && !lead.studentId && matchingStudent ? (
         <ActionDialog
           action={linkStudentAction}
           hidden={{ ...hid, studentId: matchingStudent.id }}
@@ -218,48 +202,137 @@ export function LeadControls({ lead, options, matchingStudent, duplicates, can }
           submitLabel="Link"
         />
       ) : null}
-      {can.convert && lead.studentId ? (
-        <ActionButton action={resendWelcomeAction} hidden={hid} variant="outline">
-          Resend set-password email
-        </ActionButton>
+
+      {Object.values(show).some(Boolean) ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="outline">
+              <Ellipsis /> More
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            {show.assign ? (
+              <DropdownMenuItem onSelect={() => setDialog("assign")}>
+                <UserRoundCog /> Assign…
+              </DropdownMenuItem>
+            ) : null}
+            {show.move ? (
+              <DropdownMenuItem onSelect={() => setDialog("move")}>
+                <FolderInput /> Move to project…
+              </DropdownMenuItem>
+            ) : null}
+            {show.resend ? (
+              <DropdownMenuItem onSelect={() => setDialog("resend")}>
+                <MailCheck /> Resend set-password email…
+              </DropdownMenuItem>
+            ) : null}
+            {show.merge ? (
+              <DropdownMenuItem onSelect={() => setDialog("merge")}>
+                <GitMerge /> Merge duplicate…
+              </DropdownMenuItem>
+            ) : null}
+            {show.delete ? (
+              <>
+                {show.assign || show.move || show.resend || show.merge ? <DropdownMenuSeparator /> : null}
+                <DropdownMenuItem variant="destructive" onSelect={() => setDialog("delete")}>
+                  <Trash2 /> Delete lead…
+                </DropdownMenuItem>
+              </>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
       ) : null}
-      {can.manage && duplicates.length && !lead.mergedIntoId ? (
+
+      {/* The menu's dialogs live outside it: the menu closes (and unmounts) as one opens. */}
+      {show.assign ? (
         <ActionDialog
+          {...controlled("assign")}
+          action={assignAction}
+          hidden={hid}
+          title="Assign lead"
+          description={`Team of ${lead.project.name}.`}
+          submitLabel="Assign"
+        >
+          <div className="grid content-start gap-2">
+            <Label htmlFor="ownerId">Owner</Label>
+            <Select id="ownerId" name="ownerId" defaultValue={lead.ownerId ?? ""}>
+              <option value="">Unassigned (pool)</option>
+              {team.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                  {o.available === false ? " (Off)" : ""}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </ActionDialog>
+      ) : null}
+      {show.move ? (
+        <ActionDialog
+          {...controlled("move")}
+          action={moveProjectAction}
+          hidden={hid}
+          title="Move to another project"
+          description="Choose one of your projects. Open tasks move along. The owner stays only if they are on the new project's team."
+          submitLabel="Move"
+        >
+          <div className="grid content-start gap-2">
+            <Label htmlFor="move-project">Project</Label>
+            <Select id="move-project" name="projectId" defaultValue="" required>
+              <option value="" disabled>
+                Choose a project
+              </option>
+              {otherProjects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </ActionDialog>
+      ) : null}
+      {show.resend ? (
+        <ActionDialog
+          {...controlled("resend")}
+          action={resendWelcomeAction}
+          hidden={hid}
+          title="Resend the set-password email?"
+          description="The student gets the email with a link to set their portal password again."
+          submitLabel="Send email"
+        />
+      ) : null}
+      {show.merge ? (
+        <ActionDialog
+          {...controlled("merge")}
           action={mergeAction}
           hidden={hid}
           title="Merge a duplicate into this lead"
           description="The duplicate's notes, tags, tasks and history move here; the duplicate is hidden afterwards."
-          trigger={
-            <Button size="sm" variant="outline">
-              Merge duplicate
-            </Button>
-          }
           submitLabel="Merge"
           destructive
         >
           <div className="grid content-start gap-2">
             <Label htmlFor="fromId">Duplicate</Label>
-            <NativeSelect id="fromId" name="fromId">
+            <Select id="fromId" name="fromId" defaultValue="" required>
+              <option value="" disabled>
+                Choose the duplicate
+              </option>
               {duplicates.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name} · {d.phone ?? d.email}
                 </option>
               ))}
-            </NativeSelect>
+            </Select>
           </div>
         </ActionDialog>
       ) : null}
-      {can.delete && !lead.studentId ? (
+      {show.delete ? (
         <ActionDialog
+          {...controlled("delete")}
           action={deleteLeadAction}
           hidden={hid}
           title={`Delete ${lead.name}?`}
           description="The lead, its activity history, its tasks and any duplicates merged into it are removed for good. This can't be undone."
-          trigger={
-            <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10 hover:text-destructive">
-              <Trash2 /> Delete
-            </Button>
-          }
           submitLabel="Delete lead"
           destructive
         >

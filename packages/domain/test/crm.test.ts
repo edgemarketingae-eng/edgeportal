@@ -11,7 +11,7 @@ import {
   stageIndex,
   whatsappDigits,
 } from "../src/crm/machine";
-import { commissionFor, fractionToPercent, percentToFraction, rateFor } from "../src/crm/commission";
+import { commissionFor, depositMonthRange, fractionToPercent, nextSlab, percentToFraction, rateFor } from "../src/crm/commission";
 import { ALL_PERMISSIONS, CRM_PERMISSIONS, isCrmRole, isPermission, RETIRED_SYSTEM_ROLES, SYSTEM_ROLES } from "../src/auth/permissions";
 import { CLOSED_TASK_STATUSES, CRM_TASK_STATUSES, OPEN_TASK_STATUSES } from "../src/crm/enums";
 
@@ -65,6 +65,7 @@ describe("permissions and CRM roles", () => {
       "crm.convert",
       "crm.all",
       "crm.projects.manage",
+      "crm.projects.delete",
       "crm.manage",
       "crm.staff.manage",
       "crm.roles.manage",
@@ -72,7 +73,7 @@ describe("permissions and CRM roles", () => {
       "crm.commission.manage",
     ])
       expect(isPermission(p)).toBe(true);
-    expect(CRM_PERMISSIONS.length).toBe(12);
+    expect(CRM_PERMISSIONS.length).toBe(13);
     expect(CRM_PERMISSIONS.every((p) => p.startsWith("crm."))).toBe(true);
     for (const r of SYSTEM_ROLES) for (const p of r.permissions) expect(ALL_PERMISSIONS).toContain(p);
   });
@@ -86,6 +87,10 @@ describe("permissions and CRM roles", () => {
     for (const key of ["super_admin", "admin", "crm_admin"]) expect(role(key).permissions, key).toContain("crm.leads.delete");
     for (const key of ["crm_manager", "project_manager", "sales_executive"])
       expect(role(key).permissions, key).not.toContain("crm.leads.delete");
+    // Deleting (empty) projects likewise: CRM managers create and archive them.
+    for (const key of ["super_admin", "admin", "crm_admin"]) expect(role(key).permissions, key).toContain("crm.projects.delete");
+    for (const key of ["crm_manager", "project_manager", "sales_executive"])
+      expect(role(key).permissions, key).not.toContain("crm.projects.delete");
     // Commission (rates, verifying deposits, everyone's totals) likewise.
     for (const key of ["super_admin", "admin", "crm_admin"]) expect(role(key).permissions, key).toContain("crm.commission.manage");
     for (const key of ["crm_manager", "project_manager", "sales_executive"])
@@ -165,15 +170,33 @@ describe("commission", () => {
     expect(rateFor(rates, "FIRST", 5_000_000)).toBe("0.04");
   });
 
-  it("rates a later deposit by the highest slab its amount reaches", () => {
-    expect(rateFor(rates, "LATER", 500_000)).toBe("0.01"); // $5,000: base
+  it("rates later deposits by the highest slab the month's later-deposit total reaches", () => {
+    expect(rateFor(rates, "LATER", 500_000)).toBe("0.01"); // $5,000 this month: base
     expect(rateFor(rates, "LATER", 999_999)).toBe("0.01");
     expect(rateFor(rates, "LATER", 1_000_000)).toBe("0.02"); // exactly $10,000
     expect(rateFor(rates, "LATER", 3_000_000)).toBe("0.025"); // $30,000
     expect(rateFor(rates, "LATER", 4_000_000)).toBe("0.03");
     expect(rateFor(rates, "LATER", 10_000_000)).toBe("0.03");
-    expect(commissionFor(3_000_000, rateFor(rates, "LATER", 3_000_000))).toBe(75_000); // $750 on the whole $30,000
+    // $8k + $6k + $15k = $29k in the month: every one of them earns 2.5% on its whole amount.
+    const pct = rateFor(rates, "LATER", 800_000 + 600_000 + 1_500_000);
+    expect(pct).toBe("0.025");
+    expect([800_000, 600_000, 1_500_000].map((a) => commissionFor(a, pct))).toEqual([20_000, 15_000, 37_500]);
     expect(rateFor({ firstPct: "0.04", slabs: [{ fromMinor: 1_000_000, pct: "0.02" }] }, "LATER", 500_000)).toBe("0"); // no base slab
+  });
+
+  it("finds the next slab above a month total", () => {
+    expect(nextSlab(rates, 0)).toEqual({ fromMinor: 1_000_000, pct: "0.02" });
+    expect(nextSlab(rates, 1_000_000)).toEqual({ fromMinor: 2_500_000, pct: "0.025" });
+    expect(nextSlab(rates, 2_900_000)).toEqual({ fromMinor: 4_000_000, pct: "0.03" });
+    expect(nextSlab(rates, 4_000_000)).toBeNull();
+  });
+
+  it("puts a deposit in the calendar month of its date", () => {
+    const oct = depositMonthRange(new Date("2026-10-31T00:00:00.000Z"));
+    expect(oct.from.toISOString()).toBe("2026-10-01T00:00:00.000Z");
+    expect(oct.to.toISOString()).toBe("2026-11-01T00:00:00.000Z");
+    expect(depositMonthRange(new Date("2026-11-01T00:00:00.000Z")).from.toISOString()).toBe("2026-11-01T00:00:00.000Z");
+    expect(depositMonthRange(new Date("2026-12-15T00:00:00.000Z")).to.toISOString()).toBe("2027-01-01T00:00:00.000Z");
   });
 
   it("rounds half up to a whole cent", () => {

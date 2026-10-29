@@ -2,6 +2,7 @@ import { paymentRoutes } from "@edge/contracts";
 import { formatDateTime } from "@edge/domain/dates";
 import { GATEWAYS, PAYMENT_STATUSES, SYNC_STATUSES } from "@edge/domain/enums";
 import { formatMoney } from "@edge/domain/money";
+import { TableEmpty } from "@edge/ui/blocks/empty-state";
 import { FilterBar, FilterResults, FilterScope, FilterSelect } from "@edge/ui/blocks/filter-bar";
 import { GATEWAY_LABELS, KIND_LABELS, PaymentStatusBadge } from "@edge/ui/blocks/payment-status-badge";
 import { SyncBadge } from "@edge/ui/blocks/status-badges";
@@ -84,11 +85,7 @@ export default async function AdminPaymentsPage(props: PageProps<"/admin/payment
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-muted-foreground py-10 text-center">
-                    No payments match.
-                  </TableCell>
-                </TableRow>
+                <TableEmpty colSpan={7} title="No payments match." />
               ) : (
                 rows.map((p) => (
                   <TableRow key={p.id}>

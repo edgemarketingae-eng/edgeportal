@@ -1,12 +1,13 @@
 "use client";
 
-import { ActionButton, ActionDialog } from "@edge/ui/blocks/action-dialog";
+import { ActionDialog } from "@edge/ui/blocks/action-dialog";
 import { Button } from "@edge/ui/components/button";
 import { Checkbox } from "@edge/ui/components/checkbox";
 import { Label } from "@edge/ui/components/label";
-import { NativeSelect } from "@edge/ui/components/native-select";
-import { UserPlus } from "lucide-react";
-import { projectMemberAction, removeProjectMemberAction } from "@/lib/actions/projects";
+import { SegmentedControl } from "@edge/ui/forms/segmented-control";
+import { Trash2, UserPlus } from "lucide-react";
+import { deleteProjectAction, projectMemberAction, removeProjectMemberAction } from "@/lib/actions/projects";
+import { ConfirmDelete } from "./lead-controls";
 import { sortForTeam } from "./project-form";
 
 export function AddMemberDialog({
@@ -46,21 +47,58 @@ export function AddMemberDialog({
           ))}
         </div>
       </fieldset>
-      <div className="grid content-start gap-2">
-        <Label htmlFor="member-role">Role in this project</Label>
-        <NativeSelect id="member-role" name="role" defaultValue="member">
-          <option value="member">Sales executive (team member)</option>
-          {canSetManagers ? <option value="manager">Project manager</option> : null}
-        </NativeSelect>
-      </div>
+      {canSetManagers ? (
+        <SegmentedControl
+          name="role"
+          label="Role in this project"
+          defaultValue="member"
+          options={[
+            { value: "member", label: "Sales executive" },
+            { value: "manager", label: "Project manager" },
+          ]}
+        />
+      ) : (
+        <input type="hidden" name="role" value="member" />
+      )}
     </ActionDialog>
   );
 }
 
-export function RemoveMemberButton({ projectId, userId }: { projectId: string; userId: string }) {
+export function RemoveMemberButton({ projectId, userId, name }: { projectId: string; userId: string; name: string }) {
   return (
-    <ActionButton action={removeProjectMemberAction} hidden={{ id: projectId, userId }} variant="ghost">
-      Remove
-    </ActionButton>
+    <ActionDialog
+      action={removeProjectMemberAction}
+      hidden={{ id: projectId, userId }}
+      title={`Remove ${name} from the project?`}
+      description="They leave the project's team and get none of its round-robin leads from now on. Leads they already own stay with them."
+      trigger={
+        <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10 hover:text-destructive">
+          Remove
+        </Button>
+      }
+      submitLabel="Remove"
+      destructive
+    />
+  );
+}
+
+/** CRM admins delete a project once it has no leads and no team. */
+export function DeleteProjectDialog({ projectId, name }: { projectId: string; name: string }) {
+  return (
+    <ActionDialog
+      action={deleteProjectAction}
+      hidden={{ id: projectId }}
+      title={`Delete ${name}?`}
+      description="The project is removed for good, with its tasks that have no lead. This can't be undone."
+      trigger={
+        <Button size="sm" variant="destructive">
+          <Trash2 /> Delete project
+        </Button>
+      }
+      submitLabel="Delete project"
+      destructive
+    >
+      <ConfirmDelete />
+    </ActionDialog>
   );
 }

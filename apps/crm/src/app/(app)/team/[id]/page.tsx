@@ -2,7 +2,8 @@ import { crmRoutes } from "@edge/contracts";
 import { DEPOSIT_SEQUENCE_LABELS } from "@edge/domain/crm/labels";
 import { formatDate, formatDateTime } from "@edge/domain/dates";
 import { formatMoney } from "@edge/domain/money";
-import { ActionButton } from "@edge/ui/blocks/action-dialog";
+import { ActionButton, ActionDialog } from "@edge/ui/blocks/action-dialog";
+import { Button } from "@edge/ui/components/button";
 import { AvailabilitySwitch } from "@edge/ui/blocks/availability";
 import { PendingInvite } from "@edge/ui/blocks/secret-reveal";
 import { DepositStatusBadge } from "@edge/ui/blocks/status-badges";
@@ -29,6 +30,7 @@ export default async function TeamMemberPage(props: PageProps<"/team/[id]">) {
   return (
     <>
       <PageHeader
+        back={{ href: "/team", label: "Team" }}
         help="/docs/team"
         title={s.name}
         description={`${s.email}${s.disabled ? " · disabled" : ""}${s.available ? "" : " · Off"}${s.lastSignInAt ? ` · last sign-in ${formatDateTime(s.lastSignInAt)}` : ""} · ${s.openLeads} open lead${s.openLeads === 1 ? "" : "s"}`}
@@ -38,13 +40,25 @@ export default async function TeamMemberPage(props: PageProps<"/team/[id]">) {
               <AvailabilitySwitch action={toggleCrmStaffAvailableAction} userId={s.id} name={s.name} available={s.available} showLabel />
             ) : null}
             <ResetPasswordButton userId={s.id} />
-            <ActionButton
-              action={toggleCrmStaffAction}
-              hidden={{ userId: s.id, disable: s.disabled ? "0" : "1" }}
-              variant={s.disabled ? "default" : "destructive"}
-            >
-              {s.disabled ? "Enable account" : "Disable account"}
-            </ActionButton>
+            {s.disabled ? (
+              <ActionButton action={toggleCrmStaffAction} hidden={{ userId: s.id, disable: "0" }}>
+                Enable account
+              </ActionButton>
+            ) : (
+              <ActionDialog
+                action={toggleCrmStaffAction}
+                hidden={{ userId: s.id, disable: "1" }}
+                title={`Disable ${s.name}'s account?`}
+                description="They are signed out and can't sign in until the account is enabled again. Their history stays."
+                trigger={
+                  <Button size="sm" variant="destructive">
+                    Disable account
+                  </Button>
+                }
+                submitLabel="Disable account"
+                destructive
+              />
+            )}
           </>
         }
       />

@@ -399,6 +399,8 @@ export const LeadDepositDto = z.object({
   /** Only for commission managers and the credited person; null until verified. */
   commissionPct: nullable,
   commissionMinor: z.number().nullable(),
+  /** A verified later deposit: the credited person's later-deposit total for its month, which picked the rate. */
+  slabBaseMinor: z.number().nullable(),
   createdAt: z.string(),
   /** The viewer may delete it (still pending, and they logged it, are credited, or manage commission). */
   canDelete: z.boolean(),
@@ -411,6 +413,17 @@ export const DepositSummary = z.object({
   verifiedCount: z.number(),
   verifiedMinor: z.number(),
   commissionMinor: z.number(),
+  /**
+   * Verified later deposits this month for the viewer (or the person a commission manager filtered by; null when
+   * unfiltered): the slab rate the total reaches and the next slab. Fractions.
+   */
+  month: z
+    .object({
+      laterMinor: z.number(),
+      pct: z.string(),
+      next: z.object({ fromMinor: z.number(), pct: z.string() }).nullable(),
+    })
+    .nullable(),
 });
 export type DepositSummary = z.infer<typeof DepositSummary>;
 
@@ -814,6 +827,7 @@ export const crmRoutes = {
   createProject: route({ method: "POST", path: `${base}/projects`, body: ProjectInput, response: z.object({ id: z.string() }) }),
   project: route({ method: "GET", path: `${base}/projects/:id`, params: idParam, response: ProjectDetail }),
   updateProject: route({ method: "POST", path: `${base}/projects/:id`, params: idParam, body: ProjectInput.partial(), response: zOk }),
+  deleteProject: route({ method: "POST", path: `${base}/projects/:id/delete`, params: idParam, response: zOk }),
   projectMember: route({ method: "POST", path: `${base}/projects/:id/members`, params: idParam, body: ProjectMemberInput, response: zOk }),
   removeProjectMember: route({
     method: "POST",

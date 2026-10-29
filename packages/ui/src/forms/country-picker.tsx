@@ -1,23 +1,8 @@
 "use client";
 
 import { COUNTRIES, countryByCode, type Country } from "@edge/domain/countries";
-import { Check, ChevronDown, Search } from "lucide-react";
-import { createContext, use, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { cn } from "cn";
-import { Popover, PopoverContent, PopoverTrigger } from "../components/popover";
-import { controlClass, controlSize } from "../lib/control";
-
-const Searchable = createContext(false);
-
-/**
- * Inside it, the country pickers (the phone dial code and `CountrySelect`) open a searchable list instead of the native
- * select. The CRM uses it; the public pages keep the native select, which phones show as their own picker.
- */
-export function SearchableCountryPickers({ children }: { children: ReactNode }) {
-  return <Searchable value>{children}</Searchable>;
-}
-
-export const useSearchableCountries = () => use(Searchable);
+import type { ReactNode } from "react";
+import { Combobox, fold, type ComboboxOption } from "../components/combobox";
 
 /** Names people type that are not the English name. */
 const ALIASES: Record<string, string[]> = {
@@ -31,13 +16,6 @@ const ALIASES: Record<string, string[]> = {
   CZ: ["czechia", "czech republic"],
   NL: ["holland"],
 };
-
-const fold = (s: string) =>
-  s
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[’']/g, "")
-    .toLowerCase();
 
 /** Shared dial codes list their main country first (+1 is the US, not American Samoa). */
 const MAIN_FOR_DIAL = new Set(["US", "GB", "RU", "AU", "NO", "FI", "IT"]);
@@ -100,137 +78,51 @@ export function CountryCombobox({
   className,
   ...aria
 }: CountryComboboxProps) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [active, setActive] = useState(0);
-  const listId = useId();
-  const list = useRef<HTMLUListElement>(null);
   const current = countryByCode(value);
-  const matches = searchCountries(query);
-  // The "not set" row only shows while nothing is typed.
-  const rows: { code: string; country?: Country }[] = [
-    ...(emptyLabel !== undefined && !query.trim() ? [{ code: "" }] : []),
-    ...matches.map((c) => ({ code: c.code, country: c })),
+  const options: ComboboxOption[] = [
+    ...(emptyLabel !== undefined ? [{ value: "", label: emptyLabel }] : []),
+    ...COUNTRIES.map((c) => ({ value: c.code, label: c.name })),
   ];
-
-  function openChange(next: boolean) {
-    setOpen(next);
-    if (!next) return;
-    // Opens on the full list with the current country highlighted.
-    setQuery("");
-    const at = COUNTRIES.findIndex((c) => c.code === value);
-    const offset = emptyLabel !== undefined ? 1 : 0;
-    setActive(at >= 0 ? at + offset : 0);
-  }
-  function choose(code: string) {
-    onChange(code);
-    setOpen(false);
-  }
-  function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
-    const last = rows.length - 1;
-    if (e.key === "ArrowDown") setActive((i) => Math.min(last, i + 1));
-    else if (e.key === "ArrowUp") setActive((i) => Math.max(0, i - 1));
-    else if (e.key === "Home") setActive(0);
-    else if (e.key === "End") setActive(last);
-    else if (e.key === "Enter") {
-      if (rows[active]) choose(rows[active].code);
-    } else return;
-    e.preventDefault();
-  }
-
-  // Keep the highlighted row in view: on opening (the current country) and while moving with the arrows. Scrolls the
-  // list itself, a frame later, once the popover is placed.
-  useEffect(() => {
-    if (!open) return;
-    const frame = requestAnimationFrame(() => {
-      const ul = list.current;
-      const li = ul?.querySelector<HTMLElement>(`[data-index="${active}"]`);
-      if (!ul || !li) return;
-      if (li.offsetTop < ul.scrollTop) ul.scrollTop = li.offsetTop;
-      else if (li.offsetTop + li.offsetHeight > ul.scrollTop + ul.clientHeight)
-        ul.scrollTop = li.offsetTop + li.offsetHeight - ul.clientHeight;
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [open, active]);
-
   return (
-    // Modal, so the list scrolls and takes focus inside dialogs too.
-    <Popover open={open} onOpenChange={openChange} modal>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          id={id}
-          disabled={disabled}
-          aria-haspopup="listbox"
-          {...aria}
-          className={cn(controlClass, controlSize[size], "relative flex cursor-pointer items-center gap-2 pr-8 text-left", className)}
-        >
-          {display ? (
-            display(current)
-          ) : current ? (
-            <>
-              <span className="text-base leading-none">{current.flag}</span>
-              <span className="truncate">{current.name}</span>
-            </>
-          ) : (
-            <span className="text-muted-foreground truncate">{emptyLabel ?? "Choose a country"}</span>
-          )}
-          <ChevronDown aria-hidden className="text-muted-foreground absolute top-1/2 right-2.5 size-4 -translate-y-1/2" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-80 max-w-[calc(100vw-2rem)] gap-2 p-2">
-        <div className="relative">
-          <Search aria-hidden className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
-          {/* Radix focuses this, the first focusable element, when the list opens. */}
-          <input
-            role="combobox"
-            aria-label="Search countries"
-            aria-expanded
-            aria-controls={listId}
-            aria-autocomplete="list"
-            aria-activedescendant={rows[active] ? `${listId}-${active}` : undefined}
-            value={query}
-            placeholder={dialCodes ? "Country or code, e.g. India or 91" : "Search countries"}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setActive(0);
-            }}
-            onKeyDown={onKeyDown}
-            className={cn(controlClass, controlSize.sm, "pl-8")}
-          />
-        </div>
-        <ul ref={list} id={listId} role="listbox" aria-label="Countries" className="relative max-h-64 overflow-y-auto overscroll-contain">
-          {rows.length === 0 ? <li className="text-muted-foreground px-2 py-3 text-center text-sm">No country matches.</li> : null}
-          {rows.map((r, i) => (
-            <li
-              key={r.code || "none"}
-              id={`${listId}-${i}`}
-              data-index={i}
-              role="option"
-              aria-selected={r.code === value}
-              onMouseMove={() => setActive(i)}
-              onMouseDown={(e) => e.preventDefault()} // keep focus in the search box
-              onClick={() => choose(r.code)}
-              className={cn(
-                "flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm",
-                i === active && "bg-edge-mint/50",
-                r.code === value && "font-semibold",
-              )}
-            >
-              {r.country ? (
-                <>
-                  <span className="text-base leading-none">{r.country.flag}</span>
-                  <span className="flex-1 truncate">{r.country.name}</span>
-                  {dialCodes ? <span className="text-muted-foreground tabular-nums">+{r.country.dialCode}</span> : null}
-                </>
-              ) : (
-                <span className="text-muted-foreground flex-1">{emptyLabel}</span>
-              )}
-              {r.code === value ? <Check aria-hidden className="text-edge-emerald size-4" /> : null}
-            </li>
-          ))}
-        </ul>
-      </PopoverContent>
-    </Popover>
+    <Combobox
+      id={id}
+      value={value}
+      onChange={onChange}
+      options={options}
+      searchable
+      // The "not set" row only shows while nothing is typed.
+      filter={(q) => searchCountries(q).map((c) => c.code)}
+      searchLabel="Search countries"
+      searchPlaceholder={dialCodes ? "Country or code, e.g. India or 91" : "Search countries"}
+      listLabel="Countries"
+      emptyText="No country matches."
+      renderOption={(o) => {
+        const c = countryByCode(o.value);
+        if (!c) return <span className="text-muted-foreground flex-1">{o.label}</span>;
+        return (
+          <>
+            <span className="text-base leading-none">{c.flag}</span>
+            <span className="min-w-0 flex-1 truncate">{c.name}</span>
+            {dialCodes ? <span className="text-muted-foreground tabular-nums">+{c.dialCode}</span> : null}
+          </>
+        );
+      }}
+      popupClassName="w-80"
+      disabled={disabled}
+      size={size}
+      className={className}
+      {...aria}
+    >
+      {display ? (
+        display(current)
+      ) : current ? (
+        <>
+          <span className="text-base leading-none">{current.flag}</span>
+          <span className="truncate">{current.name}</span>
+        </>
+      ) : (
+        <span className="text-muted-foreground truncate">{emptyLabel ?? "Choose a country"}</span>
+      )}
+    </Combobox>
   );
 }

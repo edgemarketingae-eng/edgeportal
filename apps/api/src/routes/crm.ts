@@ -19,6 +19,7 @@ import {
   createTask,
   deleteDeposit,
   deleteLead,
+  deleteProject,
   dueTaskCount,
   getBoard,
   getCommissionSettings,
@@ -286,6 +287,11 @@ export function crmRouter() {
     const { actor, scope } = await crm(req, "crm.write");
     await updateProject(req.valid.params.id, req.valid.body, actor, scope);
     return ok("Project saved.");
+  });
+  register(r, crmRoutes.deleteProject, async (req) => {
+    const { actor, scope } = await crm(req, "crm.projects.delete");
+    await deleteProject(req.valid.params.id, actor, scope);
+    return ok("Project deleted.");
   });
   register(r, crmRoutes.projectMember, async (req) => {
     const { actor, scope } = await crm(req, "crm.write");

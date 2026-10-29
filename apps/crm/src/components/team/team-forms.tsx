@@ -1,10 +1,11 @@
 "use client";
 
+import { ActionDialog } from "@edge/ui/blocks/action-dialog";
 import { Button } from "@edge/ui/components/button";
 import { Checkbox } from "@edge/ui/components/checkbox";
 import { Label } from "@edge/ui/components/label";
-import { NativeSelect } from "@edge/ui/components/native-select";
 import { Field, FormError, FormMessage, type ActionState } from "@edge/ui/forms/field";
+import { SegmentedControl } from "@edge/ui/forms/segmented-control";
 import { useActionState, useEffect } from "react";
 import { toast } from "sonner";
 import { createCrmStaffAction, resetCrmStaffPasswordAction, saveCrmRoleAction, updateCrmStaffAction } from "@/lib/actions/team";
@@ -23,11 +24,15 @@ function ContactFields({ channel, phone, telegram }: { channel?: string; phone?:
   return (
     <>
       <div className="grid content-start gap-2">
-        <Label htmlFor="contactChannel">Chat with leads on</Label>
-        <NativeSelect id="contactChannel" name="contactChannel" defaultValue={channel || "WHATSAPP"}>
-          <option value="WHATSAPP">WhatsApp</option>
-          <option value="TELEGRAM">Telegram</option>
-        </NativeSelect>
+        <SegmentedControl
+          name="contactChannel"
+          label="Chat with leads on"
+          defaultValue={channel || "WHATSAPP"}
+          options={[
+            { value: "WHATSAPP", label: "WhatsApp" },
+            { value: "TELEGRAM", label: "Telegram" },
+          ]}
+        />
         <p className="text-muted-foreground text-xs">Landing page and Growth Hub visitors are sent to this app.</p>
       </div>
       <Field label="Phone (WhatsApp)" name="phone" type="tel" defaultValue={phone} hint="Needed when chatting on WhatsApp." />
@@ -99,8 +104,8 @@ export function CreateCrmStaffForm({ roles, projects }: { roles: RoleOption[]; p
           </div>
         </fieldset>
       ) : null}
-      <Button className="w-fit" disabled={pending}>
-        {pending ? "Creating…" : "Create account"}
+      <Button className="w-fit" pending={pending}>
+        Create account
       </Button>
     </form>
   );
@@ -144,28 +149,30 @@ export function EditCrmStaffForm({
         />
       </div>
       <RoleChecks roles={roles} selected={v ? list(v.roleKeys) : user.roleKeys} />
-      <Button className="w-fit" disabled={pending}>
-        {pending ? "Saving…" : "Save"}
+      <Button className="w-fit" pending={pending}>
+        Save
       </Button>
     </form>
   );
 }
 
-/** The temporary password is shown once, in a toast that stays until dismissed (it is also emailed). */
+/** Asks first; the temporary password is shown once, in a toast that stays until dismissed (it is also emailed). */
 export function ResetPasswordButton({ userId }: { userId: string }) {
-  const [, action, pending] = useActionState(async (prev: ActionState, form: FormData) => {
-    const result = await resetCrmStaffPasswordAction(prev, form);
-    if (result.ok) toast.success(result.message ?? "Done", { duration: Infinity, closeButton: true });
-    if (result.error) toast.error(result.error);
-    return result;
-  }, {} as ActionState);
   return (
-    <form action={action}>
-      <input type="hidden" name="userId" value={userId} />
-      <Button type="submit" variant="outline" size="sm" disabled={pending}>
-        {pending ? "Working…" : "Reset password"}
-      </Button>
-    </form>
+    <ActionDialog
+      action={resetCrmStaffPasswordAction}
+      hidden={{ userId }}
+      title="Reset this person's password?"
+      description="They are signed out everywhere and their current password stops working. A temporary one is emailed to them, to replace at the next sign-in."
+      trigger={
+        <Button variant="outline" size="sm">
+          Reset password
+        </Button>
+      }
+      submitLabel="Reset password"
+      toastOptions={{ duration: Infinity, closeButton: true }}
+      destructive
+    />
   );
 }
 
@@ -207,8 +214,8 @@ export function RoleForm({
         </div>
       </fieldset>
       {!disabled ? (
-        <Button size="sm" className="w-fit" disabled={pending}>
-          {pending ? "Saving…" : role ? "Save role" : "Create role"}
+        <Button size="sm" className="w-fit" pending={pending}>
+          {role ? "Save role" : "Create role"}
         </Button>
       ) : null}
     </form>

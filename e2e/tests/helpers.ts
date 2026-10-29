@@ -1,5 +1,5 @@
 import { createHmac } from "node:crypto";
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import { E2E } from "../config";
 
 export async function studentSignIn(page: Page, identifier: string, password: string) {
@@ -22,6 +22,20 @@ export async function crmSignIn(page: Page, email: string, password = E2E.staffP
   await page.getByLabel("Work email").fill(email);
   await page.locator('input[name="password"]').fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
+}
+
+/**
+ * Picks an option in one of our dropdowns (a button that opens a list): opens it by its label or locator, then clicks
+ * the option by its exact text, a pattern, or its position in the list.
+ */
+export async function pickOption(page: Page, select: string | Locator, option: string | RegExp | { index: number }) {
+  const trigger = typeof select === "string" ? page.getByLabel(select, { exact: true }).filter({ visible: true }) : select;
+  await trigger.click();
+  const target =
+    typeof option === "object" && "index" in option
+      ? page.getByRole("listbox").getByRole("option").nth(option.index)
+      : page.getByRole("option", { name: option, exact: typeof option === "string" });
+  await target.click();
 }
 
 type Marked = Window & { __edgeNoReload?: boolean };

@@ -1,7 +1,7 @@
 import { crmRoutes } from "@edge/contracts";
-import { FOLLOWUP_TYPE_LABELS, TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from "@edge/domain/crm/labels";
+import { FOLLOWUP_TYPE_LABELS } from "@edge/domain/crm/labels";
 import { formatDateTime } from "@edge/domain/dates";
-import { Badge } from "@edge/ui/components/badge";
+import { TaskPriorityBadge, TaskStatusBadge } from "@edge/ui/blocks/status-badges";
 import { Card, CardContent, CardHeader, CardTitle } from "@edge/ui/components/card";
 import { PageHeader } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
@@ -25,6 +25,7 @@ export default async function TaskDetailPage(props: PageProps<"/tasks/[id]">) {
     <>
       <PageHeader
         help="/docs/tasks"
+        back={{ href: "/tasks", label: "Tasks" }}
         title={t.title}
         description={
           <>
@@ -78,8 +79,8 @@ export default async function TaskDetailPage(props: PageProps<"/tasks/[id]">) {
             </CardHeader>
             <CardContent className="grid gap-2 text-sm">
               <div className="flex flex-wrap gap-1.5">
-                <Badge variant="outline">{TASK_STATUS_LABELS[t.status]}</Badge>
-                <Badge variant="outline">{TASK_PRIORITY_LABELS[t.priority]} priority</Badge>
+                <TaskStatusBadge status={t.status} />
+                <TaskPriorityBadge priority={t.priority} />
               </div>
               <p>
                 <span className="text-muted-foreground">Due: </span>

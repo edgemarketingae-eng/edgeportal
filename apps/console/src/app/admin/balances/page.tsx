@@ -1,6 +1,7 @@
 import { adminRoutes } from "@edge/contracts";
 import { formatDate } from "@edge/domain/dates";
 import { formatMoney } from "@edge/domain/money";
+import { TableEmpty } from "@edge/ui/blocks/empty-state";
 import { EnrollmentBadge } from "@edge/ui/blocks/status-badges";
 import { Button } from "@edge/ui/components/button";
 import { Card } from "@edge/ui/components/card";
@@ -49,11 +50,7 @@ export default async function BalancesPage(props: PageProps<"/admin/balances">) 
           </TableHeader>
           <TableBody>
             {rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground py-10 text-center">
-                  No outstanding balances.
-                </TableCell>
-              </TableRow>
+              <TableEmpty colSpan={6} title="No outstanding balances." />
             ) : (
               rows.map((e) => (
                 <TableRow key={e.enrollmentId}>

@@ -63,13 +63,14 @@ export function ClassRowActions({ c }: { c: ClassRow }) {
         <ActionDialog
           action={cancelClassAction}
           hidden={{ id: c.id }}
-          title="Cancel class"
+          title="Cancel this class?"
           trigger={
             <Button size="sm" variant="outline">
-              Cancel
+              Cancel class
             </Button>
           }
           submitLabel="Cancel class"
+          cancelLabel="Keep class"
           destructive
         >
           <Label htmlFor={`r-${c.id}`}>Reason (shown to students)</Label>
