@@ -32,7 +32,7 @@ export function MobileNav({
           {logo}
           {areaLabel ? <p className="text-edge-mint/60 px-1 text-[11px] font-semibold tracking-[0.18em] uppercase">{areaLabel}</p> : null}
         </SheetHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="sidebar-scroll min-h-0 flex-1 overflow-y-auto">
           <NavLinks items={items} onNavigate={() => setOpen(false)} />
         </div>
         {signOutHref ? (

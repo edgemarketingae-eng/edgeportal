@@ -72,7 +72,7 @@ export function AppShell({
       <aside className="border-sidebar-border bg-sidebar text-sidebar-foreground sticky top-0 hidden h-svh w-64 shrink-0 flex-col gap-6 border-r p-4 lg:flex">
         <div className="px-2 pt-2">{logo}</div>
         <p className="text-edge-mint/60 px-3 text-[11px] font-semibold tracking-[0.18em] uppercase">{areaLabel}</p>
-        <div className="flex-1 overflow-y-auto">
+        <div className="sidebar-scroll flex-1 overflow-y-auto">
           <NavLinks items={items} />
         </div>
         <div className="border-sidebar-border border-t pt-3">
