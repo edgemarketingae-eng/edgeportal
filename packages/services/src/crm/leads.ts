@@ -429,10 +429,10 @@ export async function bulkAssignLeads(target: BulkTarget, ownerId: string | null
         let picker = pickers.get(String(projectId));
         if (!picker) {
           const project = await Project.findById(projectId).lean();
-          picker = project ? await roundRobinPicker(project) : { size: 0, next: () => null };
+          picker = project ? await roundRobinPicker(project) : { size: 0, next: async () => null };
           pickers.set(String(projectId), picker);
         }
-        to = picker.next();
+        to = await picker.next();
         if (!to) throw new BusinessError("No sales executives on this project");
       }
       await assignLead(id, to, actor, scope);

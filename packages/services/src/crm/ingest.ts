@@ -174,7 +174,7 @@ export async function ingestInboundLead(
     let reassignTo: string | null = null;
     if (opts.assignReachableExec && !(await reachableExec(ownerId))) {
       const project = await Project.findById(existing.projectId).lean();
-      reassignTo = project ? (await roundRobinPicker(project, { withContact: true })).next() : null;
+      reassignTo = project ? await (await roundRobinPicker(project, { withContact: true })).next() : null;
       if (reassignTo) ownerId = reassignTo;
     }
     await withTx(async () => {
@@ -215,11 +215,12 @@ export async function ingestInboundLead(
 
   const cfg = await getSetting("crm.config");
   const project = await intakeProject(opts.projectCode);
-  const ownerId = opts.assignReachableExec
-    ? ((await roundRobinPicker(project, { withContact: true })).next() ?? "")
+  const picker = opts.assignReachableExec
+    ? await roundRobinPicker(project, { withContact: true })
     : cfg.roundRobin
-      ? ((await roundRobinPicker(project)).next() ?? "")
-      : "";
+      ? await roundRobinPicker(project)
+      : null;
+  const ownerId = (await picker?.next()) ?? "";
   const leadId = await createLead(
     {
       projectId: String(project._id),

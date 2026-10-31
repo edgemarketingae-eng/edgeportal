@@ -548,8 +548,9 @@ export const crmDocs: DocModule[] = [
         body: (
           <>
             <P>
-              Round-robin hands leads out one at a time, each to the sales executive who has the <b>fewest open leads in that project</b> at
-              that moment. A batch of leads is spread evenly, and people who already have a lot get fewer.
+              Round-robin gives the sales executives <b>one lead each, in turn</b>, however many leads they already hold. Each project keeps
+              its own place in the line, so the next lead goes to the next person whether it comes from the website, a landing page, an
+              import or a bulk assign.
             </P>
             <List>
               <>
@@ -558,8 +559,8 @@ export const crmDocs: DocModule[] = [
               </>
               <>In the General project, which is open to everyone, every active sales executive takes part.</>
               <>
-                People marked <b>Off</b> on the Team page are skipped until they&apos;re back on. You can still assign leads to them by
-                hand; pickers show them as &ldquo;(Off)&rdquo;.
+                People marked <b>Off</b> on the Team page are skipped until they&apos;re back on, then rejoin at their usual place with no
+                catch-up leads. You can still assign leads to them by hand; pickers show them as &ldquo;(Off)&rdquo;.
               </>
               <>Each lead is shared within its own project. If you select leads from several projects, each project is shared separately.</>
               <>
@@ -1854,8 +1855,8 @@ export const crmDocs: DocModule[] = [
                   "When a lead's batch of interest starts within this many days, the CRM creates a High priority follow-up for it. Default 7. Set 0 to turn it off.",
                 ],
                 [
-                  <Ui key="d">Assign website leads round-robin to the sales team (least loaded first)</Ui>,
-                  "When ticked, each new website lead goes straight to the sales executive with the fewest open leads in the General project. Every active person with the Sales executive role takes part; project managers, CRM managers and admins don't. If there are no sales executives, or when not ticked, website leads wait unassigned in the General project.",
+                  <Ui key="d">Assign website leads round-robin to the sales team (each person in turn)</Ui>,
+                  "When ticked, each new website lead goes straight to the next sales executive in turn in the General project. Every active person with the Sales executive role takes part; project managers, CRM managers and admins don't. If there are no sales executives, or when not ticked, website leads wait unassigned in the General project.",
                 ],
                 [
                   <Ui key="e">Lost reasons (one per line)</Ui>,

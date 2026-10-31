@@ -285,18 +285,21 @@ number, optional), `email`, `jetaFxClientId`, `page`, `utm{}`. Response: `{ ok, 
 
 ## Round-robin
 
-One rule everywhere (`packages/services/src/crm/round-robin.ts`): leads are handed out one at a time, each to whoever
-holds the **fewest open leads in that project**, counting what the current batch has already handed out. Eligible
-people are active users (not disabled) with the **Sales executive** role who are on the project's team (managers or
-members). In the General project (open to everyone) that is every active sales executive. Project managers, CRM
-managers and admins don't receive round-robin leads unless they also hold the Sales executive role. People marked **Off**
-(`StaffProfile.available = false`, the Team page switch in the CRM or the staff page in the console) are skipped
-everywhere round-robin runs, but stay in owner filters and manual assign pickers (labelled "(Off)").
+One rule everywhere (`packages/services/src/crm/round-robin.ts`): sales executives get **one lead each, in turn**,
+however many leads they already hold. Each project saves whose turn was last (`Project.roundRobinLastId`, in user id
+order), so the rotation carries on across single leads, batches and restarts, and every path below shares it. Each turn
+is one atomic update, so leads arriving at the same time go to different people. Eligible people are active users (not
+disabled) with the **Sales executive** role who are on the project's team (managers or members). In the General project
+(open to everyone) that is every active sales executive. Project managers, CRM managers and admins don't receive
+round-robin leads unless they also hold the Sales executive role. People marked **Off** (`StaffProfile.available = false`,
+the Team page switch in the CRM or the staff page in the console) are skipped everywhere round-robin runs and rejoin at
+their usual place when they're back, with no catch-up leads. They stay in owner filters and manual assign pickers
+(labelled "(Off)").
 
 Used by: bulk assign on the leads list (_Round-robin to sales executives_; each lead within its own project; leads in
 projects with no sales executives are skipped and counted), CSV import (_Round-robin to the project's sales
-executives_; refused when the project has none), website leads when the Settings checkbox is on, and free class
-landing leads (always, limited to sales executives with a phone).
+executives_; refused when the project has none; a skipped row doesn't use up a turn), website leads when the Settings
+checkbox is on, and free class landing leads (always, limited to sales executives with a phone).
 
 ## CSV import
 

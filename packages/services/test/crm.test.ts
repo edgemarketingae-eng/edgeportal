@@ -69,6 +69,7 @@ import {
   previewImport,
   removeProjectMember,
   resetStaffPassword,
+  roundRobinPicker,
   salesExecutivesFor,
   resetEnvForTests,
   runBatchUrgency,
@@ -76,6 +77,7 @@ import {
   runStaleSweep,
   saveCrmRole,
   setProjectMember,
+  setStaffAvailable,
   setStage,
   signLeadPayload,
   TransitionError,
@@ -989,5 +991,89 @@ describe("pagination and bulk actions", () => {
     await expect(
       importLeads(csv, { projectId: none, source: "IMPORT", ownerId: "ROUND_ROBIN" }, admin.actor, await admin.scope()),
     ).rejects.toBeInstanceOf(BusinessError);
+  });
+
+  /** A project of three sales executives; `order` is the order they take turns in. */
+  async function teamOfThree() {
+    const admin = await staff("crm_admin");
+    const [a, b, c] = [await staff("sales_executive"), await staff("sales_executive"), await staff("sales_executive")];
+    const projectId = await createProject(
+      { name: "Turns", code: `TU${Date.now() % 100000}`, memberIds: [a.id, b.id, c.id] },
+      admin.actor,
+      await admin.scope(),
+    );
+    const order = [a.id, b.id, c.id].sort() as [string, string, string];
+    const picker = async () => roundRobinPicker((await Project.findById(projectId).lean())!);
+    return { admin, projectId, order, picker };
+  }
+
+  async function ownersOf(ids: string[]) {
+    const leads = await Lead.find({ _id: { $in: ids.map((id) => new Types.ObjectId(id)) } }, { ownerId: 1 }).lean();
+    const owners = new Map(leads.map((l) => [String(l._id), String(l.ownerId)]));
+    return ids.map((id) => owners.get(id));
+  }
+
+  it("round-robin gives everyone their turn whatever they already hold, and carries on across batches", async () => {
+    const { admin, projectId, order } = await teamOfThree();
+    const scope = await admin.scope();
+    for (const id of await seedLeads(5, projectId, admin.actor, scope)) await assignLead(id, order[0], admin.actor, scope);
+
+    const first = await seedLeads(4, projectId, admin.actor, scope);
+    await bulkAssignLeads({ ids: first }, "ROUND_ROBIN", admin.actor, scope);
+    expect(await ownersOf(first)).toEqual([order[0], order[1], order[2], order[0]]);
+
+    const second = await seedLeads(3, projectId, admin.actor, scope);
+    await bulkAssignLeads({ ids: second }, "ROUND_ROBIN", admin.actor, scope);
+    expect(await ownersOf(second)).toEqual([order[1], order[2], order[0]]);
+  });
+
+  it("round-robin passes over someone who is Off, who rejoins at their place, and survives the last person leaving", async () => {
+    const { admin, projectId, order, picker } = await teamOfThree();
+    expect(await (await picker()).next()).toBe(order[0]);
+
+    await setStaffAvailable(order[1], false, admin.actor);
+    expect(await (await picker()).next()).toBe(order[2]);
+
+    await setStaffAvailable(order[1], true, admin.actor);
+    expect(await (await picker()).next()).toBe(order[0]);
+    expect(await (await picker()).next()).toBe(order[1]);
+
+    await removeProjectMember(projectId, order[1], admin.actor, await admin.scope());
+    expect(await (await picker()).next()).toBe(order[2]);
+    expect(await (await picker()).next()).toBe(order[0]);
+  });
+
+  it("round-robin gives leads arriving at the same moment to different people", async () => {
+    const { order, picker } = await teamOfThree();
+    const pickers = await Promise.all(Array.from({ length: 6 }, picker));
+    const picks = await Promise.all(pickers.map((p) => p.next()));
+    expect(picks.sort()).toEqual([order[0], order[0], order[1], order[1], order[2], order[2]]);
+  });
+
+  it("a row skipped on import doesn't cost anyone their turn", async () => {
+    const admin = await staff("crm_admin");
+    const [a, b] = [await staff("sales_executive"), await staff("sales_executive")];
+    const projectId = await createProject(
+      { name: "Import Turns", code: `IT${Date.now() % 100000}`, memberIds: [a.id, b.id] },
+      admin.actor,
+      await admin.scope(),
+    );
+    const scope = await admin.scope();
+    const email = (i: number) => `turn${i}-${Date.now() % 100000}@example.com`;
+    const emails = Array.from({ length: 12 }, (_, i) => email(i));
+    // Every other row is already a lead, so counting those rows as turns would hand one person every new lead.
+    for (const known of emails.filter((_, i) => i % 2))
+      await createLead({ projectId, name: "Known", email: known, source: "IMPORT" }, admin.actor, scope);
+    const csv = ["name,email", ...emails.map((e, i) => `Imp ${i},${e}`)].join("\n");
+    expect(await importLeads(csv, { projectId, source: "IMPORT", ownerId: "ROUND_ROBIN" }, admin.actor, scope)).toEqual({
+      created: 6,
+      skipped: 6,
+      invalid: 0,
+    });
+    const counts = await Lead.aggregate<{ _id: unknown; n: number }>([
+      { $match: { projectId: new Types.ObjectId(projectId), name: /^Imp / } },
+      { $group: { _id: "$ownerId", n: { $sum: 1 } } },
+    ]);
+    expect(counts.map((x) => x.n)).toEqual([3, 3]);
   });
 });

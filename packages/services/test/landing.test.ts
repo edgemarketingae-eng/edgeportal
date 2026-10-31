@@ -107,7 +107,7 @@ describe("staff Telegram", () => {
 });
 
 describe("free class landing", () => {
-  it("assigns the lead in General to the sales executive with a phone and the fewest open leads, whatever the round-robin setting", async () => {
+  it("gives leads in General to the sales executives with a phone in turn, whatever they hold and whatever the round-robin setting", async () => {
     const busy = await exec("Busy Bee", "+971500000001");
     const free = await exec("Free Fatima", "+971500000002");
     await exec("Nophone Nadia"); // no phone: never picked
@@ -117,11 +117,12 @@ describe("free class landing", () => {
       { type: "SYSTEM" },
     );
 
+    // First in line, and holding a lead already doesn't lose them the turn.
     const r = await captureFreeClassLead({ name: "Ali Hassan", phone: "+971551112233", utm: { source: "meta", campaign: "free-class" } });
-    expect(await ownerOf("+971551112233")).toBe(free);
-    expect(r.contactName).toBe("Free Fatima");
-    expect(r.contactUrl).toMatch(/^https:\/\/wa\.me\/971500000002\?text=/);
-    expect(textOf(r.contactUrl!)).toBe("Hi Free, I'm Ali Hassan. I need help with something. Can you assist me, please?");
+    expect(await ownerOf("+971551112233")).toBe(busy);
+    expect(r.contactName).toBe("Busy Bee");
+    expect(r.contactUrl).toMatch(/^https:\/\/wa\.me\/971500000001\?text=/);
+    expect(textOf(r.contactUrl!)).toBe("Hi Busy, I'm Ali Hassan. I need help with something. Can you assist me, please?");
 
     const lead = (await Lead.findOne({ phone: "+971551112233" }).lean())!;
     expect(String(lead.projectId)).toBe(String(g._id));
@@ -132,9 +133,11 @@ describe("free class landing", () => {
     expect(lead.consent?.whatsapp).toBe(true);
     expect(await LeadActivity.countDocuments({ leadId: lead._id, type: "SYSTEM", "data.landing": "free-class" })).toBe(1);
 
-    // Both now hold one open lead: the tie goes to the first by name.
+    // The turns go on, past the person with no phone and back round.
     await captureFreeClassLead({ name: "Second", phone: "+971551112244" });
-    expect(await ownerOf("+971551112244")).toBe(busy);
+    expect(await ownerOf("+971551112244")).toBe(free);
+    await captureFreeClassLead({ name: "Third", phone: "+971551112255" });
+    expect(await ownerOf("+971551112255")).toBe(busy);
   });
 
   it("keeps an existing owner, assigns an unowned duplicate, and asks for help whatever class is switched on", async () => {

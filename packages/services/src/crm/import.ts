@@ -150,6 +150,8 @@ export async function importLeads(
       ownerId: "No sales executives on this project",
     });
   }
+  // A turn stays held until a lead is created, so a skipped row doesn't cost that person a lead.
+  let turn: string | null = null;
   for (const r of rows) {
     if (r.error) {
       invalid++;
@@ -162,6 +164,7 @@ export async function importLeads(
     }
     seen.add(key);
     try {
+      turn ??= picker ? await picker.next() : null;
       await createLead(
         {
           projectId: o.projectId,
@@ -175,12 +178,13 @@ export async function importLeads(
           tags: r.tags || undefined,
           language: normalizeLanguage(r.language) ?? undefined,
           jetaFxClientId: r.jetaFxClientId || undefined,
-          ownerId: picker ? (picker.next() ?? "") : (o.ownerId ?? ""),
+          ownerId: picker ? (turn ?? "") : (o.ownerId ?? ""),
         },
         actor,
         scope,
         { createdAs: "IMPORTED" },
       );
+      turn = null;
       created++;
     } catch (e) {
       if (e instanceof BusinessError) skipped++;

@@ -62,6 +62,8 @@ const projectSchema = new Schema(
     targetConversions: { type: Number, default: null },
     managerIds: { type: [ObjectId], default: [] },
     memberIds: { type: [ObjectId], default: [] },
+    /** Who took the last round-robin turn here: the next lead goes to the person after them, in user id order. */
+    roundRobinLastId: { type: ObjectId, default: null },
     isDefault: { type: Boolean, default: false },
     createdById: { type: ObjectId, default: null },
   },

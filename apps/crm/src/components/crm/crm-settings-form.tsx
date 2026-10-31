@@ -49,7 +49,7 @@ export function CrmSettingsForm({ s }: { s: CrmSettingsDto }) {
       </div>
       <label className="flex items-center gap-2 text-sm">
         <Checkbox name="roundRobin" defaultChecked={v ? v.roundRobin === "on" : s.roundRobin} /> Assign website leads round-robin to the
-        sales team (least loaded first)
+        sales team (each person in turn)
       </label>
       <div className="grid content-start gap-2">
         <Label htmlFor="lostReasons">Lost reasons (one per line)</Label>

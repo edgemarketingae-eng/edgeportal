@@ -1424,8 +1424,8 @@ const settings: DocModule = {
           <P>
             The student app&apos;s home page promotes the free live class to visitors from ads and social posts. Visitors tap{" "}
             <Ui>Join free class</Ui> and enter their name and WhatsApp number. The lead is created in the CRM <b>General</b> project and
-            given to the sales executive with a phone number who holds the fewest open leads there. The visitor is then sent to that
-            person&apos;s WhatsApp with a message ready to send. A returning visitor keeps the sales executive they already have.
+            given to the next sales executive in turn who has a phone number. The visitor is then sent to that person&apos;s WhatsApp with a
+            message ready to send. A returning visitor keeps the sales executive they already have.
           </P>
           <Terms
             head={["Field", "What it does (default)"]}

@@ -1,5 +1,5 @@
-import { AuthUser, Lead, Role, StaffProfile, Types, type ProjectDoc } from "@edge/db";
-import { OPEN_LEAD_STAGES, type ContactChannel } from "@edge/domain/crm/enums";
+import { AuthUser, Project, Role, StaffProfile, Types, type ProjectDoc } from "@edge/db";
+import type { ContactChannel } from "@edge/domain/crm/enums";
 
 /** The role whose holders receive round-robin leads. */
 const SALES_EXECUTIVE = "sales_executive";
@@ -41,9 +41,10 @@ export async function salesExecutivesFor(
 }
 
 /**
- * Hands out a project's sales executives one lead at a time, always to whoever holds the fewest open leads in
- * that project, counting what this batch has already handed out. A batch spreads evenly and stays fair with the
- * existing load. `next()` is null when the project has no sales executives. `withContact` limits it to people
+ * Gives a project's sales executives one lead each in turn, however many leads they already hold. The turn is saved
+ * on the project in user id order, so it carries on across batches, restarts and every intake path, and it survives
+ * the last person going Off or leaving the team. Each `next()` is one atomic update, so leads arriving together get
+ * different people. `next()` is null when the project has no sales executives. `withContact` limits it to people
  * who can be chatted with on their channel (leads that are handed straight to a WhatsApp or Telegram chat).
  */
 export async function roundRobinPicker(
@@ -51,28 +52,21 @@ export async function roundRobinPicker(
   opts: { withContact?: boolean } = {},
 ) {
   const execs = await salesExecutivesFor(project, opts);
-  const counts = execs.length
-    ? await Lead.aggregate<{ _id: Types.ObjectId; n: number }>([
-        {
-          $match: {
-            projectId: project._id,
-            mergedIntoId: null,
-            stage: { $in: [...OPEN_LEAD_STAGES] },
-            ownerId: { $in: execs.map((e) => new Types.ObjectId(e.id)) },
-          },
-        },
-        { $group: { _id: "$ownerId", n: { $sum: 1 } } },
-      ])
-    : [];
-  const load = new Map(execs.map((e) => [e.id, 0]));
-  for (const c of counts) load.set(String(c._id), c.n);
+  const ids = execs
+    .map((e) => e.id)
+    .sort()
+    .map((id) => new Types.ObjectId(id));
   return {
-    size: execs.length,
-    next(): string | null {
-      let best: string | null = null;
-      for (const e of execs) if (best === null || load.get(e.id)! < load.get(best)!) best = e.id;
-      if (best) load.set(best, load.get(best)! + 1);
-      return best;
+    size: ids.length,
+    async next(): Promise<string | null> {
+      if (!ids.length) return null;
+      const after = { $filter: { input: ids, cond: { $gt: ["$$this", "$roundRobinLastId"] } } };
+      const updated = await Project.findByIdAndUpdate(
+        project._id,
+        [{ $set: { roundRobinLastId: { $ifNull: [{ $first: after }, ids[0]] } } }],
+        { updatePipeline: true, timestamps: false, returnDocument: "after", projection: { roundRobinLastId: 1 } },
+      ).lean();
+      return updated?.roundRobinLastId ? String(updated.roundRobinLastId) : null;
     },
   };
 }
