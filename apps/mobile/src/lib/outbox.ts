@@ -1,15 +1,22 @@
 import { ApiError, crmRoutes, mobileRoutes, type CallSheetInput } from "@edge/contracts";
+import type { CallOutcome } from "@edge/domain/crm/enums";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api } from "./api";
 
 const KEY = "outbox";
 
-type ActivityBody = { type: "WHATSAPP"; body: string; nextFollowUpAt?: string; nextFollowUpTitle?: string };
+type ActivityBody = {
+  type: "NOTE" | "WHATSAPP" | "EMAIL" | "MEETING";
+  body: string;
+  direction?: "IN" | "OUT";
+  nextFollowUpAt?: string;
+  nextFollowUpTitle?: string;
+};
 
 export type OutboxJob =
   | { kind: "sheet"; body: CallSheetInput }
   | { kind: "activity"; leadId: string; body: ActivityBody }
-  | { kind: "completeTask"; taskId: string; body: { note: string; nextFollowUpAt?: string } }
+  | { kind: "completeTask"; taskId: string; body: { note: string; outcome?: CallOutcome; nextFollowUpAt?: string } }
   | { kind: "stage"; leadId: string; stage: "CONTACTED" | "QUALIFIED" | "CONSULTATION" | "NEGOTIATION" };
 
 const read = async () => JSON.parse((await AsyncStorage.getItem(KEY)) ?? "[]") as OutboxJob[];
@@ -53,6 +60,9 @@ export async function enqueue(jobs: OutboxJob[]) {
   await write([...(await read()), ...jobs]);
   return flushOutbox();
 }
+
+/** For the confirmation after `enqueue`, when something couldn't be sent yet. */
+export const SAVED_FOR_LATER = "Saved. It'll send when there's signal.";
 
 export const waitingCount = async () => (await read()).length;
 

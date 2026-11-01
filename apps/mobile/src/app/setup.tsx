@@ -1,6 +1,4 @@
-import { meRoutes } from "@edge/contracts";
 import { Ionicons } from "@expo/vector-icons";
-import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Image, PermissionsAndroid, ScrollView, StyleSheet, Switch, View } from "react-native";
@@ -9,7 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CallTracker } from "../../modules/call-tracker";
 import mark from "../../assets/splash-mark.png";
 import { BottomBar, Button, Card, Text } from "@/components/ui";
-import { api } from "@/lib/api";
+import { useMe } from "@/lib/queries";
 import { useTheme } from "@/lib/theme";
 
 /** Says plainly what's collected before Android asks, so the permission prompt isn't a surprise. */
@@ -17,7 +15,7 @@ export default function Setup() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const me = useQuery({ queryKey: ["me"], queryFn: () => api(meRoutes.me) });
+  const me = useMe();
   const [logCalls, setLogCalls] = useState(true);
   const [busy, setBusy] = useState(false);
   const name = me.data?.user.name.split(" ")[0];

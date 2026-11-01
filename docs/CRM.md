@@ -170,11 +170,19 @@ time (Dubai), an assignee, a description and comments.
 
 ## Phone app
 
-Sales executives also have an Android app (`apps/mobile`, installed as an APK, see [installing it](CRM-APP.md)). It's built
-around their day: **Today** (follow-ups due, new leads oldest first, the pool to claim), **Leads**, the lead page, and **Me**
-(this month's commission, conversions, deposits and leaderboard place). Tapping **Call** dials straight away; when the call
-ends a sheet asks how it went, with a suggested outcome, and saves the note, stage and next follow-up in a couple of taps,
-even with no signal.
+Sales staff and managers also have an Android app (`apps/mobile`, installed as an APK, see [installing it](CRM-APP.md)). It's
+built around the day: **Today** (follow-ups due, new leads oldest first, the pool to claim), **Leads**, **Tasks**, and **Me**
+(this month's commission and figures, then **Work**: Dashboard, Projects, Deposits and Leaderboard). Tapping **Call** dials
+straight away; when the call ends a sheet asks how it went, with a suggested outcome, and saves the note, stage and next
+follow-up in a couple of taps, even with no signal.
+
+The app covers the day-to-day CRM, with the same permissions as the web: the whole lead page including editing, assigning,
+moving, converting and deleting; tasks with comments; projects and their teams; deposit review; and the dashboard. Staff
+accounts, roles, CSV import and export, CRM settings, product setup, commission rates, bulk actions, merging leads, deleting
+projects and the Calls report are web-only.
+
+Notes and finished tasks save with no signal and send later. Other changes need a connection, so nobody overwrites a colleague's
+newer change.
 
 ### Call tracking
 

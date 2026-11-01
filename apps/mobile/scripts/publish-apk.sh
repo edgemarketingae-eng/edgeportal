@@ -31,4 +31,6 @@ scp "$apk" "$EDGE_DEPLOY_HOST:/var/www/edge-crm/android/$name"
 # The manifest goes last, so no phone is ever pointed at a file that isn't there yet.
 scp "$manifest" "$EDGE_DEPLOY_HOST:/var/www/edge-crm/android/latest.json"
 rm -f "$manifest"
+# mktemp files are private and scp keeps that mode, so nginx couldn't serve the manifest and phones would never see an update.
+ssh "$EDGE_DEPLOY_HOST" "chmod 644 /var/www/edge-crm/android/*"
 echo "Published $version (versionCode $version_code): https://crm.edgeacademy.ae/android/$name"

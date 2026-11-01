@@ -1,19 +1,21 @@
 import { ApiError, crmRoutes } from "@edge/contracts";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { View } from "react-native";
 import { Button, buzz, Chip, Field, Notice, Sheet, Text, Wrap } from "@/components/ui";
 import { api } from "@/lib/api";
+import { useOptions } from "@/lib/queries";
 import { toast } from "@/lib/toast";
 
 export default function NewLead() {
   const router = useRouter();
   const client = useQueryClient();
-  const options = useQuery({ queryKey: ["options"], queryFn: () => api(crmRoutes.options) });
+  const { project } = useLocalSearchParams<{ project?: string }>();
+  const options = useOptions();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("+");
-  const [picked, setPicked] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string | null>(project ?? null);
   const [allowDuplicate, setAllowDuplicate] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);

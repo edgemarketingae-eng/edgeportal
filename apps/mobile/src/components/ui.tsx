@@ -3,7 +3,9 @@ import * as Haptics from "expo-haptics";
 import { useEffect, useRef, useState, type ComponentProps, type ComponentRef, type ReactNode } from "react";
 import {
   ActivityIndicator,
+  FlatList,
   Keyboard,
+  Modal,
   Pressable,
   ScrollView,
   Text as RNText,
@@ -24,6 +26,7 @@ import Animated, {
   FadeOutDown,
   interpolateColor,
   LinearTransition,
+  SlideInDown,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -491,11 +494,32 @@ export function Avatar({ name, size = 46 }: { name: string; size?: number }) {
   );
 }
 
-export function SectionHeader({ title, count, tone }: { title: string; count?: string | number; tone?: "danger" }) {
+export function SectionHeader({
+  title,
+  count,
+  tone,
+  action,
+  onAction,
+}: {
+  title: string;
+  count?: string | number;
+  tone?: "danger";
+  action?: string;
+  onAction?: () => void;
+}) {
   return (
     <View style={styles.sectionHeader}>
-      <Text variant="heading">{title}</Text>
+      <Text variant="heading" style={{ flex: action ? 1 : undefined }}>
+        {title}
+      </Text>
       {count ? <Pill label={String(count)} tone={tone ?? "neutral"} /> : null}
+      {action ? (
+        <Pressable accessibilityRole="button" hitSlop={8} onPress={onAction}>
+          <Text variant="label" tone="accent">
+            {action}
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -615,6 +639,199 @@ export function Wrap({ children }: { children: ReactNode }) {
   return <View style={styles.wrap}>{children}</View>;
 }
 
+/** A number with its label. */
+export function StatCard({ value, label, hint, tone }: { value: string | number; label: string; hint?: string; tone?: "danger" }) {
+  return (
+    <Card style={styles.stat}>
+      <Text variant="title" numberOfLines={1} adjustsFontSizeToFit tone={tone === "danger" ? "danger" : "default"}>
+        {value}
+      </Text>
+      <Text variant="caption">{label}</Text>
+      {hint ? <Text variant="caption">{hint}</Text> : null}
+    </Card>
+  );
+}
+
+/** A labelled value in a details list. Nothing shows when there's no value, so the list stays short. */
+export function Info({ label, value }: { label: string; value?: string | null }) {
+  if (!value) return null;
+  return (
+    <View style={{ gap: 2 }}>
+      <Text variant="caption">{label}</Text>
+      <Text>{value}</Text>
+    </View>
+  );
+}
+
+/** Hides what most people don't need most of the time. */
+export function Disclosure({ label, children }: { label: string; children: ReactNode }) {
+  const t = useTheme();
+  const [open, setOpen] = useState(false);
+  return (
+    <View style={{ gap: 10 }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={() => setOpen(!open)}
+        style={styles.disclosure}
+      >
+        <Text variant="label" tone="muted" style={{ flex: 1 }}>
+          {label}
+        </Text>
+        <Ionicons name={open ? "chevron-up" : "chevron-down"} size={18} color={t.mutedForeground} />
+      </Pressable>
+      {open ? (
+        <Animated.View entering={FadeIn.duration(180)} style={{ gap: 12 }}>
+          {children}
+        </Animated.View>
+      ) : null}
+    </View>
+  );
+}
+
+/** Rises over the current screen, for pickers and menus that don't deserve a screen of their own. */
+function BottomModal({ open, onClose, tall, children }: { open: boolean; onClose: () => void; tall?: boolean; children: ReactNode }) {
+  const t = useTheme();
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal visible={open} transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
+      <Pressable accessibilityLabel="Close" style={styles.backdrop} onPress={onClose} />
+      <Animated.View
+        entering={SlideInDown.duration(240)}
+        style={[styles.bottomModal, { backgroundColor: t.background, paddingBottom: insets.bottom + 8 }, tall && { height: "78%" }]}
+      >
+        {children}
+      </Animated.View>
+    </Modal>
+  );
+}
+
+export interface Choice {
+  value: string;
+  label: string;
+  detail?: string;
+}
+
+/** Choose one from a list too long for chips. `blank` adds an option for "none of these". */
+export function SelectField({
+  label,
+  value,
+  options,
+  onChange,
+  blank,
+  placeholder = "Choose",
+  error,
+}: {
+  label: string;
+  value: string;
+  options: readonly Choice[];
+  onChange: (value: string) => void;
+  blank?: string;
+  placeholder?: string;
+  error?: string;
+}) {
+  const t = useTheme();
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const chosen = options.find((o) => o.value === value);
+  const search = q.trim().toLowerCase();
+  const rows = [...(blank ? [{ value: "", label: blank }] : []), ...options].filter(
+    (o) => !search || o.label.toLowerCase().includes(search),
+  );
+  const close = () => {
+    setOpen(false);
+    setQ("");
+  };
+  return (
+    <View style={{ gap: 6 }}>
+      <Text variant="label">{label}</Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${label}: ${chosen?.label ?? blank ?? placeholder}`}
+        onPress={() => setOpen(true)}
+        style={[styles.input, { backgroundColor: t.card, borderColor: error ? t.destructive : t.border }]}
+      >
+        <Text numberOfLines={1} tone={chosen ? "default" : "muted"} style={{ flex: 1 }}>
+          {chosen?.label ?? blank ?? placeholder}
+        </Text>
+        <Ionicons name="chevron-down" size={18} color={t.mutedForeground} />
+      </Pressable>
+      {error ? (
+        <Text variant="caption" tone="danger">
+          {error}
+        </Text>
+      ) : null}
+      <BottomModal open={open} onClose={close} tall={options.length > 7}>
+        <Text variant="heading" style={styles.modalTitle}>
+          {label}
+        </Text>
+        {options.length > 7 ? (
+          <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+            <SearchField value={q} onChangeText={setQ} placeholder="Search" accessibilityLabel={`Search ${label}`} />
+          </View>
+        ) : null}
+        <FlatList
+          data={rows}
+          keyExtractor={(o) => o.value || "blank"}
+          keyboardShouldPersistTaps="handled"
+          renderItem={({ item: o }) => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: o.value === value }}
+              android_ripple={{ color: t.muted }}
+              onPress={() => {
+                buzz.select();
+                onChange(o.value);
+                close();
+              }}
+              style={styles.choice}
+            >
+              <View style={{ flex: 1 }}>
+                <Text variant="label" tone={o.value === value ? "accent" : "default"}>
+                  {o.label}
+                </Text>
+                {"detail" in o && o.detail ? <Text variant="caption">{o.detail}</Text> : null}
+              </View>
+              {o.value === value ? <Ionicons name="checkmark" size={20} color={t.accent} /> : null}
+            </Pressable>
+          )}
+        />
+      </BottomModal>
+    </View>
+  );
+}
+
+export interface MenuItem {
+  icon: IconName;
+  label: string;
+  onPress: () => void;
+  tone?: "danger";
+}
+
+/** The less common actions on a screen, behind its ⋮ button. */
+export function ActionMenu({ open, onClose, items }: { open: boolean; onClose: () => void; items: MenuItem[] }) {
+  return (
+    <BottomModal open={open} onClose={onClose}>
+      <View style={{ paddingTop: 8 }}>
+        {items.map((item, i) => (
+          <ListRow
+            key={item.label}
+            icon={item.icon}
+            label={item.label}
+            tone={item.tone}
+            last={i === items.length - 1}
+            onPress={() => {
+              onClose();
+              // Let the menu close first: a sheet opened on top of it would close with it.
+              setTimeout(item.onPress, 160);
+            }}
+          />
+        ))}
+      </View>
+    </BottomModal>
+  );
+}
+
 export function Toaster() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
@@ -678,9 +895,15 @@ const styles = StyleSheet.create({
   inputText: { flex: 1, fontFamily: font.medium, fontSize: 16, paddingVertical: 12 },
   search: { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 50, borderRadius: 16, borderWidth: 1, paddingHorizontal: 14 },
   skeletonRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, paddingHorizontal: 14 },
-  empty: { alignItems: "center", gap: 8, paddingVertical: 36 },
+  empty: { alignItems: "center", gap: 8, paddingVertical: 36, paddingHorizontal: 20 },
   emptyIcon: { width: 64, height: 64, borderRadius: 32, marginBottom: 6 },
   sectionHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 14, marginBottom: 2 },
+  stat: { flex: 1, flexBasis: "45%", gap: 2 },
+  disclosure: { flexDirection: "row", alignItems: "center", minHeight: 36 },
+  backdrop: { flex: 1, backgroundColor: "rgba(2, 26, 26, 0.5)" },
+  bottomModal: { borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingTop: 8, overflow: "hidden" },
+  modalTitle: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 10 },
+  choice: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 52, paddingHorizontal: 20, paddingVertical: 8 },
   listRow: { flexDirection: "row", alignItems: "center", gap: 14, minHeight: 56, paddingHorizontal: 16 },
   bottomBar: { flexDirection: "row", gap: 10, paddingHorizontal: 20, paddingTop: 12, borderTopWidth: 1 },
   sheet: { paddingHorizontal: 20, paddingTop: 28, paddingBottom: 20, gap: 16 },

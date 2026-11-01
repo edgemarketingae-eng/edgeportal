@@ -105,7 +105,8 @@ export const mobileRoutes = {
 
 /**
  * Everything a phone's device token may reach; the API answers 404 to the rest. Add to this list deliberately: a device
- * token is on a phone that can be lost, and CRM routes include staff passwords, role changes and bulk deletes.
+ * token is on a phone that can be lost, and CRM routes include staff passwords, role changes and bulk deletes. Each route
+ * here still checks the signed-in person's own permissions.
  */
 export const deviceRoutes: ReadonlySet<RouteDef> = new Set<RouteDef>([
   mobileRoutes.signOut,
@@ -115,23 +116,44 @@ export const deviceRoutes: ReadonlySet<RouteDef> = new Set<RouteDef>([
   mobileRoutes.today,
   meRoutes.me,
   meRoutes.notifications,
+  crmRoutes.dashboard,
   crmRoutes.options,
   crmRoutes.dueCount,
   crmRoutes.leads,
   crmRoutes.lead,
   crmRoutes.create,
   crmRoutes.update,
+  crmRoutes.deleteLead,
   crmRoutes.stage,
+  crmRoutes.assign,
   crmRoutes.claim,
+  crmRoutes.moveProject,
   crmRoutes.activity,
+  crmRoutes.convert,
+  crmRoutes.link,
+  crmRoutes.resendWelcome,
   crmRoutes.markConversions,
+  crmRoutes.removeConversion,
   crmRoutes.logDeposit,
   crmRoutes.deposits,
+  crmRoutes.verifyDeposit,
+  crmRoutes.rejectDeposit,
+  crmRoutes.deleteDeposit,
   crmRoutes.leaderboard,
   crmRoutes.products,
   crmRoutes.tasks,
   crmRoutes.task,
   crmRoutes.createTask,
+  crmRoutes.updateTask,
+  crmRoutes.moveTask,
   crmRoutes.completeTask,
+  crmRoutes.cancelTask,
   crmRoutes.rescheduleTask,
+  crmRoutes.commentTask,
+  crmRoutes.projects,
+  crmRoutes.project,
+  crmRoutes.createProject,
+  crmRoutes.updateProject,
+  crmRoutes.projectMember,
+  crmRoutes.removeProjectMember,
 ]);

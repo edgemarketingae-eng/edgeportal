@@ -1,6 +1,7 @@
 # Edge CRM phone app
 
-Android app for sales executives, built around their day: follow-ups, new leads and one-tap contact. It's Expo (React Native)
+Android app for sales staff and managers, built around the day: follow-ups, new leads and one-tap contact, plus the day-to-day
+CRM (see [docs/CRM.md](../../docs/CRM.md) for what stays web-only). It's Expo (React Native)
 plus one Kotlin module, `modules/call-tracker`, for the optional call tracking, which reads the call log and uploads it without
 JS so it works with the app closed. It talks directly to `api.edgeacademy.ae` with a per-device token. See
 [docs/CRM.md](../../docs/CRM.md) for how calls are matched to leads.
@@ -75,6 +76,9 @@ Colours, fonts and the dark Ink surface are in `src/lib/theme.tsx`, and every sh
 those rather than styling a screen by hand. Manrope is built into the APK by the `expo-font` plugin, so use `Text` and its variants;
 `fontWeight` doesn't work with it on Android. Edge Green is only for text on dark surfaces: use `tone="accent"`, which turns to Deep
 Emerald in light mode. Forms go inside `Sheet`, which keeps Save above the keyboard.
+
+Show an action only when it's allowed, with `useCan()` or the `can` flags the API sends, but never rely on that: the server checks
+every action. A new route also has to be added to `deviceRoutes`, or phones get a 404.
 
 Call tracking is a quiet extra, so keep it out of Today and first impressions.
 

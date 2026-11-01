@@ -1174,8 +1174,13 @@ export const crmDocs: DocModule[] = [
         body: (
           <>
             <P>
-              Sales executives work leads from the Edge CRM app on their company phone. <Ui>Today</Ui> lists follow-ups that are due, new
-              leads and unassigned leads to claim, each with one-tap call and WhatsApp buttons.
+              Sales staff and managers work from the Edge CRM app on their company phone. <Ui>Today</Ui> lists follow-ups that are due, new
+              leads and unassigned leads to claim, each with one-tap call and WhatsApp buttons. <Ui>Leads</Ui> and <Ui>Tasks</Ui> work like
+              the website, and <Ui>Me</Ui> leads to projects, deposits, the leaderboard and, for managers, the dashboard.
+            </P>
+            <P>
+              The app follows the same permissions as the website. Staff accounts, roles, imports and exports, CRM settings, product setup,
+              commission rates, bulk actions, merging leads and deleting projects stay on the website.
             </P>
             <P>
               When a call ends the app asks how it went and suggests an outcome. Add a note, move the stage and pick the next follow-up,

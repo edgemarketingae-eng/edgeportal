@@ -3,7 +3,7 @@ import type { Tabs } from "expo-router";
 import { useEffect, type ComponentProps } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
-import { useTheme } from "@/lib/theme";
+import { font, useTheme } from "@/lib/theme";
 import { buzz, Text, type IconName } from "./ui";
 
 type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>["tabBar"]>>[0];
@@ -11,6 +11,7 @@ type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>["tabBar"]>
 const ICONS: Record<string, { on: IconName; off: IconName }> = {
   index: { on: "sunny", off: "sunny-outline" },
   leads: { on: "people", off: "people-outline" },
+  tasks: { on: "checkbox", off: "checkbox-outline" },
   me: { on: "person-circle", off: "person-circle-outline" },
 };
 
@@ -35,6 +36,7 @@ export function TabBar({ state, descriptors, emitter, navigateToTab, insets }: T
         {state.routes.map((route, index) => {
           const focused = state.index === index;
           const title = descriptors[route.key]?.options.title ?? route.name;
+          const badge = descriptors[route.key]?.options.tabBarBadge;
           const icons = ICONS[route.name];
           return (
             <Pressable
@@ -50,7 +52,14 @@ export function TabBar({ state, descriptors, emitter, navigateToTab, insets }: T
               }}
               style={styles.tab}
             >
-              {icons ? <Ionicons name={focused ? icons.on : icons.off} size={22} color={focused ? t.accent : t.mutedForeground} /> : null}
+              <View>
+                {icons ? <Ionicons name={focused ? icons.on : icons.off} size={22} color={focused ? t.accent : t.mutedForeground} /> : null}
+                {badge ? (
+                  <View style={[styles.badge, { backgroundColor: t.destructive, borderColor: t.card }]}>
+                    <Text style={[styles.badgeText, { color: t.card }]}>{badge}</Text>
+                  </View>
+                ) : null}
+              </View>
               <Text variant="overline" tone={focused ? "accent" : "muted"} style={styles.label}>
                 {title}
               </Text>
@@ -68,4 +77,17 @@ const styles = StyleSheet.create({
   pill: { position: "absolute", top: 0, left: 0, width: PILL_WIDTH, height: 32, borderRadius: 16 },
   tab: { flex: 1, alignItems: "center", gap: 6, paddingTop: 5 },
   label: { letterSpacing: 0.2, textTransform: "none", fontSize: 12 },
+  badge: {
+    position: "absolute",
+    top: -6,
+    left: 13,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeText: { fontSize: 10, lineHeight: 12, fontFamily: font.bold },
 });

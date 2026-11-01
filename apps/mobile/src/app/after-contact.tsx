@@ -1,17 +1,16 @@
 import type { CallSheetInput } from "@edge/contracts";
 import { CALL_OUTCOMES, type CallDirection, type CallOutcome } from "@edge/domain/crm/enums";
 import { CALL_OUTCOME_LABELS, LEAD_STAGE_LABELS } from "@edge/domain/crm/labels";
-import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
-import { toDubaiLocal } from "@edge/domain/dates";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { CallTracker, type DeviceCall } from "../../modules/call-tracker";
 import { Button, buzz, Chip, Field, type IconName, Sheet, Text, Tile, Wrap } from "@/components/ui";
+import { FollowUpPicker } from "@/components/follow-up-picker";
 import { findCallRow } from "@/lib/contact";
-import { dueLabel, FOLLOW_UP_CHOICES, talkTime } from "@/lib/format";
-import { enqueue, type OutboxJob } from "@/lib/outbox";
+import { talkTime } from "@/lib/format";
+import { enqueue, SAVED_FOR_LATER, type OutboxJob } from "@/lib/outbox";
 import { toast } from "@/lib/toast";
 
 const OUTCOME_ICONS: Record<CallOutcome, IconName> = {
@@ -60,25 +59,6 @@ function useCallRow(phone: string, tappedAt: number, skip: boolean) {
   return { row, gaveUp };
 }
 
-async function pickDateTime(onPicked: (local: string) => void) {
-  const now = new Date();
-  DateTimePickerAndroid.open({
-    value: now,
-    minimumDate: now,
-    mode: "date",
-    onChange: (e, day) => {
-      if (e.type !== "set" || !day) return;
-      DateTimePickerAndroid.open({
-        value: day,
-        mode: "time",
-        onChange: (e2, time) => {
-          if (e2.type === "set" && time) onPicked(toDubaiLocal(time));
-        },
-      });
-    },
-  });
-}
-
 export default function AfterContact() {
   const router = useRouter();
   const client = useQueryClient();
@@ -99,14 +79,7 @@ export default function AfterContact() {
   const [note, setNote] = useState("");
   const [stage, setStage] = useState<SheetStage | null>(null);
   const [followUp, setFollowUp] = useState<string | null>(null);
-  const [followUpLabel, setFollowUpLabel] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
-  const choose = (label: string, at: string) => {
-    const off = followUpLabel === label;
-    setFollowUpLabel(off ? null : label);
-    setFollowUp(off ? null : at);
-  };
 
   const save = async () => {
     setSaving(true);
@@ -133,11 +106,11 @@ export default function AfterContact() {
         ? [{ kind: "completeTask", taskId: p.taskId, body: message }]
         : [{ kind: "activity", leadId: p.leadId, body: { type: "WHATSAPP", body: message.note, nextFollowUpAt: message.nextFollowUpAt } }];
     if (stage) jobs.push({ kind: "stage", leadId: p.leadId, stage });
-    await enqueue(jobs);
+    const left = await enqueue(jobs);
     if (fromNotification) CallTracker.dismissPrompt(startedAt);
     void client.invalidateQueries();
     buzz.success();
-    toast("Saved");
+    toast(left ? SAVED_FOR_LATER : "Saved");
     router.back();
   };
 
@@ -180,24 +153,7 @@ export default function AfterContact() {
         style={{ minHeight: 72, textAlignVertical: "top" }}
       />
 
-      <View style={{ gap: 8 }}>
-        <Text variant="label">Next follow-up</Text>
-        <Wrap>
-          {FOLLOW_UP_CHOICES.map((c) => (
-            <Chip key={c.label} label={c.label} selected={followUpLabel === c.label} onPress={() => choose(c.label, c.at())} />
-          ))}
-          <Chip
-            label={followUpLabel === "custom" && followUp ? dueLabel(`${followUp}:00+04:00`) : "Pick a time"}
-            selected={followUpLabel === "custom"}
-            onPress={() =>
-              void pickDateTime((local) => {
-                setFollowUpLabel("custom");
-                setFollowUp(local);
-              })
-            }
-          />
-        </Wrap>
-      </View>
+      <FollowUpPicker value={followUp} onChange={setFollowUp} />
 
       <View style={{ gap: 8 }}>
         <Text variant="label">Move stage</Text>

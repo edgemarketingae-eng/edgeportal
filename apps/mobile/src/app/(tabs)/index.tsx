@@ -1,4 +1,4 @@
-import { ApiError, crmRoutes, meRoutes, mobileRoutes, type LeadListItem, type MobileToday, type TaskDto } from "@edge/contracts";
+import { ApiError, crmRoutes, mobileRoutes, type LeadListItem, type MobileToday, type TaskDto } from "@edge/contracts";
 import { LEAD_SOURCE_LABELS, LEAD_STAGE_LABELS } from "@edge/domain/crm/labels";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -25,6 +25,7 @@ import {
 import { api } from "@/lib/api";
 import { dueLabel, greeting, isOverdue, timeAgo, todayLabel } from "@/lib/format";
 import { waitingCount } from "@/lib/outbox";
+import { useMe } from "@/lib/queries";
 import { useTheme } from "@/lib/theme";
 import { toast } from "@/lib/toast";
 import { useAppActive } from "@/lib/use-app-active";
@@ -74,7 +75,7 @@ export default function Today() {
   const client = useQueryClient();
   const [waiting, setWaiting] = useState(0);
   const today = useQuery({ queryKey: ["today"], queryFn: () => api(mobileRoutes.today) });
-  const me = useQuery({ queryKey: ["me"], queryFn: () => api(meRoutes.me) });
+  const me = useMe();
   const claim = useMutation({
     mutationFn: (id: string) => api(crmRoutes.claim, { params: { id } }),
     onSuccess: () => {

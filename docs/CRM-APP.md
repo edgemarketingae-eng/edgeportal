@@ -5,8 +5,15 @@ For sales executives, and for whoever sets up their phones. You need your CRM em
 ## What the app does
 
 Your day in one place: follow-ups that are due, new leads and unassigned leads to claim, with one-tap Call and WhatsApp. After a
-call or message, it asks how it went and helps you set the next follow-up. It keeps working with no signal and sends your saves
-when you're back online.
+call or message, it asks how it went and helps you set the next follow-up.
+
+- **Leads:** everything about a lead, and edit it. The **⋮** button at the top right has the less common actions.
+- **Tasks:** your follow-ups and tasks by due date. Tap the circle to finish one, or open it to comment or change it.
+- **Me:** your month, then **Work** for Projects, Deposits and the Leaderboard. Managers also get the Dashboard, deposit review
+  and project settings.
+
+You see the same things you can do on the website. Notes and finished tasks save with no signal and send when you're back online.
+Other changes need a connection.
 
 ## Install
 

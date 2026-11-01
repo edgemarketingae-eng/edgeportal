@@ -2,11 +2,12 @@ import { ApiError, crmRoutes } from "@edge/contracts";
 import { DEPOSIT_SEQUENCES, type DepositSequence } from "@edge/domain/crm/enums";
 import { DEPOSIT_SEQUENCE_LABELS } from "@edge/domain/crm/labels";
 import { dubaiDateString } from "@edge/domain/dates";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Button, buzz, Chip, Field, Notice, Sheet, Text, Wrap } from "@/components/ui";
 import { api } from "@/lib/api";
+import { useLead } from "@/lib/queries";
 import { toast } from "@/lib/toast";
 
 const DAY_MS = 86_400_000;
@@ -15,7 +16,7 @@ export default function LogDeposit() {
   const router = useRouter();
   const client = useQueryClient();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const detail = useQuery({ queryKey: ["lead", id], queryFn: () => api(crmRoutes.lead, { params: { id }, query: { activity: 30 } }) });
+  const detail = useLead(id);
   const hasFirst = detail.data?.deposits.some((d) => d.sequence === "FIRST" && d.status !== "REJECTED");
   const [chosen, setChosen] = useState<DepositSequence | null>(null);
   const sequence = chosen ?? (hasFirst ? "LATER" : "FIRST");

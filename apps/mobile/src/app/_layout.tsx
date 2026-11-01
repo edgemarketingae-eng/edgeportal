@@ -88,6 +88,25 @@ function Screens() {
           <Stack.Screen name="lead/conversion" options={sheet} />
           <Stack.Screen name="lead/deposit" options={sheet} />
           <Stack.Screen name="lead/lost" options={sheet} />
+          <Stack.Screen name="lead/edit" options={sheet} />
+          <Stack.Screen name="lead/note" options={sheet} />
+          <Stack.Screen name="lead/assign" options={sheet} />
+          <Stack.Screen name="lead/move" options={sheet} />
+          <Stack.Screen name="lead/convert" options={sheet} />
+          <Stack.Screen name="lead/delete" options={sheet} />
+          <Stack.Screen name="deposit/reject" options={sheet} />
+          <Stack.Screen name="task/[id]" options={{ title: "" }} />
+          <Stack.Screen name="task/new" options={sheet} />
+          <Stack.Screen name="task/edit" options={sheet} />
+          <Stack.Screen name="task/done" options={sheet} />
+          <Stack.Screen name="task/comment" options={sheet} />
+          <Stack.Screen name="project/index" options={{ title: "Projects" }} />
+          <Stack.Screen name="project/[id]" options={{ title: "" }} />
+          <Stack.Screen name="project/edit" options={sheet} />
+          <Stack.Screen name="project/add-member" options={sheet} />
+          <Stack.Screen name="deposits" options={{ title: "Deposits" }} />
+          <Stack.Screen name="leaderboard" options={{ title: "Leaderboard" }} />
+          <Stack.Screen name="dashboard" options={{ title: "Dashboard" }} />
           <Stack.Screen name="after-contact" options={sheet} />
           <Stack.Screen name="setup" options={{ headerShown: false, animation: "fade" }} />
           <Stack.Screen name="notifications" options={{ title: "Notifications" }} />

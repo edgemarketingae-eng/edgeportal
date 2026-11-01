@@ -12,7 +12,7 @@ const config: ExpoConfig = {
   name: "Edge CRM",
   slug: "edge-crm",
   scheme: "edgecrm",
-  version: "0.1.0",
+  version: "0.2.0",
   orientation: "portrait",
   icon: "./assets/icon.png",
   userInterfaceStyle: "automatic",
@@ -20,7 +20,7 @@ const config: ExpoConfig = {
   platforms: ["android"],
   android: {
     package: "ae.edgeacademy.crm",
-    versionCode: 1,
+    versionCode: 2,
     adaptiveIcon: { foregroundImage: "./assets/adaptive-icon.png", backgroundColor: "#021a1a" },
     // Sideloaded apps can't rely on overlays, accessibility or the dialer role, so none of those are requested.
     permissions: [

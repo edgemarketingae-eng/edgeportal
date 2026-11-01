@@ -1,16 +1,17 @@
 import { ApiError, crmRoutes } from "@edge/contracts";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Button, Chip, Field, Notice, Sheet, Text, Wrap } from "@/components/ui";
 import { api } from "@/lib/api";
+import { useOptions } from "@/lib/queries";
 import { toast } from "@/lib/toast";
 
 export default function MarkLost() {
   const router = useRouter();
   const client = useQueryClient();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const options = useQuery({ queryKey: ["options"], queryFn: () => api(crmRoutes.options) });
+  const options = useOptions();
   const [reason, setReason] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);

@@ -1,4 +1,4 @@
-import { crmRoutes, meRoutes, mobileRoutes } from "@edge/contracts";
+import { crmRoutes, mobileRoutes } from "@edge/contracts";
 import { formatMoney } from "@edge/domain/money";
 import { useQuery } from "@tanstack/react-query";
 import Constants from "expo-constants";
@@ -7,30 +7,21 @@ import { useCallback, useState } from "react";
 import { Alert, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CallTracker } from "../../../modules/call-tracker";
-import { Avatar, Card, InkCard, ListGroup, ListRow, Pill, Rise, Skeleton, Text } from "@/components/ui";
+import { Avatar, InkCard, ListGroup, ListRow, Pill, Rise, Skeleton, StatCard, Text } from "@/components/ui";
 import { api } from "@/lib/api";
+import { useCan, useMe } from "@/lib/queries";
 import { useSession } from "@/lib/session";
 import { useTheme } from "@/lib/theme";
 
 const usd = (minor: number) => formatMoney(minor, "USD");
-
-function Stat({ value, label }: { value: string | number; label: string }) {
-  return (
-    <Card style={styles.stat}>
-      <Text variant="title" numberOfLines={1} adjustsFontSizeToFit>
-        {value}
-      </Text>
-      <Text variant="caption">{label}</Text>
-    </Card>
-  );
-}
 
 export default function Me() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { signOut } = useSession();
-  const me = useQuery({ queryKey: ["me"], queryFn: () => api(meRoutes.me) });
+  const can = useCan();
+  const me = useMe();
   const board = useQuery({ queryKey: ["leaderboard"], queryFn: () => api(crmRoutes.leaderboard, { query: { period: "month" } }) });
   const [tracking, setTracking] = useState(true);
   useFocusEffect(useCallback(() => setTracking(CallTracker.hasCallLogAccess()), []));
@@ -106,8 +97,8 @@ export default function Me() {
             <Text variant="caption">Your commission</Text>
           </InkCard>
           <View style={styles.stats}>
-            <Stat value={mine.conversions} label="Conversions" />
-            <Stat value={usd(mine.depositsMinor)} label="Verified deposits" />
+            <StatCard value={mine.conversions} label="Conversions" />
+            <StatCard value={usd(mine.depositsMinor)} label="Verified deposits" />
           </View>
           {mine.pendingCount ? (
             <Text variant="caption" style={{ paddingHorizontal: 4 }}>
@@ -116,6 +107,18 @@ export default function Me() {
           ) : null}
         </Rise>
       ) : null}
+
+      <Text variant="overline" style={styles.groupTitle}>
+        Work
+      </Text>
+      <ListGroup>
+        {can("crm.assign") || can("crm.all") || can("crm.manage") ? (
+          <ListRow icon="stats-chart-outline" label="Dashboard" onPress={() => router.push("/dashboard")} />
+        ) : null}
+        <ListRow icon="folder-outline" label="Projects" onPress={() => router.push("/project")} />
+        <ListRow icon="cash-outline" label="Deposits" onPress={() => router.push("/deposits")} />
+        <ListRow icon="trophy-outline" label="Leaderboard" onPress={() => router.push("/leaderboard")} last />
+      </ListGroup>
 
       <Text variant="overline" style={styles.groupTitle}>
         Settings
@@ -142,7 +145,6 @@ const styles = StyleSheet.create({
   profile: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 6 },
   earningsTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 4 },
   stats: { flexDirection: "row", gap: 10 },
-  stat: { flex: 1, gap: 2 },
   groupTitle: { marginTop: 12, paddingHorizontal: 4 },
   version: { textAlign: "center", marginTop: 6 },
 });

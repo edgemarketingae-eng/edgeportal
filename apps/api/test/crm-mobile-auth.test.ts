@@ -195,7 +195,11 @@ describe("what a device token can reach", () => {
       ["GET", crmRoutes.leadsCsv.path],
       ["POST", crmRoutes.bulkDelete.path],
       ["POST", crmRoutes.merge.path.replace(":id", victim.id)],
-      ["POST", crmRoutes.deleteLead.path.replace(":id", victim.id)],
+      ["POST", crmRoutes.deleteProject.path.replace(":id", victim.id)],
+      ["POST", crmRoutes.saveSettings.path],
+      ["POST", crmRoutes.createProduct.path],
+      ["POST", crmRoutes.importCsv.path],
+      ["GET", crmRoutes.callReport.path],
       ["POST", crmRoutes.saveCommissionSettings.path],
       ["GET", "/api/v1/files/123"],
       ["POST", "/api/v1/files"],
@@ -207,6 +211,100 @@ describe("what a device token can reach", () => {
       expect([path, res.status]).toEqual([path, 404]);
     }
     expect((await StaffProfile.findById(victim.id).lean())!.tempPasswordEnc ?? null).toBeNull();
+  });
+
+  it("reaches the working CRM routes, for someone allowed to use them", async () => {
+    const admin = await staff("super_admin");
+    const token = await tokenFor(admin.email);
+    const exec = await staff("sales_executive");
+    await get(crmRoutes.dashboard.path, token).expect(200);
+    await get(crmRoutes.projects.path, token).expect(200);
+
+    const project = (await post(crmRoutes.createProject.path, token).send({ name: "Phone project" }).expect(200)).body.id as string;
+    const inProject = (route: { path: string }) => route.path.replace(":id", project);
+    await get(inProject(crmRoutes.project), token).expect(200);
+    await post(inProject(crmRoutes.updateProject), token).send({ name: "Phone project 2", status: "PAUSED" }).expect(200);
+    await post(inProject(crmRoutes.projectMember), token).send({ userId: exec.id, role: "member" }).expect(200);
+    await post(inProject(crmRoutes.removeProjectMember), token).send({ userId: exec.id }).expect(200);
+    await post(inProject(crmRoutes.updateProject), token).send({ status: "ACTIVE" }).expect(200);
+
+    const lead = (
+      await post(crmRoutes.create.path, token)
+        .send({ projectId: project, name: "Phone Lead", phone: "+971501112233", source: "PHONE_IN" })
+        .expect(200)
+    ).body.id as string;
+    const onLead = (route: { path: string }) => route.path.replace(":id", lead);
+    await post(onLead(crmRoutes.assign), token).send({ ownerId: "" }).expect(200);
+    await post(onLead(crmRoutes.update), token).send({ notes: "Edited on a phone", tags: "vip" }).expect(200);
+    expect((await get(`${onLead(crmRoutes.lead)}?activity=30`, token).expect(200)).body.lead).toMatchObject({
+      notes: "Edited on a phone",
+      tags: ["vip"],
+    });
+
+    const task = (await post(crmRoutes.createTask.path, token).send({ leadId: lead, title: "Ring them" }).expect(200)).body.id as string;
+    const onTask = (route: { path: string }) => route.path.replace(":id", task);
+    await post(onTask(crmRoutes.updateTask), token).send({ title: "Ring them back", priority: "HIGH" }).expect(200);
+    await post(onTask(crmRoutes.moveTask), token).send({ status: "IN_PROGRESS" }).expect(200);
+    await post(onTask(crmRoutes.commentTask), token).send({ body: "Busy until Friday" }).expect(200);
+    const detail = (await get(onTask(crmRoutes.task), token).expect(200)).body;
+    expect(detail.task).toMatchObject({ title: "Ring them back", priority: "HIGH", status: "IN_PROGRESS", commentCount: 1 });
+    await post(onTask(crmRoutes.cancelTask), token).send({}).expect(200);
+
+    await post(onLead(crmRoutes.deleteLead), token).send({}).expect(200);
+    await get(`${onLead(crmRoutes.lead)}?activity=30`, token).expect(404);
+  });
+
+  it("still holds a phone to what that person may do", async () => {
+    const admin = await tokenFor((await staff("super_admin")).email);
+    const execUser = await staff("sales_executive");
+    const exec = await tokenFor(execUser.email);
+    const other = await staff("sales_executive");
+    const project = (
+      await post(crmRoutes.createProject.path, admin)
+        .send({ name: "Locked", memberIds: [execUser.id, other.id] })
+        .expect(200)
+    ).body.id as string;
+    const lead = (
+      await post(crmRoutes.create.path, exec)
+        .send({ projectId: project, name: "Own Lead", phone: "+971501112244", source: "PHONE_IN" })
+        .expect(200)
+    ).body.id as string;
+    const onLead = (route: { path: string }) => route.path.replace(":id", lead);
+
+    await post(crmRoutes.createProject.path, exec).send({ name: "Not allowed" }).expect(403);
+    await post(onLead(crmRoutes.deleteLead), exec).send({}).expect(403);
+    await post(onLead(crmRoutes.assign), exec).send({ ownerId: other.id }).expect(403);
+    expect([403, 404]).toContain((await post(crmRoutes.updateProject.path.replace(":id", project), exec).send({ name: "Renamed" })).status);
+
+    const deposit = (
+      await post(onLead(crmRoutes.logDeposit), exec)
+        .send({ sequence: "FIRST", amount: "250", depositedAt: "2026-11-01", jetaFxClientId: "1234" })
+        .expect(200)
+    ).body.id as string;
+    await post(crmRoutes.verifyDeposit.path.replace(":id", deposit), exec).send({}).expect(403);
+    await post(crmRoutes.rejectDeposit.path.replace(":id", deposit), exec).send({ reason: "Testing" }).expect(403);
+    await post(crmRoutes.verifyDeposit.path.replace(":id", deposit), admin).send({}).expect(200);
+  });
+
+  it("lets a project manager run their own project but nobody else's", async () => {
+    const admin = await tokenFor((await staff("super_admin")).email);
+    const pmUser = await staff("project_manager");
+    const pm = await tokenFor(pmUser.email);
+    const member = await staff("sales_executive");
+    const mine = (
+      await post(crmRoutes.createProject.path, admin)
+        .send({ name: "Mine", managerIds: [pmUser.id] })
+        .expect(200)
+    ).body.id as string;
+    const theirs = (await post(crmRoutes.createProject.path, admin).send({ name: "Theirs" }).expect(200)).body.id as string;
+
+    await post(crmRoutes.updateProject.path.replace(":id", mine), pm).send({ description: "Run from a phone" }).expect(200);
+    await post(crmRoutes.projectMember.path.replace(":id", mine), pm).send({ userId: member.id, role: "member" }).expect(200);
+    const refused = await post(crmRoutes.updateProject.path.replace(":id", mine), pm).send({ status: "PAUSED" });
+    expect(refused.status).toBeGreaterThanOrEqual(400);
+    expect(refused.body.error.message).toContain("Only a CRM manager");
+    const notMine = await post(crmRoutes.updateProject.path.replace(":id", theirs), pm).send({ description: "Nope" });
+    expect([403, 404]).toContain(notMine.status);
   });
 
   it("still lets the Next.js servers through, and a cookie can't change who a phone is", async () => {

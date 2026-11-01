@@ -1,16 +1,17 @@
 import { ApiError, crmRoutes } from "@edge/contracts";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Button, buzz, Chip, Field, Notice, Sheet, Text, Wrap } from "@/components/ui";
 import { api } from "@/lib/api";
+import { useLead } from "@/lib/queries";
 import { toast } from "@/lib/toast";
 
 export default function MarkConversion() {
   const router = useRouter();
   const client = useQueryClient();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const detail = useQuery({ queryKey: ["lead", id], queryFn: () => api(crmRoutes.lead, { params: { id }, query: { activity: 30 } }) });
+  const detail = useLead(id);
   const [picked, setPicked] = useState<string[]>([]);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
