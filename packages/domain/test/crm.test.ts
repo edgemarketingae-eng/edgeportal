@@ -73,7 +73,7 @@ describe("permissions and CRM roles", () => {
       "crm.commission.manage",
     ])
       expect(isPermission(p)).toBe(true);
-    expect(CRM_PERMISSIONS.length).toBe(13);
+    expect(CRM_PERMISSIONS.length).toBe(15);
     expect(CRM_PERMISSIONS.every((p) => p.startsWith("crm."))).toBe(true);
     for (const r of SYSTEM_ROLES) for (const p of r.permissions) expect(ALL_PERMISSIONS).toContain(p);
   });

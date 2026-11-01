@@ -206,6 +206,32 @@ export function touchPatch(lead: Pick<LeadDoc, "stage" | "firstContactedAt">, ty
   return { set, autoStage };
 }
 
+/**
+ * Lead fields to update for a tracked call. Same rule as a hand-logged call, where "No answer" counts as contact, so an
+ * outgoing attempt counts; a missed incoming call doesn't. Uses the call's own time and never moves a date backwards,
+ * because uploads can arrive late. A call from before the lead existed changes nothing.
+ */
+export function callTouchPatch(
+  lead: Pick<LeadDoc, "stage" | "createdAt" | "firstContactedAt" | "lastContactedAt" | "lastActivityAt">,
+  call: { startedAt: Date; direction: string; connected: boolean },
+) {
+  const at = call.startedAt;
+  const set: Record<string, unknown> = {};
+  let autoStage: "CONTACTED" | null = null;
+  if (at < lead.createdAt) return { set, autoStage };
+  if (!lead.lastActivityAt || lead.lastActivityAt < at) set.lastActivityAt = at;
+  if (call.direction === "OUT" || call.connected) {
+    if (!lead.lastContactedAt || lead.lastContactedAt < at) set.lastContactedAt = at;
+    if (!lead.firstContactedAt || lead.firstContactedAt > at) set.firstContactedAt = at;
+    if (lead.stage === "NEW") {
+      autoStage = "CONTACTED";
+      set.stage = "CONTACTED";
+      set.stageChangedAt = at;
+    }
+  }
+  return { set, autoStage };
+}
+
 /** Keep lead.nextFollowUpAt = earliest open task with a due date (joins the surrounding transaction). */
 export async function recomputeNextFollowUp(leadId: Types.ObjectId) {
   const next = await CrmTask.findOne({ leadId, status: { $in: [...OPEN_TASK_STATUSES] }, dueAt: { $ne: null } }, { dueAt: 1 })

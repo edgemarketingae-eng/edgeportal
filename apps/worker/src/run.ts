@@ -6,6 +6,7 @@ import type { Handlers } from "@edge/services";
 /** Per-queue concurrency: long or ordering-sensitive jobs run one at a time. */
 const CONCURRENCY: Partial<Record<QueueName, number>> = {
   "email.send": 5,
+  "push.send": 5,
   "odoo.sync": 2,
   "mailerlite.sync": 3,
   "recordings.cacheFill": 1,
@@ -14,6 +15,7 @@ const CONCURRENCY: Partial<Record<QueueName, number>> = {
   "crm.followUpDigest": 1,
   "crm.staleSweep": 1,
   "crm.batchUrgency": 1,
+  "crm.dueReminders": 1,
   "crm.autoLink": 2,
   "hr.leaveDaily": 1,
   "files.orphanSweep": 1,

@@ -14,7 +14,7 @@ import { loadViewerMiddleware, sameAppOrigin } from "../http/middleware";
 import { register } from "../http/route";
 
 /** Headers for internal Better Auth calls: the browser's cookies/origin plus our policy marker. */
-function policyHeaders(req: Request, channel?: string) {
+export function policyHeaders(req: Request, channel?: string) {
   const h = fromNodeHeaders(req.headers);
   h.set(POLICY_HEADER, env.INTERNAL_API_TOKEN);
   if (channel) h.set(OTP_CHANNEL_HEADER, channel);
@@ -27,7 +27,7 @@ function forwardCookies(res: Response, headers: Headers | undefined) {
 }
 
 /** The account exists but cannot use this app: point them at the one they can use. */
-const wrongApp = (app: "student" | "console" | "crm", homes: ReturnType<typeof homesFor> | null) => {
+export const wrongApp = (app: "student" | "console" | "crm", homes: ReturnType<typeof homesFor> | null) => {
   const where = homes?.console
     ? `the staff console (${env.CONSOLE_APP_URL})`
     : homes?.crm

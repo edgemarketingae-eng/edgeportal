@@ -3,7 +3,7 @@
 import type { CrmOptions, LeadDto } from "@edge/contracts";
 import { LEAD_STAGES } from "@edge/domain/crm/enums";
 import { LEAD_STAGE_LABELS } from "@edge/domain/crm/labels";
-import { nextStage, whatsappDigits } from "@edge/domain/crm/machine";
+import { nextStage, whatsappDigits, whatsappGreeting } from "@edge/domain/crm/machine";
 import { ActionButton, ActionDialog } from "@edge/ui/blocks/action-dialog";
 import { Button } from "@edge/ui/components/button";
 import { Checkbox } from "@edge/ui/components/checkbox";
@@ -96,10 +96,7 @@ type MoreDialog = "assign" | "move" | "resend" | "merge" | "delete";
 export function LeadControls({ lead, options, matchingStudent, duplicates, can }: LeadControlsProps) {
   const [dialog, setDialog] = useState<MoreDialog | null>(null);
   const hid = { id: lead.id };
-  const first = lead.name.split(/\s+/)[0] ?? lead.name;
-  const waText = encodeURIComponent(
-    `Hi ${first}, this is Edge Trading Academy. Thanks for your interest in our trading program. When is a good time to talk?`,
-  );
+  const waText = encodeURIComponent(whatsappGreeting(lead.name));
   const open = lead.stage !== "CONVERTED" && !lead.mergedIntoId;
   const next = nextStage(lead.stage);
   const team = options.teams[lead.project.id] ?? [];

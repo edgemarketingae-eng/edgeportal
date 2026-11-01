@@ -1,5 +1,6 @@
 import {
   ACTIVITY_DIRECTIONS,
+  CALL_DIRECTIONS,
   CALL_OUTCOMES,
   CONVERSION_SOURCES,
   CRM_TASK_STATUSES,
@@ -84,6 +85,8 @@ const leadSchema = new Schema(
     projectId: { type: ObjectId, required: true },
     name: { type: String, required: true },
     phone: { type: String, default: null }, // E.164
+    /** Other numbers of the same person, e.g. a call number when `phone` is their WhatsApp. Used to match phone calls. */
+    altPhones: { type: [String], default: [] }, // E.164
     email: { type: String, default: null }, // lower-case
     country: { type: String, default: null },
     language: { type: String, enum: [...LEAD_LANGUAGES, null], default: null },
@@ -126,6 +129,7 @@ const leadSchema = new Schema(
   { ...timestamps, collection: "leads" },
 );
 leadSchema.index({ phone: 1 });
+leadSchema.index({ altPhones: 1 });
 leadSchema.index({ email: 1 });
 leadSchema.index({ projectId: 1, mergedIntoId: 1, stage: 1 });
 leadSchema.index({ projectId: 1, ownerId: 1 });
@@ -139,7 +143,7 @@ leadSchema.index({ createdAt: -1 });
 leadSchema.index({ jetaFxClientId: 1 });
 leadSchema.index({ productIds: 1 });
 
-/** Append-only timeline per lead (notes, calls, stage changes, system events). */
+/** Append-only timeline per lead (notes, calls, stage changes, system events). A tracked call's details live on its LeadCall. */
 const leadActivitySchema = new Schema(
   {
     leadId: { type: ObjectId, required: true },
@@ -150,10 +154,62 @@ const leadActivitySchema = new Schema(
     data: { type: Schema.Types.Mixed, default: {} },
     actorType: { type: String, enum: ACTOR_TYPES, required: true },
     actorId: { type: String, default: null },
+    callId: { type: ObjectId, default: null },
   },
   { timestamps: { createdAt: true, updatedAt: false }, versionKey: false, collection: "leadActivities" },
 );
 leadActivitySchema.index({ leadId: 1, createdAt: -1 });
+leadActivitySchema.index({ callId: 1 }, partialUnique("callId", "objectId"));
+
+/**
+ * A real phone call with a lead, read from the executive's phone. Uploads repeat, so this is one row per call: neither
+ * device nor lead is in the key, which means reinstalls and merges can't duplicate one. Only calls matching a lead are stored.
+ */
+const leadCallSchema = new Schema(
+  {
+    userId: { type: ObjectId, required: true },
+    leadId: { type: ObjectId, required: true },
+    /** The lead's project when the call happened, for project managers' reports. */
+    projectId: { type: ObjectId, required: true },
+    phone: { type: String, required: true }, // E.164
+    direction: { type: String, enum: CALL_DIRECTIONS, required: true },
+    startedAt: { type: Date, required: true }, // whole seconds
+    durationSec: { type: Number, default: 0 },
+    connected: { type: Boolean, default: false },
+    /** Saved from the app with no call log row yet (still on the call, or tracking off): the real row replaces the time and duration. */
+    estimated: { type: Boolean, default: false },
+    outcome: { type: String, enum: [...CALL_OUTCOMES, null], default: null },
+    body: { type: String, default: null },
+    /** Set once the executive saved the after-call sheet, so a retried save can't create a second follow-up. */
+    sheetSavedAt: { type: Date, default: null },
+  },
+  { ...timestamps, collection: "leadCalls" },
+);
+leadCallSchema.index({ userId: 1, phone: 1, startedAt: 1 }, { unique: true });
+leadCallSchema.index({ leadId: 1, startedAt: -1 });
+leadCallSchema.index({ startedAt: -1, userId: 1 });
+leadCallSchema.index({ projectId: 1, startedAt: -1 });
+
+/** A phone signed in to the CRM app. Only a hash of its token is stored; a user has one live device at a time. */
+const crmDeviceSchema = new Schema(
+  {
+    userId: { type: ObjectId, required: true },
+    tokenHash: { type: String, required: true },
+    model: { type: String, default: null },
+    androidVersion: { type: String, default: null },
+    appVersion: { type: String, default: null },
+    fcmToken: { type: String, default: null },
+    /** Call log permission as last reported by the phone; null until its first report. */
+    trackingOn: { type: Boolean, default: null },
+    lastSeenAt: { type: Date, default: null },
+    lastSyncAt: { type: Date, default: null },
+    revokedAt: { type: Date, default: null },
+    revokedReason: { type: String, default: null },
+  },
+  { ...timestamps, collection: "crmDevices" },
+);
+crmDeviceSchema.index({ tokenHash: 1 }, { unique: true });
+crmDeviceSchema.index({ userId: 1, revokedAt: 1 });
 
 /**
  * A task on the board: a follow-up on a lead (leadId set) or any piece of sales work in a
@@ -295,6 +351,8 @@ leadDepositSchema.index({ creditedToId: 1, sequence: 1, status: 1, depositedAt: 
 export const Project = model("Project", projectSchema);
 export const Lead = model("Lead", leadSchema);
 export const LeadActivity = model("LeadActivity", leadActivitySchema);
+export const LeadCall = model("LeadCall", leadCallSchema);
+export const CrmDevice = model("CrmDevice", crmDeviceSchema);
 export const CrmTask = model("CrmTask", crmTaskSchema);
 export const TaskComment = model("TaskComment", taskCommentSchema);
 export const LeadInboundEvent = model("LeadInboundEvent", leadInboundEventSchema);
@@ -305,6 +363,8 @@ export const LeadDeposit = model("LeadDeposit", leadDepositSchema);
 export type ProjectDoc = InferSchemaType<typeof projectSchema> & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date };
 export type LeadDoc = InferSchemaType<typeof leadSchema> & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date };
 export type LeadActivityDoc = InferSchemaType<typeof leadActivitySchema> & { _id: Types.ObjectId; createdAt: Date };
+export type LeadCallDoc = InferSchemaType<typeof leadCallSchema> & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date };
+export type CrmDeviceDoc = InferSchemaType<typeof crmDeviceSchema> & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date };
 export type CrmTaskDoc = InferSchemaType<typeof crmTaskSchema> & { _id: Types.ObjectId; createdAt: Date; updatedAt: Date };
 export type TaskCommentDoc = InferSchemaType<typeof taskCommentSchema> & { _id: Types.ObjectId; createdAt: Date };
 export type LeadInboundEventDoc = InferSchemaType<typeof leadInboundEventSchema> & { _id: Types.ObjectId };

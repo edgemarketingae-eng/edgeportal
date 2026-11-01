@@ -11,24 +11,24 @@ Operations (jobs, backups, provider details, everyday admin tasks) are in [RUNBO
 
 ## What runs where
 
-| Hostname | Serves | On the server |
-|---|---|---|
-| `portal.edgeacademy.ae` | Student portal | PM2 `edge-student` on 127.0.0.1:3000 |
-| `console.edgeacademy.ae` | Staff portal and admin panel | PM2 `edge-console` on 127.0.0.1:3001 |
-| `crm.edgeacademy.ae` | Sales CRM ([CRM.md](CRM.md)) | PM2 `edge-crm` on 127.0.0.1:3002 |
-| `api.edgeacademy.ae` | Only `/api/health`, `/api/webhooks/*` and `/api/media/*` (signed video links); everything else is 404 | PM2 `edge-api` on :4000 |
-| (none) | Background jobs, schedules, recordings | PM2 `edge-worker` |
+| Hostname                 | Serves                                                                                                                                                                                                       | On the server                        |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
+| `portal.edgeacademy.ae`  | Student portal                                                                                                                                                                                               | PM2 `edge-student` on 127.0.0.1:3000 |
+| `console.edgeacademy.ae` | Staff portal and admin panel                                                                                                                                                                                 | PM2 `edge-console` on 127.0.0.1:3001 |
+| `crm.edgeacademy.ae`     | Sales CRM ([CRM.md](CRM.md))                                                                                                                                                                                 | PM2 `edge-crm` on 127.0.0.1:3002     |
+| `api.edgeacademy.ae`     | Only `/api/health`, `/api/webhooks/*`, `/api/public/*` (browser forms), `/api/media/*` (signed video links) and the CRM phone app's paths (device token required, see [CRM](CRM.md)); everything else is 404 | PM2 `edge-api` on :4000              |
+| (none)                   | Background jobs, schedules, recordings                                                                                                                                                                       | PM2 `edge-worker`                    |
 
 nginx terminates HTTPS (certbot certificate) and proxies the four hosts. Redis holds the job queues. Everything
 is configured from one file, `.env` at the repo root. The files behind this live in [`deploy/`](../deploy):
 
-| File | What it is |
-|---|---|
-| `deploy/setup.sh` | One-time server setup: packages, firewall, Redis, PM2 on boot, HTTPS certificate, nginx site |
-| `deploy/deploy.sh` | Every deploy: install, build, migrate, restart, health check |
-| `deploy/ecosystem.config.cjs` | The five PM2 processes |
-| `deploy/nginx.conf` | The nginx site (linked into `/etc/nginx/sites-enabled` by `setup.sh`) |
-| `deploy/env.production.example` | Template for the server's `.env` |
+| File                            | What it is                                                                                   |
+| ------------------------------- | -------------------------------------------------------------------------------------------- |
+| `deploy/setup.sh`               | One-time server setup: packages, firewall, Redis, PM2 on boot, HTTPS certificate, nginx site |
+| `deploy/deploy.sh`              | Every deploy: install, build, migrate, restart, health check                                 |
+| `deploy/ecosystem.config.cjs`   | The five PM2 processes                                                                       |
+| `deploy/nginx.conf`             | The nginx site (linked into `/etc/nginx/sites-enabled` by `setup.sh`)                        |
+| `deploy/env.production.example` | Template for the server's `.env`                                                             |
 
 ## First-time setup
 
@@ -151,12 +151,12 @@ Optionally `sudo reboot` and check that `pm2 status` shows all five processes on
 
 Webhook URLs to register with the payment providers:
 
-| Provider | Webhook URL |
-|---|---|
-| Stripe | `https://api.edgeacademy.ae/api/webhooks/stripe` |
-| Nomod | `https://api.edgeacademy.ae/api/webhooks/nomod` |
-| Tabby | `https://api.edgeacademy.ae/api/webhooks/tabby` |
-| Tamara | none to register: sent with every checkout |
+| Provider          | Webhook URL                                                                                                    |
+| ----------------- | -------------------------------------------------------------------------------------------------------------- |
+| Stripe            | `https://api.edgeacademy.ae/api/webhooks/stripe`                                                               |
+| Nomod             | `https://api.edgeacademy.ae/api/webhooks/nomod`                                                                |
+| Tabby             | `https://api.edgeacademy.ae/api/webhooks/tabby`                                                                |
+| Tamara            | none to register: sent with every checkout                                                                     |
 | Website lead form | `https://api.edgeacademy.ae/api/webhooks/leads/website` (signed with `LEAD_WEBHOOK_SECRET`, see [CRM](CRM.md)) |
 
 Events, secrets and the other providers (Twilio, MailerSend, Google, Odoo, MailerLite) are in
@@ -183,12 +183,12 @@ git checkout v1.2.0 && ./deploy/deploy.sh      # roll back to a tag (git checkou
 The live site keeps running while it installs, builds and migrates. Only the final restart interrupts it, for a
 few seconds. Deploy outside class times.
 
-| You changed | Run |
-|---|---|
-| Code (a new release) | `git pull && ./deploy/deploy.sh` |
-| A value in `.env` | `pm2 restart all` (a redeploy also works) |
-| `deploy/nginx.conf` | `sudo nginx -t && sudo systemctl reload nginx` |
-| `deploy/ecosystem.config.cjs` | `pm2 delete all && ./deploy/deploy.sh` |
+| You changed                   | Run                                            |
+| ----------------------------- | ---------------------------------------------- |
+| Code (a new release)          | `git pull && ./deploy/deploy.sh`               |
+| A value in `.env`             | `pm2 restart all` (a redeploy also works)      |
+| `deploy/nginx.conf`           | `sudo nginx -t && sudo systemctl reload nginx` |
+| `deploy/ecosystem.config.cjs` | `pm2 delete all && ./deploy/deploy.sh`         |
 
 ## Everyday commands
 
@@ -206,20 +206,20 @@ pnpm store prune                   # free disk from old package versions
 
 Start with `pm2 status` and `pm2 logs <name> --lines 100`.
 
-| Symptom | Fix |
-|---|---|
-| `deploy.sh` stops at Preflight | Do what the message says (missing `.env`, `NODE_ENV=production` line, or a tool that `setup.sh` installs) |
-| `Invalid environment configuration:` during migrate | The message lists each bad key (a `mock` mode, an empty or `dev-…` secret, a malformed URL). Fix `.env`, run `deploy.sh` again |
-| `Set SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD…` | First deploy: set both (password 12+ characters) |
-| `MongoServerSelectionError … SSL alert number 80` | The VPS IP isn't in Atlas Network Access (or the entry is still Pending, or in another project). Get it with `curl -4 ifconfig.me` and add it as `/32` |
-| `bad auth : authentication failed` | Wrong Atlas user or password; use a hex password so nothing needs URL-encoding |
-| `querySrv ENOTFOUND` / `ETIMEOUT` | The server's resolver can't look up SRV records. Set `DNS=1.1.1.1 8.8.8.8` in `/etc/systemd/resolved.conf`, then `sudo systemctl restart systemd-resolved` |
-| Data shows up in a database called `test` | `/edge` is missing from `MONGODB_URI` |
-| `setup.sh`: "resolves to … expected …" | DNS isn't pointing at the server yet. Wait for the A records, re-run |
-| Certificate request fails | DNS wrong, port 80 blocked by a provider firewall, Cloudflare proxy on, or a CAA record. Fix, re-run `setup.sh` |
-| `502 Bad Gateway` | The app behind that host is down: `pm2 status`, then `pm2 logs` for it |
+| Symptom                                              | Fix                                                                                                                                                                                             |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deploy.sh` stops at Preflight                       | Do what the message says (missing `.env`, `NODE_ENV=production` line, or a tool that `setup.sh` installs)                                                                                       |
+| `Invalid environment configuration:` during migrate  | The message lists each bad key (a `mock` mode, an empty or `dev-…` secret, a malformed URL). Fix `.env`, run `deploy.sh` again                                                                  |
+| `Set SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD…`      | First deploy: set both (password 12+ characters)                                                                                                                                                |
+| `MongoServerSelectionError … SSL alert number 80`    | The VPS IP isn't in Atlas Network Access (or the entry is still Pending, or in another project). Get it with `curl -4 ifconfig.me` and add it as `/32`                                          |
+| `bad auth : authentication failed`                   | Wrong Atlas user or password; use a hex password so nothing needs URL-encoding                                                                                                                  |
+| `querySrv ENOTFOUND` / `ETIMEOUT`                    | The server's resolver can't look up SRV records. Set `DNS=1.1.1.1 8.8.8.8` in `/etc/systemd/resolved.conf`, then `sudo systemctl restart systemd-resolved`                                      |
+| Data shows up in a database called `test`            | `/edge` is missing from `MONGODB_URI`                                                                                                                                                           |
+| `setup.sh`: "resolves to … expected …"               | DNS isn't pointing at the server yet. Wait for the A records, re-run                                                                                                                            |
+| Certificate request fails                            | DNS wrong, port 80 blocked by a provider firewall, Cloudflare proxy on, or a CAA record. Fix, re-run `setup.sh`                                                                                 |
+| `502 Bad Gateway`                                    | The app behind that host is down: `pm2 status`, then `pm2 logs` for it                                                                                                                          |
 | Sign-in loops back to login, or `403 Invalid origin` | `STUDENT_APP_URL` / `CONSOLE_APP_URL` / `CRM_APP_URL` must be exactly `https://portal.edgeacademy.ae` / `https://console.edgeacademy.ae` / `https://crm.edgeacademy.ae`; then `pm2 restart all` |
-| CRM password-reset email links to the student portal | `CRM_APP_URL` is missing or wrong in `.env` (the API only trusts the hosts it knows); fix it, `pm2 restart all` |
-| Payment stays pending | Check the provider's webhook delivery log and `pm2 logs edge-api`; use Admin → Payments → "Re-check with gateway" |
-| Tamara stays in test mode after go-live | `TAMARA_API_URL` still points at the sandbox |
-| Build killed (`exit code 137`) | Out of memory. `setup.sh` adds 4 GB swap; check `free -h` |
+| CRM password-reset email links to the student portal | `CRM_APP_URL` is missing or wrong in `.env` (the API only trusts the hosts it knows); fix it, `pm2 restart all`                                                                                 |
+| Payment stays pending                                | Check the provider's webhook delivery log and `pm2 logs edge-api`; use Admin → Payments → "Re-check with gateway"                                                                               |
+| Tamara stays in test mode after go-live              | `TAMARA_API_URL` still points at the sandbox                                                                                                                                                    |
+| Build killed (`exit code 137`)                       | Out of memory. `setup.sh` adds 4 GB swap; check `free -h`                                                                                                                                       |

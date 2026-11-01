@@ -1,4 +1,4 @@
-import { crmRoutes } from "@edge/contracts";
+import { ApiError, crmRoutes } from "@edge/contracts";
 import { ROUND_ROBIN } from "@edge/domain/crm/enums";
 import { LEAD_STAGE_LABELS } from "@edge/domain/crm/labels";
 import type { Permission } from "@edge/domain/auth/permissions";
@@ -22,6 +22,7 @@ import {
   deleteProject,
   dueTaskCount,
   getBoard,
+  getCallReport,
   getCommissionSettings,
   getCrmDashboard,
   getCrmOptions,
@@ -52,6 +53,7 @@ import {
   previewImport,
   rejectDeposit,
   removeConversion,
+  removeDevice,
   removeProjectMember,
   resendWelcome,
   resetCrmStaffPassword,
@@ -78,7 +80,7 @@ import { actorOf, requirePermission } from "../http/guards";
 import { register } from "../http/route";
 
 /** Every CRM route needs crm.access plus the named permissions; the project scope is loaded once per request. */
-async function crm(req: Request, ...perms: Permission[]) {
+export async function crm(req: Request, ...perms: Permission[]) {
   const v = requirePermission(req, "crm.access", ...perms);
   req.crmScope ??= await loadCrmScope(v);
   return { v, actor: actorOf(v), scope: req.crmScope };
@@ -156,6 +158,8 @@ export function crmRouter() {
   });
   register(r, crmRoutes.activity, async (req) => {
     const { actor, scope } = await crm(req, "crm.write");
+    // A phone sends calls through the after-call sheet, which ties them to the tracked call instead of adding a second entry.
+    if (req.device && req.valid.body.type === "CALL") throw new ApiError(409, "BUSINESS_RULE", "Update the app to log this call.");
     await addActivity(req.valid.params.id, req.valid.body, actor, scope);
     return ok(req.valid.body.nextFollowUpAt ? "Logged and follow-up scheduled." : "Logged.");
   });
@@ -224,6 +228,12 @@ export function crmRouter() {
     return ok("Deposit deleted.");
   });
   register(r, crmRoutes.leaderboard, async (req) => getLeaderboard(req.valid.query, (await crm(req, "crm.read")).scope));
+  register(r, crmRoutes.callReport, async (req) => getCallReport(req.valid.query, (await crm(req, "crm.calls.read")).scope));
+  register(r, crmRoutes.removeDevice, async (req) => {
+    const { actor } = await crm(req, "crm.devices.manage");
+    await removeDevice(req.valid.params.id, actor);
+    return ok("Phone removed. It stops working straight away.");
+  });
 
   // Products (what a lead can convert to)
   register(r, crmRoutes.products, async (req) => listProducts((await crm(req, "crm.manage")).scope));

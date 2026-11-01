@@ -1,3 +1,4 @@
+import type { CrmDeviceDoc } from "@edge/db";
 import type { CrmScope, Viewer } from "@edge/services";
 import type { Request } from "express";
 
@@ -10,6 +11,8 @@ declare global {
       /** Project-aware CRM scope, loaded once per request by the CRM routes. */
       crmScope?: CrmScope;
       sessionToken?: string | null;
+      /** Set when the request came from the CRM phone app with a device token instead of a Next.js server. */
+      device?: CrmDeviceDoc;
       valid?: { params?: unknown; query?: unknown; body?: unknown };
     }
   }

@@ -20,8 +20,8 @@ done
 
 step "Installing dependencies"
 # Dev dependencies too: next build and tsx need them. CI=true avoids pnpm's interactive prompts;
-# the MONGOMS flag skips the test-only MongoDB binary download.
-env -u NODE_ENV CI=true MONGOMS_DISABLE_POSTINSTALL=1 pnpm install --frozen-lockfile
+# the MONGOMS flag skips the test-only MongoDB binary download. The phone app is built on a laptop, not here.
+env -u NODE_ENV CI=true MONGOMS_DISABLE_POSTINSTALL=1 pnpm install --frozen-lockfile --filter '!@edge/mobile'
 
 # Everything from here runs as production. Never `source .env`: every process reads it with
 # Node's --env-file, and PM2 would freeze shell values.

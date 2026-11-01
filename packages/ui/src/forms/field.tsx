@@ -5,6 +5,7 @@ import { Input } from "../components/input";
 import { Label } from "../components/label";
 import { cn } from "../lib/utils";
 import { DatePicker, TimeInput } from "./date-picker";
+import { PasswordInput } from "./password-input";
 import { PhoneInput } from "./phone-input";
 
 export interface ActionState {
@@ -59,6 +60,8 @@ export function Field({
     );
   } else if (!control && input.type === "time") {
     control = <TimeInput id={id} name={name} aria-invalid={invalid} aria-describedby={msgId} {...input} />;
+  } else if (!control && input.type === "password") {
+    control = <PasswordInput id={id} name={name} aria-invalid={invalid} aria-describedby={msgId} {...input} />;
   }
   return (
     <div className={cn("grid content-start gap-2", className)}>

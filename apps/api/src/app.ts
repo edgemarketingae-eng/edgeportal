@@ -7,7 +7,7 @@ import helmet from "helmet";
 import { pinoHttp } from "pino-http";
 import type { Auth } from "./auth";
 import { errorHandler } from "./http/errors";
-import { internalOnly, loadViewerMiddleware, publicCors, requestContext } from "./http/middleware";
+import { internalOrDevice, phoneRateLimit, publicCors, requestContext } from "./http/middleware";
 import { authRouter } from "./routes/auth";
 import { adminRouter } from "./routes/admin";
 import { devRouter } from "./routes/dev";
@@ -19,6 +19,7 @@ import { classesRouter, joinRouter, mediaRouter } from "./routes/classes";
 import { crmRouter, leadWebhookRouter } from "./routes/crm";
 import { filesRouter } from "./routes/files";
 import { hrRouter } from "./routes/hr";
+import { mobileAuthRouter, mobileRouter } from "./routes/mobile";
 
 export interface AppOptions {
   auth: Auth;
@@ -59,14 +60,16 @@ export function createApp({ auth, logger = true, extraRoutes }: AppOptions) {
   // Browser-facing forms on the academy's other sites (Forex Growth Hub), straight to the public API host.
   app.use("/api/public", publicCors(env.PUBLIC_FORM_ORIGINS));
   app.use(publicRouter());
-  // Everything else under /api/v1 is internal: Next.js servers only, with the forwarded session cookie.
-  app.use("/api/v1", internalOnly, loadViewerMiddleware(auth));
+  app.use(mobileAuthRouter(auth));
+  // Everything else under /api/v1 is internal (Next.js servers with the forwarded session cookie) or the CRM phone app.
+  app.use("/api/v1", internalOrDevice(auth), phoneRateLimit());
   app.use(meRouter());
   app.use(studentRouter());
   app.use(paymentsRouter());
   app.use(classesRouter());
   app.use(adminRouter());
   app.use(crmRouter());
+  app.use(mobileRouter());
   app.use(hrRouter());
   app.use(filesRouter());
   app.use(devRouter());

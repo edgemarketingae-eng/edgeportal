@@ -22,15 +22,17 @@ Access is decided by permission keys on roles, exactly as in the admin console. 
 | `crm.staff.manage`      | create and disable CRM staff, reset their passwords, give them CRM roles                                 |
 | `crm.roles.manage`      | create and edit CRM roles                                                                                |
 | `crm.commission.manage` | set commission rates, verify or reject broker deposits, see everyone's commission                        |
+| `crm.calls.read`        | see the Calls report for the team                                                                        |
+| `crm.devices.manage`    | see the team's phones and remove a lost one                                                              |
 
 System roles, re-applied by `migrate` on every deploy (clone a role under Team → Roles for a variant):
 
-| Role                                    | Permissions                                                        | Typical person                                      |
-| --------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------- |
-| **CRM admin** (`crm_admin`)             | every `crm.*` key                                                  | runs the sales organisation                         |
-| **CRM manager** (`crm_manager`)         | access, read, write, assign, convert, all, projects.manage, manage | creates projects and hands them to project managers |
-| **Project manager** (`project_manager`) | access, read, write, assign, convert                               | runs the projects assigned to them                  |
-| **Sales executive** (`sales_executive`) | access, read, write, convert                                       | works their own leads and the project pool          |
+| Role                                    | Permissions                                                                                    | Typical person                                      |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| **CRM admin** (`crm_admin`)             | every `crm.*` key                                                                              | runs the sales organisation                         |
+| **CRM manager** (`crm_manager`)         | access, read, write, assign, convert, all, projects.manage, manage, calls.read, devices.manage | creates projects and hands them to project managers |
+| **Project manager** (`project_manager`) | access, read, write, assign, convert, calls.read                                               | runs the projects assigned to them                  |
+| **Sales executive** (`sales_executive`) | access, read, write, convert                                                                   | works their own leads and the project pool          |
 
 `crm.write` also covers marking product conversions and logging broker deposits; removing a conversion and managing
 products need `crm.manage`. `crm.commission.manage` is held by CRM admins (every `crm.*` key), Admin and Super admin,
@@ -165,6 +167,82 @@ time (Dubai), an assignee, a description and comments.
   the next follow-up in one step. A lead's "next follow-up" is the earliest open task with a due date.
 - The Tasks badge in the navigation counts the viewer's tasks due today or earlier.
 - Filters: project, assignee, priority. Project managers see their whole project; executives their own tasks.
+
+## Phone app
+
+Sales executives also have an Android app (`apps/mobile`, installed as an APK, see [installing it](CRM-APP.md)). It's built
+around their day: **Today** (follow-ups due, new leads oldest first, the pool to claim), **Leads**, the lead page, and **Me**
+(this month's commission, conversions, deposits and leaderboard place). Tapping **Call** dials straight away; when the call
+ends a sheet asks how it went, with a suggested outcome, and saves the note, stage and next follow-up in a couple of taps,
+even with no signal.
+
+### Call tracking
+
+Tracking is a quiet extra, not the app's purpose. It's one optional switch at first sign-in, on by default, and after that it
+lives under **Me > Settings**. The app reads the phone's call log: number, direction, start time and length. It records no
+audio.
+
+- **Only calls with leads are stored.** Numbers are matched exactly on `Lead.phone` and `Lead.altPhones`, across all leads.
+  Anything else is dropped by the API and never saved or logged, because company phones also carry personal calls.
+- **WhatsApp and Telegram calls aren't tracked.** Coming back from WhatsApp offers the same sheet, so they can be logged by hand.
+- Calls from before someone signed in are never read.
+- When several leads share a number, the call goes to the lead dialled from the app, otherwise the caller's own lead, then one
+  they can see, then an open one, then the most recently active. It's kept even on a lead the caller can't see (a lead may
+  have been reassigned before the upload arrived), but the phone is only told about leads they can see.
+
+### One call, one timeline entry
+
+The phone uploads in the background and may repeat itself, and the sheet can be saved before or after the upload. Both go
+through `saveCall` (`packages/services/src/crm/calls.ts`). A call is one `LeadCall`, unique on person, number and start time,
+with one `LeadActivity` pointing at it. The timeline entry is never edited: the outcome, note and length live on the
+`LeadCall` and are filled in when the timeline is read.
+
+A sheet saved before the call log has a row (still on the call, or tracking off) is marked `estimated`, and the real row
+replaces its time and length when it arrives.
+
+Logging the same call by hand on the web gives a second entry. Talk time only counts tracked calls, so reports aren't inflated.
+
+### What a call does to the lead
+
+Tracked calls use the call's own time and never move a date backwards, because uploads can be late.
+
+- An outgoing call counts as contact even if unanswered, the same as logging "No answer" by hand: it stamps the first
+  response and moves `NEW` to `CONTACTED`.
+- An answered incoming call counts too. A missed or declined one only updates the last activity.
+- A call from before the lead existed appears on the timeline and changes nothing.
+- **Connected** means the executive chose Answered or Asked to call back, otherwise 5 seconds or longer. A voicemail pickup can
+  count as connected.
+
+Merging moves the calls to the survivor and keeps the merged lead's number in its `altPhones`, so later calls still match.
+
+### Calls report
+
+`/calls` (needs `crm.calls.read`) shows calls, connected calls, talk time and leads called per person, today, for the last 7
+days, this month or last month (Dubai calendar). Sales executives are listed even at zero, so someone not calling stands out.
+Project managers see their own projects' calls.
+
+People with `crm.devices.manage` also see each phone: **Tracking**, **Tracking off** (the permission was turned off),
+**Not syncing** (nothing for 24 hours) or **No phone**, and **Remove** for a lost phone. Turning tracking off doesn't lock the
+app or warn the executive: the app shows **Off** under **Me > Settings**, and the manager sees it here.
+
+### Phone access
+
+The app calls `api.edgeacademy.ae` directly with a device token, not a Better Auth session.
+
+- A token is random, stored only as a hash in `crmDevices`, and doesn't expire: a tracker that quietly stops after 30 days is
+  worse than a long-lived token that can be revoked. It's revoked by signing out, signing in on another phone (one live phone
+  per person), a password change or reset, disabling the account, or **Remove** on `/calls`.
+- `/api/v1` stays closed. A device token only reaches paths under `/crm`, `/mobile`, `/me` and `/notifications`, and within
+  those only the routes in `deviceRoutes` (`packages/contracts/src/mobile.ts`); everything else is 404, whatever the person's
+  role. Staff, role, import, bulk, delete, merge and commission routes aren't on the list. Add to it deliberately.
+- Sign-in is `POST /api/v1/mobile/auth/sign-in`, email and password, limited to 20 per minute per address and 5 failures per
+  15 minutes per account. An authenticator code goes in the same request. Staff accounts have no `phoneNumber`, so mobile sign-in isn't offered.
+
+### Alerts
+
+Sent through Firebase Cloud Messaging: a lead assigned to you, a follow-up due now, a known lead enquiring again, a deposit
+verified or rejected. Bulk assign and CSV import send one summary per person. A missed call from a lead and the prompt to add
+an outcome come from the phone itself. Until Firebase is set up (`PUSH_MODE=live`), alerts only go to the worker log.
 
 ## Website lead form (public intake)
 
@@ -319,6 +397,7 @@ or email already belongs to a lead or a portal account are skipped; nothing is o
 | crm.batchUrgency   | 09:15 daily                                | auto task when a lead's batch of interest starts within `batchUrgencyDays`; rolls interest from closed batches to the current one |
 | crm.staleSweep     | 09:30 daily                                | open leads with no activity for `staleAfterDays` become Cold                                                                      |
 | crm.inboxSweep     | every 5 min                                | reprocesses website submissions that failed or stalled                                                                            |
+| crm.dueReminders   | every minute                               | phone alert when a follow-up comes due; once per due time, so rescheduling re-arms it; automatic tasks are skipped                |
 | crm.autoLink       | on sign-up and on every successful payment | links the matching lead and marks it converted; adds "payment received" to its timeline                                           |
 
 Run any of them by hand in development: `curl -X POST localhost:4000/api/dev/jobs/crm.followUpDigest`.
@@ -331,13 +410,14 @@ see the commission rates per deposit (setting `crm.commission`, stored as fracti
 
 ## Data
 
-`crmProjects`, `leads` (one `projectId` each; `productIds` mirrors the lead's conversions), `leadActivities`
-(append-only timeline), `crmTasks`, `crmTaskComments`, `leadInboundEvents` (intake inbox), `crmProducts`,
+`crmProjects`, `leads` (one `projectId` each; `productIds` mirrors the lead's conversions; `altPhones` holds other numbers),
+`leadActivities` (append-only timeline), `leadCalls` (tracked calls with leads), `crmDevices` (signed-in phones),
+`crmTasks`, `crmTaskComments`, `leadInboundEvents` (intake inbox), `crmProducts`,
 `leadConversions` (one per lead and product, with the credited person), `leadDeposits` (amounts in cents, status,
 commission rate and amount fixed at verification). Lead language used to be free text; `migrate` maps old values onto
 the dropdown codes. Every mutation is in the audit log (`lead.*` including
 `lead.conversion.*` and `lead.deposit.*`, `task.*`, `project.*`, `product.*`, `crm.settings.update`,
-`crm.commission.update`, `staff.*`, `role.*`). Leads keep no unique index on phone or email on purpose:
+`crm.commission.update`, `staff.*`, `role.*`, `device.*`). Leads keep no unique index on phone or email on purpose:
 duplicates are a real state, flagged on entry and resolved with **Merge duplicate**.
 
 ## Rolling out the CRM host (production)

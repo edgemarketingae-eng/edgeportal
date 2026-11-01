@@ -2,7 +2,19 @@ import type { Model } from "mongoose";
 import { AuthAccount, AuthRateLimit, AuthSession, AuthTwoFactor, AuthUser, AuthVerification } from "./models/auth";
 import { Batch, Course } from "./models/catalog";
 import { ClassSession, JoinLog, MeetEvent, Recording, RecordingView } from "./models/classes";
-import { CrmProduct, CrmTask, Lead, LeadActivity, LeadConversion, LeadDeposit, LeadInboundEvent, Project, TaskComment } from "./models/crm";
+import {
+  CrmDevice,
+  CrmProduct,
+  CrmTask,
+  Lead,
+  LeadActivity,
+  LeadCall,
+  LeadConversion,
+  LeadDeposit,
+  LeadInboundEvent,
+  Project,
+  TaskComment,
+} from "./models/crm";
 import { Enrollment, EnrollmentEvent } from "./models/enrollment";
 import { FileAsset } from "./models/files";
 import {
@@ -53,6 +65,8 @@ export const ALL_MODELS: Model<any>[] = [
   Project,
   Lead,
   LeadActivity,
+  LeadCall,
+  CrmDevice,
   CrmTask,
   TaskComment,
   LeadInboundEvent,

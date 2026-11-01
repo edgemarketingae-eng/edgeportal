@@ -16,3 +16,6 @@ export * from "./settings";
 export * from "./products";
 export * from "./deposits";
 export * from "./leaderboard";
+export * from "./calls";
+export * from "./devices";
+export * from "./today";

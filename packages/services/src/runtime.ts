@@ -6,6 +6,7 @@ import { createMailerLite, type MailerLiteApi } from "@edge/integrations/mailerl
 import { createOdooClient, type OdooClient } from "@edge/integrations/odoo/client";
 import { createGoogleWorkspace, type GoogleWorkspace } from "@edge/integrations/google/workspace";
 import type { GatewayDeps } from "@edge/integrations/gateways/types";
+import { createPushSender, type PushSender } from "@edge/integrations/push/index";
 import { createOtpProvider, type OtpProvider } from "@edge/integrations/twilio/verify";
 import { createBullProducer, dispatchOutbox, type JobProducer } from "@edge/jobs";
 import path from "node:path";
@@ -25,6 +26,7 @@ export interface Runtime {
   producer: JobProducer;
   otp: OtpProvider;
   email: EmailSender;
+  push: PushSender;
   gateways: GatewayRegistry;
   odoo: OdooClient;
   mailerlite: MailerLiteApi;
@@ -86,6 +88,7 @@ const factories: { [K in keyof Runtime]: () => Runtime[K] } = {
       serviceSid: env.TWILIO_VERIFY_SERVICE_SID,
     }),
   email: () => createEmailSender({ mode: env.EMAIL_MODE, from: env.EMAIL_FROM, mailersendApiKey: env.MAILERSEND_API_KEY }),
+  push: () => createPushSender({ mode: env.PUSH_MODE, serviceAccountJson: env.FCM_SERVICE_ACCOUNT_JSON }),
   gateways: () =>
     createGatewayRegistry(
       {

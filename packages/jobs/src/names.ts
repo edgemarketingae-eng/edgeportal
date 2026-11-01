@@ -1,6 +1,7 @@
 /** Queue names and payloads shared by producers (api, services) and the worker. */
 export const QUEUES = {
   EMAIL_SEND: "email.send",
+  PUSH_SEND: "push.send",
   PAYMENTS_RECONCILE: "payments.reconcile",
   PAYMENTS_EXPIRE: "payments.expire",
   PAYMENTS_INBOX_SWEEP: "payments.inboxSweep",
@@ -19,6 +20,7 @@ export const QUEUES = {
   CRM_STALE_SWEEP: "crm.staleSweep",
   CRM_BATCH_URGENCY: "crm.batchUrgency",
   CRM_INBOX_SWEEP: "crm.inboxSweep",
+  CRM_DUE_REMINDERS: "crm.dueReminders",
   HR_LEAVE_DAILY: "hr.leaveDaily",
   FILES_ORPHAN_SWEEP: "files.orphanSweep",
 } as const;
@@ -27,6 +29,7 @@ export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
 
 export interface JobPayloads {
   "email.send": { notificationLogId: string };
+  "push.send": { notificationLogId: string };
   "payments.reconcile": Record<string, never>;
   "payments.expire": Record<string, never>;
   "payments.inboxSweep": Record<string, never>;
@@ -51,6 +54,7 @@ export interface JobPayloads {
   "crm.staleSweep": { asOf?: string };
   "crm.batchUrgency": { asOf?: string };
   "crm.inboxSweep": Record<string, never>;
+  "crm.dueReminders": { asOf?: string };
   "hr.leaveDaily": { asOf?: string };
   "files.orphanSweep": Record<string, never>;
 }
@@ -77,6 +81,7 @@ export const SCHEDULES: { id: string; queue: QueueName; pattern: string; data?: 
   { id: "crm-batch-urgency-daily", queue: QUEUES.CRM_BATCH_URGENCY, pattern: "15 9 * * *" },
   { id: "crm-stale-sweep-daily", queue: QUEUES.CRM_STALE_SWEEP, pattern: "30 9 * * *" },
   { id: "crm-inbox-sweep", queue: QUEUES.CRM_INBOX_SWEEP, pattern: "*/5 * * * *" },
+  { id: "crm-due-reminders", queue: QUEUES.CRM_DUE_REMINDERS, pattern: "* * * * *" },
   { id: "hr-leave-daily", queue: QUEUES.HR_LEAVE_DAILY, pattern: "30 0 * * *" },
   { id: "files-orphan-sweep-weekly", queue: QUEUES.FILES_ORPHAN_SWEEP, pattern: "0 3 * * 0" },
 ];

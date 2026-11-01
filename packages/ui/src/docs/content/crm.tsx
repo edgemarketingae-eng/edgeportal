@@ -10,6 +10,7 @@ import {
   Package,
   Settings,
   Trash2,
+  PhoneCall,
   Trophy,
   Upload,
   Users,
@@ -1159,6 +1160,79 @@ export const crmDocs: DocModule[] = [
   },
 
   // ---------------------------------------------------------------------------------------------
+  {
+    slug: "calls",
+    title: "Phone app and calls",
+    summary: "The Android app for sales executives, how calls with leads are tracked, and the Calls report.",
+    icon: PhoneCall,
+    group: "Leads",
+    audience: ["crm.read"],
+    sections: [
+      {
+        id: "app",
+        title: "The phone app",
+        body: (
+          <>
+            <P>
+              Sales executives work leads from the Edge CRM app on their company phone. <Ui>Today</Ui> lists follow-ups that are due, new
+              leads and unassigned leads to claim, each with one-tap call and WhatsApp buttons.
+            </P>
+            <P>
+              When a call ends the app asks how it went and suggests an outcome. Add a note, move the stage and pick the next follow-up,
+              then <Ui>Save</Ui>. It saves even with no signal and sends when the phone reconnects.
+            </P>
+          </>
+        ),
+      },
+      {
+        id: "tracking",
+        title: "What is tracked",
+        body: (
+          <>
+            <P>
+              Call tracking is an optional extra, on by default at first sign-in and found under <Ui>Me</Ui> after that. It saves the
+              number, time, direction and length of SIM calls with leads, on the phone it's signed in on. Nothing is ever recorded: it can't
+              hear calls. Calls with anyone who isn't a lead aren't saved.
+            </P>
+            <P>
+              WhatsApp and Telegram calls aren't tracked. Coming back from WhatsApp offers the same screen, so those can be logged by hand.
+            </P>
+            <P>
+              A tracked call appears on the lead's timeline as <Ui>Outgoing call</Ui>, <Ui>Incoming call</Ui> or <Ui>Missed call</Ui>,
+              marked Tracked from the phone. An outgoing call counts as contact even if nobody answered, the same as logging No answer by
+              hand.
+            </P>
+          </>
+        ),
+      },
+      {
+        id: "report",
+        title: "The Calls report",
+        body: (
+          <>
+            <P>
+              <To href="/calls">Calls</To> shows calls, connected calls, talk time and leads called per person. Project managers see their
+              own projects. A call counts as connected if the executive chose Answered or Asked to call back, otherwise at 5 seconds or
+              longer, so a voicemail pickup can count.
+            </P>
+            <Terms
+              head={["Phone status", "What it means"]}
+              rows={[
+                [<Ui key="a">Tracking</Ui>, "The phone is signed in and reported in the last 24 hours."],
+                [<Ui key="b">Tracking off</Ui>, "The executive turned off call log access. The app still works and shows Off under Me."],
+                [<Ui key="c">Not syncing</Ui>, "Nothing for 24 hours: the phone may be off, or a battery setting may be stopping the app."],
+                [<Ui key="d">No phone</Ui>, "Nobody is signed in to the app for this person."],
+              ]}
+            />
+            <P>
+              <Ui>Remove</Ui> signs a lost or replaced phone out straight away. CRM admins and CRM managers see phone status and can remove
+              a phone.
+            </P>
+          </>
+        ),
+      },
+    ],
+  },
   {
     slug: "deleting-leads",
     title: "Deleting leads",

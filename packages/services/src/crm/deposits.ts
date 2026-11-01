@@ -13,6 +13,8 @@ import { BusinessError, NotFoundError, TransitionError, ValidationError } from "
 import { oid } from "../ids";
 import { day, iso } from "../mappers";
 import { notifyPermissionHolders, notifyUser } from "../notifications/in-app";
+import { queuePush } from "../notifications/push";
+import { flushOutbox } from "../runtime";
 import { pageOf } from "../paging";
 import { getSetting } from "../settings";
 import { actorId, between, leadHref, loadLead, lockLead, optId, periodRange, recordActivity, userNames } from "./common";
@@ -272,6 +274,12 @@ export async function verifyDeposit(id: string, actor: Actor & { type: "USER" },
       (month ? ` ${monthLine(month)}${raised ? " Your earlier ones this month went up too." : ""}` : ""),
     href: leadHref(d.leadId),
   });
+  await queuePush(d.creditedToId, {
+    title: "Deposit verified",
+    body: `${lead?.name ?? "A lead"}: ${usd(d.amountMinor)}. Your commission: ${usd(commissionMinor)}.`,
+    leadId: d.leadId,
+  });
+  await flushOutbox();
 }
 
 /** Reject a pending deposit, or a verified one that the broker reversed. It earns no commission. */
@@ -325,6 +333,12 @@ export async function rejectDeposit(id: string, reason: string, actor: Actor & {
       (month?.count ? ` ${monthLine(month)}` : ""),
     href: leadHref(d.leadId),
   });
+  await queuePush(d.creditedToId, {
+    title: "Deposit rejected",
+    body: `${lead?.name ?? "A lead"}: ${usd(d.amountMinor)}. ${why}`,
+    leadId: d.leadId,
+  });
+  await flushOutbox();
 }
 
 function mayDelete(d: Pick<LeadDepositDoc, "status" | "loggedById" | "creditedToId">, scope: CrmScope) {

@@ -14,3 +14,4 @@ export * from "./payments";
 export * from "./classes";
 export * from "./crm";
 export * from "./hr";
+export * from "./mobile";

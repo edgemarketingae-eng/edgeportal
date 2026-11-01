@@ -9,6 +9,8 @@ import { ApiError } from "@edge/contracts";
 import { z } from "zod";
 import { env } from "../env";
 import { notifyUser } from "../notifications/in-app";
+import { queuePush } from "../notifications/push";
+import { flushOutbox } from "../runtime";
 import { getSetting } from "../settings";
 import { escapeRegex, findDuplicateLeads, leadHref, normalizeEmail, recordActivity } from "./common";
 import { applyAssign, createLead } from "./leads";
@@ -188,7 +190,9 @@ export async function ingestInboundLead(
       if (p.consent) Object.assign(set, { "consent.marketing": true, "consent.marketingAt": existing.consent?.marketingAt ?? at });
       if (p.whatsappConsent) set["consent.whatsapp"] = true;
       const tags = parseTags((p.tags ?? []).join(","));
-      await Lead.updateOne({ _id: existing._id }, { $set: set, ...(tags.length ? { $addToSet: { tags: { $each: tags } } } : {}) });
+      const extraPhone = altPhone && altPhone !== (existing.phone ?? phone) ? altPhone : null;
+      const addToSet = { ...(tags.length ? { tags: { $each: tags } } : {}), ...(extraPhone ? { altPhones: extraPhone } : {}) };
+      await Lead.updateOne({ _id: existing._id }, { $set: set, ...(Object.keys(addToSet).length ? { $addToSet: addToSet } : {}) });
       await recordActivity(existing._id, "INBOUND", actor, {
         body: p.message?.trim() || null,
         direction: "IN",
@@ -197,19 +201,19 @@ export async function ingestInboundLead(
       if (existing.stage === "LOST")
         await recordActivity(existing._id, "STAGE_CHANGED", actor, { data: { from: "LOST", to: "NEW", auto: true } });
       if (reassignTo) await applyAssign(existing, new Types.ObjectId(reassignTo), actor);
-      else if (existing.ownerId)
-        await notifyUser(String(existing.ownerId), {
-          title: `${existing.name} enquired again`,
-          body: p.message?.trim().slice(0, 140) || `New enquiry from the ${source}`,
-          href: leadHref(existing._id),
-        });
-      else
+      else if (existing.ownerId) {
+        const title = `${existing.name} enquired again`;
+        const body = p.message?.trim().slice(0, 140) || `New enquiry from the ${source}`;
+        await notifyUser(String(existing.ownerId), { title, body, href: leadHref(existing._id) });
+        await queuePush(existing.ownerId, { title, body, leadId: existing._id });
+      } else
         await notifyProjectManagers(existing.projectId, {
           title: `${existing.name} enquired again`,
           body: "Unassigned lead, enquiry from the website.",
           href: leadHref(existing._id),
         });
     });
+    await flushOutbox();
     return { leadId: String(existing._id), existing: true, ownerId };
   }
 
@@ -243,7 +247,7 @@ export async function ingestInboundLead(
     },
     actor,
     undefined,
-    { inboundEventId: eventId, utm },
+    { inboundEventId: eventId, utm, altPhones: altPhone && altPhone !== phone ? [altPhone] : [] },
   );
   if (!ownerId)
     await notifyProjectManagers(project._id, {

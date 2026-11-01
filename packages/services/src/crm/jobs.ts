@@ -5,6 +5,7 @@ import { dubaiDateOnly, dubaiDateString, formatDate, startOfDubaiDay } from "@ed
 import { env } from "../env";
 import { queueEmail } from "../notifications/email";
 import { notifyPermissionHolders, notifyUser } from "../notifications/in-app";
+import { queuePush } from "../notifications/push";
 import { flushOutbox } from "../runtime";
 import { getSetting } from "../settings";
 import { channelToTaskType, leadHref, recomputeNextFollowUp, recordActivity, taskHref } from "./common";
@@ -12,11 +13,44 @@ import { channelToTaskType, leadHref, recomputeNextFollowUp, recordActivity, tas
 const SYSTEM = { type: "SYSTEM" as const, id: "crm-jobs" };
 const OPEN = { $in: [...OPEN_TASK_STATUSES] };
 
+/** How far back a run looks, so a late or restarted worker still catches what just came due. */
+const DUE_WINDOW_MS = 10 * 60_000;
+
+/**
+ * Every minute: a phone notification when a follow-up comes due. Automatic tasks are skipped, since nobody chose that time.
+ * The due time is in the key, so a rescheduled task reminds again and a task reminds only once per due time.
+ */
+export async function runDueReminders(asOf: Date = now()) {
+  const tasks = await CrmTask.find({
+    status: OPEN,
+    assigneeId: { $ne: null },
+    autoKey: null,
+    dueAt: { $gt: new Date(asOf.getTime() - DUE_WINDOW_MS), $lte: asOf },
+  }).lean();
+  if (!tasks.length) return { sent: 0 };
+  const leadIds = tasks.flatMap((t) => (t.leadId ? [t.leadId] : []));
+  const leads = new Map((await Lead.find({ _id: { $in: leadIds } }, { name: 1 }).lean()).map((l) => [String(l._id), l.name]));
+  let sent = 0;
+  for (const t of tasks) {
+    const id = await queuePush(t.assigneeId!, {
+      title: `Follow-up due: ${t.leadId ? (leads.get(String(t.leadId)) ?? "Lead") : t.title}`,
+      body: t.title,
+      leadId: t.leadId ?? undefined,
+      dedupeKey: `crm-due:${t._id}:${t.dueAt!.getTime()}`,
+    });
+    if (id) sent++;
+  }
+  await flushOutbox();
+  return { sent };
+}
+
 /** Daily 09:00: each assignee gets one in-app note + email listing tasks due today or overdue. Exactly-once per day via the email dedupe key. */
 export async function runFollowUpDigest(asOf: Date = now()) {
   const todayEnd = startOfDubaiDay(asOf, 1);
   const todayStart = startOfDubaiDay(asOf);
-  const tasks = await CrmTask.find({ status: OPEN, assigneeId: { $ne: null }, dueAt: { $lt: todayEnd } }).sort({ dueAt: 1 }).lean();
+  const tasks = await CrmTask.find({ status: OPEN, assigneeId: { $ne: null }, dueAt: { $lt: todayEnd } })
+    .sort({ dueAt: 1 })
+    .lean();
   const byAssignee = new Map<string, typeof tasks>();
   for (const t of tasks) {
     const k = String(t.assigneeId);
@@ -37,14 +71,25 @@ export async function runFollowUpDigest(asOf: Date = now()) {
         name: user.name,
         dueToday: list.length - overdue,
         overdue,
-        items: list.slice(0, 25).map((t) => ({ leadName: t.leadId ? (leads.get(String(t.leadId)) ?? "Lead") : "Task", title: t.title, dueAt: t.dueAt!.toISOString(), href: t.leadId ? leadHref(t.leadId) : taskHref(t._id) })),
+        items: list
+          .slice(0, 25)
+          .map((t) => ({
+            leadName: t.leadId ? (leads.get(String(t.leadId)) ?? "Lead") : "Task",
+            title: t.title,
+            dueAt: t.dueAt!.toISOString(),
+            href: t.leadId ? leadHref(t.leadId) : taskHref(t._id),
+          })),
         tasksUrl: `${env.CRM_APP_URL}/tasks`,
       },
       dedupeKey: `crm-digest:${userId}:${dubaiDateString(asOf)}`,
     });
     if (!id) continue; // already sent today
     sent++;
-    await notifyUser(userId, { title: `${list.length} task${list.length === 1 ? "" : "s"} due today`, body: overdue ? `${overdue} overdue.` : "Keep the pipeline moving.", href: `${env.CRM_APP_URL}/tasks` });
+    await notifyUser(userId, {
+      title: `${list.length} task${list.length === 1 ? "" : "s"} due today`,
+      body: overdue ? `${overdue} overdue.` : "Keep the pipeline moving.",
+      href: `${env.CRM_APP_URL}/tasks`,
+    });
   }
   if (sent) await flushOutbox();
   return { owners: byAssignee.size, sent };
@@ -55,11 +100,20 @@ export async function runStaleSweep(asOf: Date = now()) {
   const cfg = await getSetting("crm.config");
   const cutoff = new Date(asOf.getTime() - cfg.staleAfterDays * 86_400_000);
   const r = await Lead.updateMany(
-    { mergedIntoId: null, stage: { $in: [...OPEN_LEAD_STAGES] }, temperature: { $ne: "COLD" }, $or: [{ lastActivityAt: { $lt: cutoff } }, { lastActivityAt: null, createdAt: { $lt: cutoff } }] },
+    {
+      mergedIntoId: null,
+      stage: { $in: [...OPEN_LEAD_STAGES] },
+      temperature: { $ne: "COLD" },
+      $or: [{ lastActivityAt: { $lt: cutoff } }, { lastActivityAt: null, createdAt: { $lt: cutoff } }],
+    },
     { $set: { temperature: "COLD" } },
   );
   if (r.modifiedCount) {
-    await notifyPermissionHolders("crm.all", { title: `${r.modifiedCount} lead${r.modifiedCount === 1 ? "" : "s"} went cold`, body: `No activity for ${cfg.staleAfterDays} days.`, href: `${env.CRM_APP_URL}/leads?temperature=COLD` });
+    await notifyPermissionHolders("crm.all", {
+      title: `${r.modifiedCount} lead${r.modifiedCount === 1 ? "" : "s"} went cold`,
+      body: `No activity for ${cfg.staleAfterDays} days.`,
+      href: `${env.CRM_APP_URL}/leads?temperature=COLD`,
+    });
   }
   return { cooled: r.modifiedCount };
 }
@@ -74,7 +128,10 @@ export async function runBatchUrgency(asOf: Date = now()) {
   let tasksCreated = 0;
   let rolled = 0;
   if (cfg.batchUrgencyDays > 0) {
-    const upcoming = await Batch.find({ status: { $in: ["OPEN", "RUNNING"] }, startDate: { $gte: dubaiDateOnly(asOf), $lte: dubaiDateOnly(asOf, cfg.batchUrgencyDays) } }).lean();
+    const upcoming = await Batch.find({
+      status: { $in: ["OPEN", "RUNNING"] },
+      startDate: { $gte: dubaiDateOnly(asOf), $lte: dubaiDateOnly(asOf, cfg.batchUrgencyDays) },
+    }).lean();
     for (const b of upcoming) {
       const leads = await Lead.find({ mergedIntoId: null, batchInterestId: b._id, stage: { $in: [...OPEN_LEAD_STAGES] } }).lean();
       for (const lead of leads) {
@@ -96,7 +153,16 @@ export async function runBatchUrgency(asOf: Date = now()) {
                 autoKey,
               },
             ]);
-            await recordActivity(lead._id, "TASK_CREATED", SYSTEM, { data: { taskId: String(t!._id), title: t!.title, type: t!.type, dueAt: asOf.toISOString(), auto: true, batchId: String(b._id) } });
+            await recordActivity(lead._id, "TASK_CREATED", SYSTEM, {
+              data: {
+                taskId: String(t!._id),
+                title: t!.title,
+                type: t!.type,
+                dueAt: asOf.toISOString(),
+                auto: true,
+                batchId: String(b._id),
+              },
+            });
             await recomputeNextFollowUp(lead._id);
           });
           tasksCreated++;
@@ -108,13 +174,26 @@ export async function runBatchUrgency(asOf: Date = now()) {
   }
   const closed = await Batch.find({ status: { $in: ["COMPLETED", "ARCHIVED"] } }, { _id: 1, name: 1, courseId: 1 }).lean();
   if (closed.length) {
-    const stuck = await Lead.find({ mergedIntoId: null, batchInterestId: { $in: closed.map((b) => b._id) }, stage: { $in: [...OPEN_LEAD_STAGES] } }).lean();
+    const stuck = await Lead.find({
+      mergedIntoId: null,
+      batchInterestId: { $in: closed.map((b) => b._id) },
+      stage: { $in: [...OPEN_LEAD_STAGES] },
+    }).lean();
     for (const lead of stuck) {
       const old = closed.find((b) => String(b._id) === String(lead.batchInterestId))!;
-      const next = await Batch.findOne({ courseId: old.courseId, isCurrentForEnrollment: true, status: { $in: ["OPEN", "RUNNING"] } }, { _id: 1, name: 1 }).lean();
+      const next = await Batch.findOne(
+        { courseId: old.courseId, isCurrentForEnrollment: true, status: { $in: ["OPEN", "RUNNING"] } },
+        { _id: 1, name: 1 },
+      ).lean();
       await withTx(async () => {
-        await Lead.updateOne({ _id: lead._id, batchInterestId: old._id }, { $set: { batchInterestId: next?._id ?? null, lastActivityAt: asOf } });
-        await recordActivity(lead._id, "SYSTEM", SYSTEM, { body: next ? `${old.name} closed; interest moved to ${next.name}` : `${old.name} closed; no open batch to move interest to`, data: { fromBatchId: String(old._id), toBatchId: next ? String(next._id) : null } });
+        await Lead.updateOne(
+          { _id: lead._id, batchInterestId: old._id },
+          { $set: { batchInterestId: next?._id ?? null, lastActivityAt: asOf } },
+        );
+        await recordActivity(lead._id, "SYSTEM", SYSTEM, {
+          body: next ? `${old.name} closed; interest moved to ${next.name}` : `${old.name} closed; no open batch to move interest to`,
+          data: { fromBatchId: String(old._id), toBatchId: next ? String(next._id) : null },
+        });
       });
       rolled++;
     }

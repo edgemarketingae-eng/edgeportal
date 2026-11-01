@@ -9,7 +9,7 @@ import { parsePhone } from "@edge/domain/phone";
 import { audit } from "../audit";
 import { BusinessError, ValidationError } from "../errors";
 import { oid } from "../ids";
-import { createLead } from "./leads";
+import { createLead, pushAssignmentSummary } from "./leads";
 import { roundRobinPicker } from "./round-robin";
 import type { CrmScope } from "./scope";
 
@@ -139,6 +139,7 @@ export async function importLeads(
 ) {
   const rows = parseRows(csv, o.defaultCountry);
   let created = 0;
+  const assigned = new Map<string, number>();
   let skipped = 0;
   let invalid = 0;
   const seen = new Set<string>();
@@ -182,8 +183,10 @@ export async function importLeads(
         },
         actor,
         scope,
-        { createdAs: "IMPORTED" },
+        { createdAs: "IMPORTED", quiet: true },
       );
+      const owner = picker ? turn : o.ownerId;
+      if (owner && owner !== actor.id) assigned.set(owner, (assigned.get(owner) ?? 0) + 1);
       turn = null;
       created++;
     } catch (e) {
@@ -199,5 +202,6 @@ export async function importLeads(
     entityId: "import",
     after: { projectId: o.projectId, source: o.source, rows: rows.length, created, skipped, invalid },
   });
+  await pushAssignmentSummary(assigned);
   return { created, skipped, invalid };
 }

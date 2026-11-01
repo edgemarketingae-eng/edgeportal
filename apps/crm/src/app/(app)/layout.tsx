@@ -10,6 +10,7 @@ import {
   LifeBuoy,
   Package,
   Settings,
+  PhoneCall,
   Trophy,
   Upload,
   Users,
@@ -42,6 +43,7 @@ async function CrmShell({ children }: { children: React.ReactNode }) {
         { href: "/projects", label: "Projects", icon: <FolderKanban />, show: can(v, "crm.read") },
         { href: "/deposits", label: "Deposits", icon: <Banknote />, show: can(v, "crm.write") || can(v, "crm.commission.manage") },
         { href: "/leaderboard", label: "Leaderboard", icon: <Trophy />, show: can(v, "crm.read") },
+        { href: "/calls", label: "Calls", icon: <PhoneCall />, show: can(v, "crm.calls.read") },
       ],
     ],
     [

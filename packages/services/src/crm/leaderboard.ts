@@ -6,7 +6,7 @@ import { between, optId, periodRange, userNames } from "./common";
 import { has, type CrmScope } from "./scope";
 
 /** Active people holding the sales executive role (Off or not): they are always on the board, even at zero. */
-async function salesExecutiveIds() {
+export async function salesExecutiveIds() {
   const role = await Role.findOne({ key: "sales_executive" }, { _id: 1 }).lean();
   if (!role) return [];
   const staff = await StaffProfile.find({ roleIds: role._id }, { _id: 1 }).lean();

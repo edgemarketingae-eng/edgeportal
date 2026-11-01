@@ -7,6 +7,7 @@ import {
   isDuplicateKey,
   Lead,
   LeadActivity,
+  LeadCall,
   LeadConversion,
   LeadDeposit,
   LeadInboundEvent,
@@ -14,6 +15,7 @@ import {
   TaskComment,
   Types,
   withTx,
+  type LeadActivityDoc,
   type LeadDoc,
   type ProjectDoc,
 } from "@edge/db";
@@ -33,6 +35,7 @@ import type { Actor } from "@edge/domain/enums";
 import { parsePhone } from "@edge/domain/phone";
 import { audit } from "../audit";
 import { EXPORT_CAP, facetPage } from "../paging";
+import { moveCallsOnMerge, withCallDetails } from "./calls";
 import { depositsForLead } from "./deposits";
 import { activeProducts, moveConversions, recordStudentConversion, toConversionDtos } from "./products";
 import { roundRobinPicker } from "./round-robin";
@@ -40,6 +43,7 @@ import { getCurrentEnrollment } from "../enrollment/service";
 import { BusinessError, ForbiddenError, NotFoundError, TransitionError, ValidationError } from "../errors";
 import { oid } from "../ids";
 import { notifyUser } from "../notifications/in-app";
+import { queuePush } from "../notifications/push";
 import { flushOutbox } from "../runtime";
 import { getSetting } from "../settings";
 import {
@@ -90,6 +94,10 @@ export interface CreateLeadOptions {
   utm?: { source?: string | null; medium?: string | null; campaign?: string | null; content?: string | null; term?: string | null } | null;
   /** Timeline entry for the creation (IMPORTED for CSV rows). */
   createdAs?: "CREATED" | "IMPORTED";
+  /** The person's other numbers, already E.164. */
+  altPhones?: string[];
+  /** No phone notification: bulk paths send one summary instead of one per lead. */
+  quiet?: boolean;
 }
 
 async function validCourse(id?: string | null) {
@@ -167,6 +175,7 @@ export async function createLead(input: LeadInput, actor: Actor, scope?: CrmScop
           projectId: project._id,
           name,
           phone,
+          altPhones: opts.altPhones ?? [],
           email,
           country,
           language: input.language || null,
@@ -237,6 +246,7 @@ export async function createLead(input: LeadInput, actor: Actor, scope?: CrmScop
           body: `${name} · ${LEAD_SOURCE_LABELS[input.source]} · ${project.name}`,
           href: leadHref(lead!._id),
         });
+        if (!opts.quiet) await queuePush(ownerId, { title: "New lead assigned to you", body: name, leadId: lead!._id });
       }
       return lead!._id;
     });
@@ -254,6 +264,7 @@ export async function applyAssign(
   to: Types.ObjectId | null,
   actor: Actor,
   type: "ASSIGNED" | "CLAIMED" = "ASSIGNED",
+  quiet = false,
 ) {
   const at = now();
   const names = await userNames([lead.ownerId, to]);
@@ -270,8 +281,20 @@ export async function applyAssign(
       toName: to ? (names.get(String(to)) ?? null) : null,
     },
   });
-  if (to && !(actor.type === "USER" && actor.id === String(to)))
+  if (to && !(actor.type === "USER" && actor.id === String(to))) {
     await notifyUser(String(to), { title: "Lead assigned to you", body: lead.name, href: leadHref(lead._id) });
+    if (!quiet) await queuePush(to, { title: "Lead assigned to you", body: lead.name, leadId: lead._id });
+  }
+}
+
+/** One phone notification for a batch of assignments, however many leads it was. */
+export async function pushAssignmentSummary(counts: Map<string, number>) {
+  for (const [userId, n] of counts)
+    await queuePush(userId, {
+      title: n === 1 ? "New lead assigned to you" : `${n} new leads assigned to you`,
+      body: "Open the app to call them.",
+    });
+  await flushOutbox();
 }
 
 export async function updateLead(id: string, input: LeadUpdateInput, actor: Actor & { type: "USER" }, scope: CrmScope) {
@@ -370,7 +393,13 @@ export async function setStage(
 }
 
 /** Hand a lead to someone on the project team (or unassign). Needs crm.assign in a project the viewer manages. */
-export async function assignLead(id: string, ownerId: string | null, actor: Actor & { type: "USER" }, scope: CrmScope) {
+export async function assignLead(
+  id: string,
+  ownerId: string | null,
+  actor: Actor & { type: "USER" },
+  scope: CrmScope,
+  opts: { quiet?: boolean } = {},
+) {
   const _id = oid(id, "Lead");
   const current = await loadLead(_id, scope);
   if (!canAssignIn(scope, current.projectId)) throw new NotFoundError("Lead");
@@ -378,7 +407,7 @@ export async function assignLead(id: string, ownerId: string | null, actor: Acto
   await withTx(async () => {
     const lead = await lockLead(_id);
     if (String(lead.ownerId ?? "") === String(to ?? "")) return;
-    await applyAssign(lead, to, actor);
+    await applyAssign(lead, to, actor, "ASSIGNED", opts.quiet);
     await audit({
       actor,
       action: "lead.assign",
@@ -388,6 +417,7 @@ export async function assignLead(id: string, ownerId: string | null, actor: Acto
       after: { ownerId: to ? String(to) : null },
     });
   });
+  if (!opts.quiet) await flushOutbox();
 }
 
 /** The leads a bulk action targets: ticked ids, or everything matching a filter. */
@@ -420,6 +450,7 @@ export async function bulkAssignLeads(target: BulkTarget, ownerId: string | null
     : [];
   const projectOf = new Map(leads.map((l) => [String(l._id), l.projectId]));
   const pickers = new Map<string, Awaited<ReturnType<typeof roundRobinPicker>>>();
+  const assigned = new Map<string, number>();
   for (const id of ids) {
     try {
       let to = ownerId;
@@ -435,13 +466,15 @@ export async function bulkAssignLeads(target: BulkTarget, ownerId: string | null
         to = await picker.next();
         if (!to) throw new BusinessError("No sales executives on this project");
       }
-      await assignLead(id, to, actor, scope);
+      await assignLead(id, to, actor, scope, { quiet: true });
       updated++;
+      if (to && to !== actor.id) assigned.set(to, (assigned.get(to) ?? 0) + 1);
     } catch (e) {
       if (!(e instanceof NotFoundError) && !(e instanceof BusinessError) && !(e instanceof ForbiddenError)) throw e;
       skipped++;
     }
   }
+  await pushAssignmentSummary(assigned);
   return { updated, skipped };
 }
 
@@ -528,6 +561,7 @@ export async function mergeLeads(intoId: string, fromId: string, actor: Actor & 
     }
     await LeadDeposit.updateMany({ leadId: fromOid }, { $set: { leadId: intoOid } });
     await LeadActivity.updateMany({ leadId: fromOid }, { $set: { leadId: intoOid } });
+    await moveCallsOnMerge(from, into);
     await CrmTask.updateMany({ leadId: fromOid }, { $set: { leadId: intoOid, projectId: into.projectId } });
     await Lead.updateOne(
       { _id: fromOid },
@@ -563,6 +597,7 @@ export async function deleteLead(id: string, actor: Actor & { type: "USER" }, sc
     const taskIds = tasks.map((t) => t._id);
     const [activities] = await Promise.all([
       LeadActivity.deleteMany({ leadId: { $in: leadIds } }),
+      LeadCall.deleteMany({ leadId: { $in: leadIds } }),
       TaskComment.deleteMany({ taskId: { $in: taskIds } }),
     ]);
     await CrmTask.deleteMany({ _id: { $in: taskIds } });
@@ -713,11 +748,13 @@ export async function listLeads(filters: LeadFilters, scope: CrmScope, opts?: { 
   const sort: Record<string, 1 | -1> =
     filters.sort === "created"
       ? { createdAt: -1 }
-      : filters.sort === "name"
-        ? { name: 1 }
-        : filters.sort === "followUp"
-          ? { followUpSort: 1, createdAt: -1 }
-          : { lastActivityAt: -1, createdAt: -1 };
+      : filters.sort === "oldest"
+        ? { createdAt: 1 }
+        : filters.sort === "name"
+          ? { name: 1 }
+          : filters.sort === "followUp"
+            ? { followUpSort: 1, createdAt: -1 }
+            : { lastActivityAt: -1, createdAt: -1 };
   const out = await facetPage<ListRow>(
     Lead,
     [
@@ -878,7 +915,7 @@ export async function getLeadDetail(id: string, scope: CrmScope, activityLimit =
   const visibleDups = dups.filter((d) => canSeeLeadDoc(d, scope));
   return {
     lead: toLeadDto(lead, refs),
-    activities: activities.map((a) => toActivityDto(a, names)),
+    activities: (await withCallDetails(activities as LeadActivityDoc[])).map((a) => toActivityDto(a, names)),
     activityTotal,
     tasks: await tasksToDtos([...openTasks, ...doneTasks]),
     conversions: await toConversionDtos(conversions),

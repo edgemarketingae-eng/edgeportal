@@ -2,6 +2,7 @@ import { now } from "@edge/domain/clock";
 import { dispatchOutbox, type JobPayloads, type QueueName } from "@edge/jobs";
 import { runAutolock, runBalanceReminders } from "../enrollment/service";
 import { deliverEmail } from "../notifications/email";
+import { deliverPush } from "../notifications/push";
 import { runtime } from "../runtime";
 import { expireStalePayments, reconcileOpenPayments, sweepWebhookInbox } from "../payments/sync";
 import { sweepOdooPending, syncPaymentToOdoo } from "../odoo/sync";
@@ -10,7 +11,7 @@ import { evictCache, fillCache } from "../recordings/cache";
 import { discoverMeetRecordings } from "../recordings/service";
 import { linkLeadForStudent } from "../crm/autolink";
 import { sweepLeadInbox } from "../crm/ingest";
-import { runBatchUrgency, runFollowUpDigest, runStaleSweep } from "../crm/jobs";
+import { runBatchUrgency, runDueReminders, runFollowUpDigest, runStaleSweep } from "../crm/jobs";
 import { sweepOrphanFiles } from "../files/service";
 import { runLeaveDaily } from "../hr/leave";
 
@@ -24,6 +25,7 @@ const asOf = (d: { asOf?: string }) => (d.asOf ? new Date(d.asOf) : now());
 
 export const baseHandlers: Handlers = {
   "email.send": (d) => deliverEmail(d.notificationLogId),
+  "push.send": (d) => deliverPush(d.notificationLogId),
   "enrollment.autolock": (d) => runAutolock(asOf(d)),
   "enrollment.reminders": (d) => runBalanceReminders(asOf(d)),
   "outbox.sweep": () => dispatchOutbox(runtime().producer),
@@ -42,6 +44,7 @@ export const baseHandlers: Handlers = {
   "crm.staleSweep": (d) => runStaleSweep(asOf(d)),
   "crm.batchUrgency": (d) => runBatchUrgency(asOf(d)),
   "crm.inboxSweep": () => sweepLeadInbox(),
+  "crm.dueReminders": (d) => runDueReminders(asOf(d)),
   "hr.leaveDaily": (d) => runLeaveDaily(asOf(d)),
   "files.orphanSweep": () => sweepOrphanFiles(),
 };

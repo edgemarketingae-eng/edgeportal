@@ -49,6 +49,10 @@ export const LEAD_ACTIVITY_TYPES = [
 ] as const;
 export const CALL_OUTCOMES = ["ANSWERED", "NO_ANSWER", "BUSY", "WRONG_NUMBER", "CALLBACK"] as const;
 export const ACTIVITY_DIRECTIONS = ["IN", "OUT"] as const;
+/** A call as the phone's call log records it. */
+export const CALL_DIRECTIONS = ["IN", "OUT", "MISSED", "REJECTED"] as const;
+/** A call this long counts as connected unless the executive says otherwise. A voicemail pickup can pass this. */
+export const CONNECTED_MIN_SEC = 5;
 export const FOLLOWUP_TYPES = ["CALL", "WHATSAPP", "EMAIL", "MEETING", "OTHER"] as const;
 /** Board columns; DONE and CANCELLED are closed. */
 export const CRM_TASK_STATUSES = ["TODO", "IN_PROGRESS", "WAITING", "DONE", "CANCELLED"] as const;
@@ -68,6 +72,7 @@ export const DEPOSIT_STATUSES = ["PENDING", "VERIFIED", "REJECTED"] as const;
 /** Broker deposits are in US dollars. */
 export const DEPOSIT_CURRENCY = "USD";
 export const LEADERBOARD_PERIODS = ["month", "lastMonth", "quarter", "year", "all"] as const;
+export const CALL_REPORT_PERIODS = ["today", "week", "month", "lastMonth"] as const;
 /** Public ingest endpoints: POST /api/webhooks/leads/:source */
 export const INBOUND_SOURCES = ["website"] as const;
 /** What a visitor asks about on the student app's contact page (/support). */
@@ -82,6 +87,7 @@ export type ContactChannel = (typeof CONTACT_CHANNELS)[number];
 export type LeadTouchType = (typeof LEAD_TOUCH_TYPES)[number];
 export type LeadActivityType = (typeof LEAD_ACTIVITY_TYPES)[number];
 export type CallOutcome = (typeof CALL_OUTCOMES)[number];
+export type CallDirection = (typeof CALL_DIRECTIONS)[number];
 export type FollowUpType = (typeof FOLLOWUP_TYPES)[number];
 export type CrmTaskStatus = (typeof CRM_TASK_STATUSES)[number];
 export type TaskPriority = (typeof TASK_PRIORITIES)[number];
@@ -93,6 +99,7 @@ export type ConversionSource = (typeof CONVERSION_SOURCES)[number];
 export type DepositSequence = (typeof DEPOSIT_SEQUENCES)[number];
 export type DepositStatus = (typeof DEPOSIT_STATUSES)[number];
 export type LeaderboardPeriod = (typeof LEADERBOARD_PERIODS)[number];
+export type CallReportPeriod = (typeof CALL_REPORT_PERIODS)[number];
 export type InboundSource = (typeof INBOUND_SOURCES)[number];
 export type SupportTopic = (typeof SUPPORT_TOPICS)[number];
 

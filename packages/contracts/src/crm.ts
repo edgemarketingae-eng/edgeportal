@@ -15,6 +15,7 @@ import {
   LEAD_STAGES,
   LEAD_TEMPERATURES,
   LEAD_TOUCH_TYPES,
+  CALL_REPORT_PERIODS,
   LEADERBOARD_PERIODS,
   PRODUCT_STATUSES,
   PROJECT_STATUSES,
@@ -57,7 +58,7 @@ export const LeadFilters = z.object({
   created: z.enum(["today", "week", "month"]).optional(),
   /** Default "open" hides CONVERTED and LOST unless a stage filter is given. */
   view: z.enum(["open", "all"]).optional(),
-  sort: z.enum(["recent", "created", "followUp", "name"]).optional(),
+  sort: z.enum(["recent", "created", "oldest", "followUp", "name"]).optional(),
   ...zPage.shape,
 });
 export type LeadFilters = z.input<typeof LeadFilters>;
@@ -243,6 +244,36 @@ export const CommissionSettingsInput = z.object({
     .refine((s) => s.some((x) => x.from === 0), "Keep a base rate (from 0)")
     .refine((s) => new Set(s.map((x) => x.from)).size === s.length, "Each slab needs its own starting amount"),
 });
+
+export const CallsQuery = z.object({ period: z.enum(CALL_REPORT_PERIODS).optional(), project: z.string().optional() });
+
+export const CallReportRow = z.object({
+  userId: z.string(),
+  name: z.string(),
+  calls: z.number(),
+  connected: z.number(),
+  talkSec: z.number(),
+  leads: z.number(),
+  /** The phone signed in for this person; null when they have none. Only sent to `crm.devices.manage`. */
+  device: z
+    .object({
+      id: z.string(),
+      model: nullable,
+      appVersion: nullable,
+      lastSyncAt: nullable,
+      /** `off`: the call log permission is off. `silent`: nothing heard from it lately. */
+      status: z.enum(["tracking", "off", "silent"]),
+    })
+    .nullable(),
+});
+export type CallReportRow = z.infer<typeof CallReportRow>;
+
+export const CallReportDto = z.object({
+  rows: z.array(CallReportRow),
+  totals: z.object({ calls: z.number(), connected: z.number(), talkSec: z.number() }),
+  canManageDevices: z.boolean(),
+});
+export type CallReportDto = z.infer<typeof CallReportDto>;
 
 export const LeaderboardQuery = z.object({
   period: z.enum(LEADERBOARD_PERIODS).default("month"),
@@ -781,6 +812,8 @@ export const crmRoutes = {
   }),
   deleteDeposit: route({ method: "POST", path: `${base}/deposits/:id/delete`, params: idParam, response: zOk }),
   leaderboard: route({ method: "GET", path: `${base}/leaderboard`, query: LeaderboardQuery, response: LeaderboardDto }),
+  callReport: route({ method: "GET", path: `${base}/calls`, query: CallsQuery, response: CallReportDto }),
+  removeDevice: route({ method: "POST", path: `${base}/devices/:id/remove`, params: idParam, response: zOk }),
 
   products: route({ method: "GET", path: `${base}/products`, response: z.array(ProductDto) }),
   createProduct: route({ method: "POST", path: `${base}/products`, body: ProductInput, response: z.object({ id: z.string() }) }),

@@ -1,13 +1,8 @@
-import type { LeadActivityDto } from "@edge/contracts";
-import {
-  ACTIVITY_LABELS,
-  CALL_OUTCOME_LABELS,
-  DEPOSIT_SEQUENCE_LABELS,
-  FOLLOWUP_TYPE_LABELS,
-  LEAD_STAGE_LABELS,
-} from "@edge/domain/crm/labels";
-import { formatDate, formatDateTime } from "@edge/domain/dates";
-import { formatMoney } from "@edge/domain/money";
+import { formatDate, formatDateTime } from "../dates";
+import { formatMoney } from "../money";
+import type { LeadActivityType } from "./enums";
+import { ACTIVITY_LABELS, CALL_OUTCOME_LABELS, DEPOSIT_SEQUENCE_LABELS, FOLLOWUP_TYPE_LABELS, LEAD_STAGE_LABELS } from "./labels";
+import { talkTime } from "./machine";
 
 const s = (v: unknown) => (typeof v === "string" && v ? v : null);
 const n = (v: unknown) => (typeof v === "number" ? v : null);
@@ -26,12 +21,34 @@ const deposit = (d: Record<string, unknown>) => {
 };
 const stage = (v: unknown) => (s(v) ? ((LEAD_STAGE_LABELS as Record<string, string>)[s(v)!] ?? s(v)) : null);
 
-/** Title line and a short detail line for a timeline entry. */
-export function describeActivity(a: LeadActivityDto): { title: string; detail: string | null } {
+const CALL_DIRECTION_TITLES: Record<string, string> = {
+  OUT: "Outgoing call",
+  IN: "Incoming call",
+  MISSED: "Missed call",
+  REJECTED: "Declined call",
+};
+
+/** A call read from the executive's phone, so its length is known rather than typed in. */
+function trackedCall(a: { outcome: string | null; data: Record<string, unknown> }) {
+  const parts = [CALL_DIRECTION_TITLES[s(a.data.callDirection) ?? ""] ?? "Call"];
+  const sec = n(a.data.durationSec);
+  if (sec) parts.push(talkTime(sec));
+  if (a.outcome) parts.push((CALL_OUTCOME_LABELS as Record<string, string>)[a.outcome] ?? a.outcome);
+  return parts.join(" · ");
+}
+
+/** Title line and a short detail line for a timeline entry; the same wording in the web CRM and the phone app. */
+export function describeActivity(a: {
+  type: LeadActivityType;
+  direction: string | null;
+  outcome: string | null;
+  data: Record<string, unknown>;
+}): { title: string; detail: string | null } {
   const d = a.data;
   const base = ACTIVITY_LABELS[a.type] ?? a.type;
   switch (a.type) {
     case "CALL":
+      if (d.tracked) return { title: trackedCall(a), detail: "Tracked from the phone" };
       return {
         title: `${base}${a.outcome ? `: ${(CALL_OUTCOME_LABELS as Record<string, string>)[a.outcome] ?? a.outcome}` : ""}`,
         detail: null,

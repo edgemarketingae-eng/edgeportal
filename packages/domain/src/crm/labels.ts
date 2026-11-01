@@ -7,6 +7,7 @@ import type {
   FollowUpType,
   LeadActivityType,
   LeadChannel,
+  CallReportPeriod,
   LeaderboardPeriod,
   LeadLanguage,
   LeadSource,
@@ -66,6 +67,13 @@ export const DEPOSIT_SEQUENCE_LABELS: Record<DepositSequence, string> = {
 };
 
 export const DEPOSIT_STATUS_LABELS: Record<DepositStatus, string> = { PENDING: "Pending", VERIFIED: "Verified", REJECTED: "Rejected" };
+
+export const CALL_REPORT_PERIOD_LABELS: Record<CallReportPeriod, string> = {
+  today: "Today",
+  week: "Last 7 days",
+  month: "This month",
+  lastMonth: "Last month",
+};
 
 export const LEADERBOARD_PERIOD_LABELS: Record<LeaderboardPeriod, string> = {
   month: "This month",

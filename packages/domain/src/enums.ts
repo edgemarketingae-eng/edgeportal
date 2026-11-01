@@ -14,7 +14,7 @@ export const CLASS_STATUSES = ["SCHEDULED", "CANCELLED", "COMPLETED"] as const;
 export const RECORDING_SOURCES = ["MEET_AUTO", "MANUAL_DRIVE"] as const;
 export const RECORDING_STATUSES = ["DISCOVERED", "PUBLISHED", "HIDDEN", "ERROR"] as const;
 export const CACHE_STATES = ["NONE", "FILLING", "READY", "EVICTED", "ERROR"] as const;
-export const CHANNELS = ["EMAIL", "SMS", "WHATSAPP", "IN_APP"] as const;
+export const CHANNELS = ["EMAIL", "SMS", "WHATSAPP", "IN_APP", "PUSH"] as const;
 export const DELIVERY_STATUSES = ["QUEUED", "SENT", "DELIVERED", "FAILED", "BOUNCED", "SKIPPED"] as const;
 export const ACTOR_TYPES = ["USER", "SYSTEM", "WEBHOOK"] as const;
 

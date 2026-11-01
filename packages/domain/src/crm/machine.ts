@@ -62,6 +62,20 @@ export function whatsappDigits(phone: string) {
   return phone.replace(/\D/g, "");
 }
 
+/** "45s", "4m 12s", "1h 5m". */
+export function talkTime(sec: number) {
+  if (sec < 60) return `${sec}s`;
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  return h ? `${h}h ${m}m` : `${m}m ${sec % 60}s`;
+}
+
+/** First message to a lead on WhatsApp; the same from the web CRM and the phone app. */
+export function whatsappGreeting(name: string) {
+  const first = name.split(/\s+/)[0] ?? name;
+  return `Hi ${first}, this is Edge Trading Academy. Thanks for your interest in our trading program. When is a good time to talk?`;
+}
+
 /** A language code from free text ("english", " Malayalam"); blank is null, any other language is OTHER. */
 export function normalizeLanguage(input: string | null | undefined): LeadLanguage | null {
   const v = input?.trim().toUpperCase();

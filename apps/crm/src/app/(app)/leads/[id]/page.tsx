@@ -1,4 +1,5 @@
 import { countryName } from "@edge/domain/countries";
+import { describeActivity } from "@edge/domain/crm/activity-text";
 import { crmRoutes } from "@edge/contracts";
 import { fractionToPercent } from "@edge/domain/crm/commission";
 import type { DepositSequence } from "@edge/domain/crm/enums";
@@ -33,7 +34,6 @@ import { Button } from "@edge/ui/components/button";
 import { CircleCheck, CircleX } from "lucide-react";
 import Link from "next/link";
 import { ActivityComposer } from "@/components/crm/activity-composer";
-import { describeActivity } from "@/components/crm/activity-text";
 import { MarkConversionDialog, RemoveConversionDialog } from "@/components/crm/conversion-actions";
 import { DeleteDepositButton, LogDepositDialog, RejectDepositDialog, VerifyDepositDialog } from "@/components/crm/deposit-actions";
 import { FollowUpDue, TimeAgo } from "@/components/crm/due";

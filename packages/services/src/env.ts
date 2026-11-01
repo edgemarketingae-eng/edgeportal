@@ -65,6 +65,9 @@ const schema = z
     ODOO_API_KEY: z.string().optional(),
 
     GOOGLE_MODE: mode.default("mock"),
+    /** Push to the CRM phone app. mock only logs, and is allowed in production until the Firebase project exists. */
+    PUSH_MODE: mode.default("mock"),
+    FCM_SERVICE_ACCOUNT_JSON: z.string().optional(),
     GOOGLE_SERVICE_ACCOUNT_JSON: z.string().optional(),
     GOOGLE_DEFAULT_ORGANIZER: z.string().optional(),
     MOCK_DRIVE_FILE: z.string().optional(),
