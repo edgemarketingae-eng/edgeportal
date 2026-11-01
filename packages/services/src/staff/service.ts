@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { AuthAccount, AuthSession, AuthUser, Role, StaffProfile, Types, withTx } from "@edge/db";
 import type { ContactChannel } from "@edge/domain/crm/enums";
 import type { Actor } from "@edge/domain/enums";
-import { isCrmRole, isPermission } from "@edge/domain/auth/permissions";
+import { isCrmRole, isHrPermission, isPermission } from "@edge/domain/auth/permissions";
 import { hashPassword } from "better-auth/crypto";
 import { audit } from "../audit";
 import { env } from "../env";
@@ -33,11 +33,14 @@ export async function rolesByKeys(keys: string[]) {
   return roles;
 }
 
-async function isSuperAdmin(userId: string) {
+export async function isSuperAdmin(userId: string) {
   const staff = await StaffProfile.findById(oid(userId)).lean();
   if (!staff) return false;
   return !!(await Role.exists({ _id: { $in: staff.roleIds }, key: "super_admin" }));
 }
+
+/** Roles that open everyone's pay. Only a super admin may hand them out, or an admin could grant themselves salary access. */
+const opensHr = (roles: { permissions?: string[] | null }[]) => roles.some((r) => r.permissions?.some(isHrPermission));
 
 /**
  * Writes Better Auth's user + credential account documents directly, in exactly the shape its
@@ -86,7 +89,11 @@ export async function createUserWithPassword(input: {
 
 /** "@edge_sara", "t.me/edge_sara" or "edge_sara" → "edge_sara"; empty → null. Telegram: 5–32 letters, digits, _. */
 export function normalizeTelegram(input: string | null | undefined): string | null {
-  const v = (input ?? "").trim().replace(/^(https?:\/\/)?(www\.)?(t\.me|telegram\.me)\//i, "").replace(/^@/, "").replace(/\/+$/, "");
+  const v = (input ?? "")
+    .trim()
+    .replace(/^(https?:\/\/)?(www\.)?(t\.me|telegram\.me)\//i, "")
+    .replace(/^@/, "")
+    .replace(/\/+$/, "");
   if (!v) return null;
   if (!/^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(v))
     throw new ValidationError({ telegramUsername: "Enter a Telegram username, e.g. @edge_sara (5–32 letters, numbers or _)" });
@@ -115,6 +122,9 @@ export async function createStaff(
   const roles = await rolesByKeys(input.roleKeys);
   if (roles.some((r) => r.key === "super_admin") && actor.type === "USER" && !(await isSuperAdmin(actor.id))) {
     throw new BusinessError("Only a super admin can create another super admin");
+  }
+  if (opensHr(roles) && actor.type === "USER" && !(await isSuperAdmin(actor.id))) {
+    throw new BusinessError("Only a super admin can give someone HR access");
   }
   const password = input.password ?? tempPassword();
   const tempPasswordEnc = input.password ? null : await encryptTempPassword(password);
@@ -168,6 +178,8 @@ export async function updateStaff(
   const willSuper = roles.some((r) => r.key === "super_admin");
   if (hadSuper !== willSuper && !(await isSuperAdmin(actor.id)))
     throw new BusinessError("Only a super admin can grant or remove super admin");
+  if (opensHr(current) !== opensHr(roles) && !(await isSuperAdmin(actor.id)))
+    throw new BusinessError("Only a super admin can give or remove HR access");
   if (userId === actor.id && hadSuper && !willSuper) throw new BusinessError("You cannot remove your own super admin role");
   await withTx(async () => {
     await AuthUser.updateOne({ _id }, { $set: { name: input.name.trim(), updatedAt: new Date() } });

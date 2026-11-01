@@ -11,6 +11,8 @@ Student portal, staff portal and admin panel for Edge Trading Academy (Phase 1).
   invoice sync, and manage staff, roles and settings. Every sensitive change is in the audit log.
 - **Sales** work in a separate CRM app: leads grouped into projects with their own teams, a drag-and-drop task
   board, and one-click conversion of a lead into a student account. See [docs/CRM.md](docs/CRM.md).
+- **HR** in the staff portal: attendance, leave and balances, HR requests, monthly payslips with commission and
+  bonuses in AED, USD or INR, and salary advances. See [docs/HR.md](docs/HR.md).
 
 ## Architecture
 

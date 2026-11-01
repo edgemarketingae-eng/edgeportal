@@ -14,6 +14,7 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
+import type { ReactNode } from "react";
 import { Flow, List, Note, P, Steps, Terms, To, Ui } from "../kit";
 import type { DocModule, DocSection } from "../types";
 
@@ -1245,8 +1246,8 @@ const staff: DocModule = {
             </>
           </List>
           <Note kind="warning" title="Don't edit the built-in roles">
-            The built-in roles (Admin, Admissions staff, Finance, Mentor and the CRM roles) are reset to their standard permissions every
-            time the system is updated. If you need a different mix, create a new role with its own name instead.
+            The built-in roles (Admin, Admissions staff, Finance, Mentor, HR manager, Employee and the CRM roles) are reset to their
+            standard permissions every time the system is updated. If you need a different mix, create a new role with its own name instead.
           </Note>
         </>
       ),
@@ -1285,7 +1286,12 @@ const roles: DocModule = {
               "Finance",
               "Payments: viewing payments and students, recording bank and cash payments, retrying Odoo syncs, the balances list, and payment method fees and general settings.",
             ],
-            ["Mentor", "The staff portal only: schedules classes and manages recordings for the batches they are ticked on as mentor."],
+            ["Mentor", "Schedules classes and manages recordings in the staff portal, for the batches they are ticked on as mentor."],
+            [
+              "HR manager",
+              "Everything in the HR section of the staff portal, including everyone's salaries. Only a super admin can give this role.",
+            ],
+            ["Employee", "No extra access. For people who only need the staff portal: their own attendance, leave, salary and requests."],
             ["CRM admin", "Everything in the CRM, including CRM staff and CRM roles. No admin panel."],
             [
               "CRM manager",
@@ -1693,6 +1699,7 @@ const staffClasses: DocModule = {
   icon: CalendarDays,
   group: "Teaching",
   href: "/staff/classes",
+  audience: ["staff.access"],
   sections: [
     {
       id: "what-for",
@@ -1722,6 +1729,7 @@ const staffRecordings: DocModule = {
   icon: PlayCircle,
   group: "Teaching",
   href: "/staff/recordings",
+  audience: ["staff.access"],
   sections: [
     {
       id: "what-for",
@@ -1738,4 +1746,219 @@ const staffRecordings: DocModule = {
   ],
 };
 
-export const staffDocs: DocModule[] = [gettingStarted("/staff", "/security"), staffDashboard, staffClasses, staffRecordings];
+const hrDoc = (
+  m: Pick<DocModule, "slug" | "title" | "summary" | "icon" | "group" | "href" | "audience"> & { points: ReactNode[] },
+): DocModule => {
+  const { points, ...rest } = m;
+  return {
+    ...rest,
+    sections: [
+      {
+        id: "how-it-works",
+        title: "How it works",
+        body: (
+          <ul className="list-disc space-y-2 pl-5">
+            {points.map((p, i) => (
+              <li key={i}>{p}</li>
+            ))}
+          </ul>
+        ),
+      },
+    ],
+  };
+};
+
+const myAttendanceDoc = hrDoc({
+  slug: "attendance",
+  title: "My attendance",
+  summary: "See how each day of your month was marked.",
+  icon: CalendarDays,
+  group: "My HR",
+  href: "/staff/attendance",
+  points: [
+    "HR marks attendance each day. You can see it here but not change it.",
+    "Weekly offs and holidays are shown for you.",
+    "If a day looks wrong, send an HR request.",
+  ],
+});
+
+const myLeaveDoc = hrDoc({
+  slug: "leave",
+  title: "My leave",
+  summary: "Apply for leave and see your balances.",
+  icon: CalendarDays,
+  group: "My HR",
+  href: "/staff/leave",
+  points: [
+    "Choose the type and dates. Weekly offs and holidays aren't counted.",
+    "You can withdraw a request while it's pending. Once approved, ask HR to cancel it.",
+    "Your balance goes down when leave is approved. Balance history shows every change.",
+  ],
+});
+
+const mySalaryDoc = hrDoc({
+  slug: "salary",
+  title: "My salary",
+  summary: "Your payslip for each closed month.",
+  icon: Wallet,
+  group: "My HR",
+  href: "/staff/salary",
+  points: [
+    "A payslip appears when HR closes the month, and you get an email.",
+    "Each amount stays in its own currency, so a total can read 3,000 AED + 500 USD. Nothing is converted.",
+    "Hover over a total, or tap it on a phone, to see salary, commission, bonuses and deductions.",
+    "A deposit verified after a month closes appears on a later payslip as a commission adjustment.",
+  ],
+});
+
+const myAdvancesDoc = hrDoc({
+  slug: "advances",
+  title: "Salary advance",
+  summary: "Ask for part of your salary early.",
+  icon: Wallet,
+  group: "My HR",
+  href: "/staff/advances",
+  points: [
+    "Advances are in your salary currency.",
+    "HR decides how many months it's repaid over. Each installment comes off that month's payslip.",
+    "You can withdraw a request while it's pending.",
+  ],
+});
+
+const myRequestsDoc = hrDoc({
+  slug: "requests",
+  title: "HR requests",
+  summary: "Ask HR for certificates, letters and more.",
+  icon: Bell,
+  group: "My HR",
+  href: "/staff/requests",
+  points: ["Choose what you need and add a short subject.", "HR's reply and any letter appear here, and you get an email."],
+});
+
+const hrTeamDoc = hrDoc({
+  slug: "hr-team",
+  title: "Team",
+  summary: "Set up each person's HR record, pay and opening balances.",
+  icon: Users,
+  group: "HR",
+  href: "/staff/hr/team",
+  audience: ["hr.manage"],
+  points: [
+    "Logins are still created in Staff & roles or CRM Team. New people appear here marked Not set up.",
+    "Enter the joining date, then the pay. Someone with no salary needs an explicit 0.",
+    "Use Adjust balance for the opening balance. Leave accrues from the month after set-up, so enter what they have today.",
+    "Setting a leaving date cancels leave after it and returns those days. It doesn't disable the login.",
+  ],
+});
+
+const hrAttendanceDoc = hrDoc({
+  slug: "hr-attendance",
+  title: "Mark attendance",
+  summary: "Mark a day, or see the whole month.",
+  icon: CalendarDays,
+  group: "HR",
+  href: "/staff/hr/attendance",
+  audience: ["hr.manage"],
+  points: [
+    "Pick a day, set each person's status, and save. Mark all present fills only the empty rows.",
+    "Approved leave fills itself in and can't be overwritten here.",
+    "Attendance never changes pay by itself. Closed months lock.",
+  ],
+});
+
+const hrLeaveDoc = hrDoc({
+  slug: "hr-leave",
+  title: "Leave approvals",
+  summary: "Approve, reject or cancel leave.",
+  icon: BadgeCheck,
+  group: "HR",
+  href: "/staff/hr/leave",
+  audience: ["hr.manage"],
+  points: [
+    "Approving takes the days off the balance and fills in attendance.",
+    "If the balance is short, approval stops unless you tick Allow negative balance.",
+    "Nobody approves their own leave. HR's own leave goes to a super admin.",
+    "Cancelling started leave returns only days in months that aren't closed.",
+    "Approved leave doesn't mark anyone Off for leads. Managers still do that by hand.",
+  ],
+});
+
+const hrRequestsDoc = hrDoc({
+  slug: "hr-requests",
+  title: "Requests inbox",
+  summary: "Reply to what staff ask for.",
+  icon: Bell,
+  group: "HR",
+  href: "/staff/hr/requests",
+  audience: ["hr.manage"],
+  points: ["Reply with a note and an optional letter, then set the status.", "Done and Rejected close the request."],
+});
+
+const hrSalaryDoc = hrDoc({
+  slug: "hr-salary",
+  title: "Salary months",
+  summary: "Build, check and close each month's payslips.",
+  icon: Wallet,
+  group: "HR",
+  href: "/staff/hr/salary",
+  audience: ["hr.payroll"],
+  points: [
+    "Months run in order, one at a time. The first month is your choice, and earlier months are never paid here.",
+    "Start builds a draft from salaries, verified commission and advance installments. Staff see nothing yet.",
+    "Add bonuses and deductions as lines, in any of the three currencies. Refresh keeps them.",
+    "Late, absent and unpaid leave never cut pay by themselves. Add a deduction if one is due. Joiners and leavers aren't prorated either.",
+    "If figures changed since you last looked, closing saves the new figures and asks you to review again.",
+    "Close is final. Fixes go on next month. Commission that changes after a close comes through as an adjustment automatically.",
+    "A clawback only takes what the payslip's USD can cover. The rest waits for a later month.",
+  ],
+});
+
+const hrAdvancesDoc = hrDoc({
+  slug: "hr-advances",
+  title: "Advance approvals",
+  summary: "Approve advances and set how they're repaid.",
+  icon: CreditCard,
+  group: "HR",
+  href: "/staff/hr/advances",
+  audience: ["hr.payroll"],
+  points: [
+    "Choose the first month and how many months it's repaid over.",
+    "Change repayment moves what's left. The months must add up to what's owed.",
+    "A person's pay currency can't change while they're repaying.",
+  ],
+});
+
+const hrSettingsDoc = hrDoc({
+  slug: "hr-settings",
+  title: "HR settings",
+  summary: "Leave types, weekly off and holidays.",
+  icon: Settings,
+  group: "HR",
+  href: "/staff/hr/settings",
+  audience: ["hr.settings"],
+  points: [
+    "The first values here are placeholders. Set your real rules before staff start applying.",
+    "Added monthly spreads days over the year. Given each January grants them all at once, from the January after a person is set up.",
+    "A person with a different contract gets their own days and weekly off on their Team page.",
+    "Rename or switch off a leave type at any time. Old leave keeps its record.",
+  ],
+});
+
+export const staffDocs: DocModule[] = [
+  gettingStarted("/staff", "/security"),
+  staffDashboard,
+  myAttendanceDoc,
+  myLeaveDoc,
+  mySalaryDoc,
+  myAdvancesDoc,
+  myRequestsDoc,
+  staffClasses,
+  staffRecordings,
+  hrTeamDoc,
+  hrAttendanceDoc,
+  hrLeaveDoc,
+  hrRequestsDoc,
+  hrSalaryDoc,
+  hrAdvancesDoc,
+  hrSettingsDoc,
+];

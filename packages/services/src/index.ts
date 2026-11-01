@@ -34,3 +34,5 @@ export * from "./recordings/cache";
 export * from "./recordings/service";
 export * from "./crm/index";
 export * from "./staff/crm-team";
+export * from "./files/service";
+export * from "./hr/index";

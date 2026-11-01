@@ -1,4 +1,5 @@
 import { AuthUser, Payment, PaymentEvent, Types } from "@edge/db";
+import { createFileStore, type FileStore } from "@edge/integrations/cloudinary/client";
 import { createEmailSender, type EmailSender } from "@edge/integrations/email/index";
 import { createGatewayRegistry, type GatewayRegistry } from "@edge/integrations/gateways/registry";
 import { createMailerLite, type MailerLiteApi } from "@edge/integrations/mailerlite/client";
@@ -28,20 +29,29 @@ export interface Runtime {
   odoo: OdooClient;
   mailerlite: MailerLiteApi;
   google: GoogleWorkspace;
+  files: FileStore;
 }
 
 /** Data the payment adapters may read (kept out of the integrations package). */
 export const gatewayDeps: GatewayDeps = {
   async latestEvent(paymentId, gateway, types) {
     if (!Types.ObjectId.isValid(paymentId)) return null;
-    const ev = await PaymentEvent.findOne({ paymentId: new Types.ObjectId(paymentId), gateway, signatureOk: true, ...(types ? { type: { $in: types } } : {}) })
+    const ev = await PaymentEvent.findOne({
+      paymentId: new Types.ObjectId(paymentId),
+      gateway,
+      signatureOk: true,
+      ...(types ? { type: { $in: types } } : {}),
+    })
       .sort({ receivedAt: -1 })
       .lean();
     return ev ? { type: ev.type, payload: ev.payload } : null;
   },
   async buyerHistory(customerId) {
     const _id = new Types.ObjectId(customerId);
-    const [u, count] = await Promise.all([AuthUser.findById(_id, { createdAt: 1 }).lean(), Payment.countDocuments({ studentId: _id, status: "SUCCEEDED" })]);
+    const [u, count] = await Promise.all([
+      AuthUser.findById(_id, { createdAt: 1 }).lean(),
+      Payment.countDocuments({ studentId: _id, status: "SUCCEEDED" }),
+    ]);
     return { registeredSince: u?.createdAt ?? new Date(), successfulPayments: count };
   },
 };
@@ -68,7 +78,13 @@ export async function closeRuntime() {
  */
 const factories: { [K in keyof Runtime]: () => Runtime[K] } = {
   producer: () => createBullProducer(env.REDIS_URL, env.BULLMQ_PREFIX),
-  otp: () => createOtpProvider({ mode: env.OTP_MODE, accountSid: env.TWILIO_ACCOUNT_SID, authToken: env.TWILIO_AUTH_TOKEN, serviceSid: env.TWILIO_VERIFY_SERVICE_SID }),
+  otp: () =>
+    createOtpProvider({
+      mode: env.OTP_MODE,
+      accountSid: env.TWILIO_ACCOUNT_SID,
+      authToken: env.TWILIO_AUTH_TOKEN,
+      serviceSid: env.TWILIO_VERIFY_SERVICE_SID,
+    }),
   email: () => createEmailSender({ mode: env.EMAIL_MODE, from: env.EMAIL_FROM, mailersendApiKey: env.MAILERSEND_API_KEY }),
   gateways: () =>
     createGatewayRegistry(
@@ -79,7 +95,12 @@ const factories: { [K in keyof Runtime]: () => Runtime[K] } = {
         studentAppUrl: env.STUDENT_APP_URL,
         apiPublicUrl: env.API_PUBLIC_URL,
         stripe: { secretKey: env.STRIPE_SECRET_KEY, webhookSecret: env.STRIPE_WEBHOOK_SECRET },
-        tabby: { apiUrl: env.TABBY_API_URL, secretKey: env.TABBY_SECRET_KEY, merchantCode: env.TABBY_MERCHANT_CODE, webhookHeaderValue: env.TABBY_WEBHOOK_HEADER_VALUE },
+        tabby: {
+          apiUrl: env.TABBY_API_URL,
+          secretKey: env.TABBY_SECRET_KEY,
+          merchantCode: env.TABBY_MERCHANT_CODE,
+          webhookHeaderValue: env.TABBY_WEBHOOK_HEADER_VALUE,
+        },
         tamara: { apiUrl: env.TAMARA_API_URL, apiToken: env.TAMARA_API_TOKEN, notificationToken: env.TAMARA_NOTIFICATION_TOKEN },
         nomod: { apiUrl: env.NOMOD_API_URL, apiKey: env.NOMOD_API_KEY, webhookSecret: env.NOMOD_WEBHOOK_SECRET },
       },
@@ -87,7 +108,20 @@ const factories: { [K in keyof Runtime]: () => Runtime[K] } = {
     ),
   odoo: () => createOdooClient({ mode: env.ODOO_MODE, url: env.ODOO_URL, db: env.ODOO_DB, apiKey: env.ODOO_API_KEY }),
   mailerlite: () => createMailerLite({ mode: env.MAILERLITE_MODE, apiKey: env.MAILERLITE_API_KEY }),
-  google: () => createGoogleWorkspace({ mode: env.GOOGLE_MODE, serviceAccountJson: env.GOOGLE_SERVICE_ACCOUNT_JSON, timeZone: env.TZ_DEFAULT, mockDriveFile: mockDriveFile() }),
+  files: () =>
+    createFileStore({
+      mode: env.STORAGE_MODE,
+      cloudName: env.CLOUDINARY_CLOUD_NAME,
+      apiKey: env.CLOUDINARY_API_KEY,
+      apiSecret: env.CLOUDINARY_API_SECRET,
+    }),
+  google: () =>
+    createGoogleWorkspace({
+      mode: env.GOOGLE_MODE,
+      serviceAccountJson: env.GOOGLE_SERVICE_ACCOUNT_JSON,
+      timeZone: env.TZ_DEFAULT,
+      mockDriveFile: mockDriveFile(),
+    }),
 };
 
 function provide<K extends keyof Runtime>(key: K): Runtime[K] {

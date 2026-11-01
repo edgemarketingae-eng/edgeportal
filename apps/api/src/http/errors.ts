@@ -38,11 +38,13 @@ export function fromAuthError(e: unknown, fallback = "Something went wrong. Plea
 export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   let e: ApiError;
   if (err instanceof ApiError) e = err;
-  else if (err instanceof ZodError) e = new ApiError(400, "VALIDATION", "Please fix the highlighted fields.", fieldErrorsFromIssues(err.issues));
+  else if (err instanceof ZodError)
+    e = new ApiError(400, "VALIDATION", "Please fix the highlighted fields.", fieldErrorsFromIssues(err.issues));
   else if (err?.name === "CastError") e = new ApiError(404, "NOT_FOUND", "Not found");
   else if (err?.code === 11000) e = new ApiError(409, "CONFLICT", "That conflicts with an existing record.");
   else if (err instanceof BetterAuthError) e = fromAuthError(err);
   else if (err?.type === "entity.parse.failed") e = new ApiError(400, "VALIDATION", "Malformed JSON body");
+  else if (err?.type === "entity.too.large") e = new ApiError(413, "VALIDATION", "That file is too large.");
   else {
     req.log?.error({ err }, "unhandled error");
     e = new ApiError(500, "INTERNAL", "Something went wrong. Please try again.");

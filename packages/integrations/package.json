@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@edge/domain": "workspace:*",
+    "cloudinary": "^2.7.0",
     "google-auth-library": "^11.1.0",
     "jose": "^6.2.12",
     "stripe": "^23.0.0",

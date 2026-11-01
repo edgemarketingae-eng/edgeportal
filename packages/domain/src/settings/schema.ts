@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LEAVE_ACCRUALS } from "../hr/enums";
 
 /**
  * Admin-editable settings (stored in the settings collection by key).
@@ -52,6 +53,63 @@ export const SETTINGS = {
       slabs: z.array(z.object({ fromMinor: z.number().int().min(0), pct: z.string() })).min(1),
     }),
     default: { firstPct: "0", slabs: [{ fromMinor: 0, pct: "0" }] },
+  },
+  /** Set by HR. `key` never changes once used, so old leave keeps pointing at its type after a rename. */
+  "hr.leaveTypes": {
+    schema: z
+      .array(
+        z.object({
+          key: z.string(),
+          name: z.string(),
+          paid: z.boolean(),
+          accrual: z.enum(LEAVE_ACCRUALS),
+          daysPerYear: z.number().min(0).max(366),
+          carryForwardDays: z.number().min(0).max(366),
+          needsAttachment: z.boolean(),
+          active: z.boolean(),
+        }),
+      )
+      .min(1),
+    default: [
+      {
+        key: "annual",
+        name: "Annual leave",
+        paid: true,
+        accrual: "MONTHLY",
+        daysPerYear: 30,
+        carryForwardDays: 0,
+        needsAttachment: false,
+        active: true,
+      },
+      {
+        key: "sick",
+        name: "Sick leave",
+        paid: true,
+        accrual: "YEARLY",
+        daysPerYear: 15,
+        carryForwardDays: 0,
+        needsAttachment: true,
+        active: true,
+      },
+      {
+        key: "unpaid",
+        name: "Unpaid leave",
+        paid: false,
+        accrual: "NONE",
+        daysPerYear: 0,
+        carryForwardDays: 0,
+        needsAttachment: false,
+        active: true,
+      },
+    ],
+  },
+  /** `weeklyOffDays`: 0 = Sunday ... 6 = Saturday. `holidays`: YYYY-MM-DD. */
+  "hr.calendar": {
+    schema: z.object({
+      weeklyOffDays: z.array(z.number().int().min(0).max(6)),
+      holidays: z.array(z.object({ day: z.string(), name: z.string() })),
+    }),
+    default: { weeklyOffDays: [0], holidays: [] as { day: string; name: string }[] },
   },
   "academy.profile": {
     schema: z.object({ name: z.string(), supportEmail: z.string(), supportWhatsapp: z.string(), website: z.string() }),

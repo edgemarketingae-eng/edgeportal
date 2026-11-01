@@ -40,7 +40,15 @@ export interface TemplateData {
   "class.scheduled": { name: string; title: string; batchName: string; startsAt: string; classesUrl: string };
   "class.cancelled": { name: string; title: string; startsAt: string; reason?: string | null };
   "crm.studentWelcome": { name: string; email: string; batchName: string | null; setPasswordUrl: string; expiresDays: number };
-  "crm.followUpDigest": { name: string; dueToday: number; overdue: number; items: { leadName: string; title: string; dueAt: string; href: string }[]; tasksUrl: string };
+  "crm.followUpDigest": {
+    name: string;
+    dueToday: number;
+    overdue: number;
+    items: { leadName: string; title: string; dueAt: string; href: string }[];
+    tasksUrl: string;
+  };
+  /** Never put salary figures in here: the payload stays in the notification log. */
+  "hr.notice": { name: string; title: string; body: string; url: string };
 }
 
 export type TemplateName = keyof TemplateData;
@@ -235,7 +243,14 @@ export function renderEmail<T extends TemplateName>(template: T, data: TemplateD
         ...x.items.map((i) => `• <a href="${esc(i.href)}">${esc(i.leadName)}</a> — ${esc(i.title)} (${formatDateTime(i.dueAt)})`),
       ];
       if (x.items.length < total) lines.push(`…and ${total - x.items.length} more.`);
-      return build(`${total} follow-up${total === 1 ? "" : "s"} due today`, "Today's follow-ups", lines, { label: "Open my follow-ups", url: x.tasksUrl });
+      return build(`${total} follow-up${total === 1 ? "" : "s"} due today`, "Today's follow-ups", lines, {
+        label: "Open my follow-ups",
+        url: x.tasksUrl,
+      });
+    }
+    case "hr.notice": {
+      const x = d as unknown as TemplateData["hr.notice"];
+      return build(x.title, x.title, [`Hi ${esc(x.name)},`, esc(x.body)], { label: "Open the staff portal", url: x.url });
     }
   }
   throw new Error(`Unknown template ${template as string}`);

@@ -6,6 +6,7 @@ import {
   TASK_PRIORITY_LABELS,
   TASK_STATUS_LABELS,
 } from "@edge/domain/crm/labels";
+import { ADVANCE_STATUS_LABELS, ATTENDANCE_LABELS, HR_REQUEST_STATUS_LABELS, LEAVE_STATUS_LABELS } from "@edge/domain/hr/labels";
 import { Flame, Snowflake, Sun } from "lucide-react";
 import type { ReactNode } from "react";
 import { Badge } from "../components/badge";
@@ -103,6 +104,30 @@ const DEPOSIT: Record<string, Tone> = { PENDING: "warning", VERIFIED: "success",
 
 export function DepositStatusBadge({ status }: { status: string }) {
   return <ToneBadge value={status} tones={DEPOSIT} labels={DEPOSIT_STATUS_LABELS} />;
+}
+
+const LEAVE: Record<string, Tone> = { PENDING: "warning", APPROVED: "success", REJECTED: "danger", CANCELLED: "gray" };
+
+export function LeaveStatusBadge({ status }: { status: string }) {
+  return <ToneBadge value={status} tones={LEAVE} labels={LEAVE_STATUS_LABELS} />;
+}
+
+const HR_REQUEST: Record<string, Tone> = { OPEN: "warning", IN_PROGRESS: "blue", DONE: "success", REJECTED: "danger" };
+
+export function HrRequestStatusBadge({ status }: { status: string }) {
+  return <ToneBadge value={status} tones={HR_REQUEST} labels={HR_REQUEST_STATUS_LABELS} />;
+}
+
+const ADVANCE: Record<string, Tone> = { PENDING: "warning", APPROVED: "blue", REJECTED: "danger", CANCELLED: "gray", REPAID: "success" };
+
+export function AdvanceStatusBadge({ status }: { status: string }) {
+  return <ToneBadge value={status} tones={ADVANCE} labels={ADVANCE_STATUS_LABELS} />;
+}
+
+const ATTENDANCE: Record<string, Tone> = { PRESENT: "success", ABSENT: "danger", HALF_DAY: "orange", LATE: "warning", LEAVE: "blue" };
+
+export function AttendanceBadge({ status }: { status: string }) {
+  return <ToneBadge value={status} tones={ATTENDANCE} labels={ATTENDANCE_LABELS} />;
 }
 
 const TASK_STATUS: Record<string, Tone> = { TODO: "blue", IN_PROGRESS: "indigo", WAITING: "warning", DONE: "success", CANCELLED: "gray" };

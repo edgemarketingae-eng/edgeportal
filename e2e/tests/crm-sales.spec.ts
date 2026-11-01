@@ -60,7 +60,7 @@ test("2. the CRM admin sets the rates and verifies the deposit", async ({ page }
   await expect(page).toHaveURL(/\/dashboard$/);
   await page.goto(`${E2E.crm}/settings`);
   await page.getByLabel("First deposit (%)").fill("10");
-  await page.getByLabel("Base rate · any amount").fill("1");
+  await page.getByLabel("Base rate · any total").fill("1");
   await page.getByRole("button", { name: "Add slab" }).click();
   await page.getByLabel("Slab 1 from (USD)").fill("10000");
   await page.getByLabel("Slab 1 (%)").fill("2");

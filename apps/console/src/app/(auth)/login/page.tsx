@@ -18,7 +18,7 @@ export default function LoginPage(props: PageProps<"/login">) {
     <div className="grid gap-6">
       <div>
         <h2 className="font-display text-2xl uppercase">Staff sign in</h2>
-        <p className="text-muted-foreground mt-1 text-sm">Mentors, admissions, finance and admins.</p>
+        <p className="text-muted-foreground mt-1 text-sm">For all Edge staff.</p>
       </div>
       <Suspense>
         <Notices searchParams={props.searchParams} />

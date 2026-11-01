@@ -4,6 +4,18 @@ import { Batch, Course } from "./models/catalog";
 import { ClassSession, JoinLog, MeetEvent, Recording, RecordingView } from "./models/classes";
 import { CrmProduct, CrmTask, Lead, LeadActivity, LeadConversion, LeadDeposit, LeadInboundEvent, Project, TaskComment } from "./models/crm";
 import { Enrollment, EnrollmentEvent } from "./models/enrollment";
+import { FileAsset } from "./models/files";
+import {
+  AttendanceDay,
+  Employee,
+  EmployeePay,
+  HrRequest,
+  LeaveLedger,
+  LeaveRequest,
+  PayrollMonth,
+  Payslip,
+  SalaryAdvance,
+} from "./models/hr";
 import { AuditLog, InAppNotification, JobOutbox, NotificationLog, OtpThrottle } from "./models/ops";
 import { FeeRate, OdooSyncLog, Payment, PaymentEvent, Setting } from "./models/payments";
 import { Role, StaffProfile, StudentProfile } from "./models/people";
@@ -47,6 +59,16 @@ export const ALL_MODELS: Model<any>[] = [
   CrmProduct,
   LeadConversion,
   LeadDeposit,
+  Employee,
+  EmployeePay,
+  AttendanceDay,
+  LeaveRequest,
+  LeaveLedger,
+  HrRequest,
+  SalaryAdvance,
+  PayrollMonth,
+  Payslip,
+  FileAsset,
 ];
 
 /**

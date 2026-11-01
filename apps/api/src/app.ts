@@ -17,6 +17,8 @@ import { meRouter } from "./routes/me";
 import { checkoutReturnRouter, paymentsRouter, webhookRouter } from "./routes/payments";
 import { classesRouter, joinRouter, mediaRouter } from "./routes/classes";
 import { crmRouter, leadWebhookRouter } from "./routes/crm";
+import { filesRouter } from "./routes/files";
+import { hrRouter } from "./routes/hr";
 
 export interface AppOptions {
   auth: Auth;
@@ -30,7 +32,10 @@ export function createApp({ auth, logger = true, extraRoutes }: AppOptions) {
   app.disable("x-powered-by");
   app.set("trust proxy", ["loopback", "uniquelocal"]);
   app.use(requestContext);
-  if (logger) app.use(pinoHttp({ genReqId: (req) => (req as express.Request).requestId, autoLogging: { ignore: (req) => req.url === "/api/health" } }));
+  if (logger)
+    app.use(
+      pinoHttp({ genReqId: (req) => (req as express.Request).requestId, autoLogging: { ignore: (req) => req.url === "/api/health" } }),
+    );
   app.use(helmet({ crossOriginResourcePolicy: false, contentSecurityPolicy: false }));
 
   app.get("/api/health", async (_req, res) => {
@@ -62,6 +67,8 @@ export function createApp({ auth, logger = true, extraRoutes }: AppOptions) {
   app.use(classesRouter());
   app.use(adminRouter());
   app.use(crmRouter());
+  app.use(hrRouter());
+  app.use(filesRouter());
   app.use(devRouter());
 
   app.use((_req, res) => res.status(404).json({ error: { code: "NOT_FOUND", message: "Not found" } }));

@@ -14,6 +14,7 @@ import {
   Settings,
   ShieldCheck,
   Users,
+  UsersRound,
   Wallet,
 } from "lucide-react";
 import { Suspense } from "react";
@@ -41,13 +42,21 @@ async function AdminShell({ children }: { children: React.ReactNode }) {
     { href: "/admin/classes", label: "Live classes", icon: <CalendarDays />, show: can(v, "class.schedule.any") },
     { href: "/admin/recordings", label: "Recordings", icon: <PlayCircle />, show: can(v, "recording.manage") },
     { href: "/admin/staff", label: "Staff & roles", icon: <ShieldCheck />, show: can(v, "staff.manage") },
+    {
+      href: can(v, "hr.manage") ? "/staff/hr/team" : "/staff/hr/salary",
+      label: "HR",
+      icon: <UsersRound />,
+      show: can(v, "hr.manage") || can(v, "hr.payroll"),
+    },
     { href: "/admin/settings", label: "Settings", icon: <Settings />, show: can(v, "settings.fees") || can(v, "settings.integrations") },
     { href: "/admin/audit", label: "Audit log", icon: <FileClock />, show: can(v, "audit.read") },
     { href: "/admin/notifications", label: "Notifications", icon: <ClipboardList />, show: true },
     { href: "/admin/docs", label: "Help & docs", icon: <LifeBuoy />, show: true },
   ];
-  const areas: AreaLink[] = [{ href: "/admin", label: "Admin panel" }];
-  if (can(v, "staff.access")) areas.push({ href: "/staff", label: "Staff portal" });
+  const areas: AreaLink[] = [
+    { href: "/admin", label: "Admin panel" },
+    { href: "/staff", label: "Staff portal" },
+  ];
   if (can(v, "crm.access")) areas.push({ href: process.env.CRM_APP_URL ?? "http://crm.localhost:3002", label: "CRM" });
   return (
     <AppShell

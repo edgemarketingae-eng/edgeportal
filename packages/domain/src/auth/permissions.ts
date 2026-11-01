@@ -1,7 +1,7 @@
 /** Typed permission catalogue. Roles are stored in the DB as lists of these keys. */
 export const PERMISSIONS = {
   "admin.access": "Open the admin panel",
-  "staff.access": "Open the staff portal",
+  "staff.access": "Use the teaching tools in the staff portal (live classes and recordings)",
   "enrollment.read": "View enrollments",
   "enrollment.approve": "Approve or reject paid enrollments",
   "enrollment.lock": "Lock and unlock student access",
@@ -34,6 +34,9 @@ export const PERMISSIONS = {
   "crm.staff.manage": "Create and manage CRM staff",
   "crm.roles.manage": "Create and edit CRM roles",
   "crm.commission.manage": "Set commission rates, verify deposits and see everyone's commission",
+  "hr.manage": "Manage employee records, attendance, leave approvals and HR requests",
+  "hr.payroll": "See and change salaries, run salary months and approve advances",
+  "hr.settings": "Edit leave rules, weekly off days and holidays",
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -53,6 +56,12 @@ export function isCrmRole(role: { permissions?: readonly string[] | null }) {
   return !!role.permissions?.length && role.permissions.every(isCrmPermission);
 }
 
+/** HR permissions are the `hr.*` keys: only HR and super admins hold them, because they open everyone's pay. */
+export function isHrPermission(p: string) {
+  return p.startsWith("hr.");
+}
+export const HR_PERMISSIONS = ALL_PERMISSIONS.filter(isHrPermission);
+
 /** System roles created by the seed. Admins can create more roles later. */
 export const SYSTEM_ROLES: { key: string; name: string; description: string; permissions: Permission[] }[] = [
   { key: "super_admin", name: "Super admin", description: "Full access", permissions: ALL_PERMISSIONS },
@@ -60,7 +69,7 @@ export const SYSTEM_ROLES: { key: string; name: string; description: string; per
     key: "admin",
     name: "Admin",
     description: "Runs the academy day to day",
-    permissions: ALL_PERMISSIONS.filter((p) => p !== "roles.manage" && p !== "settings.integrations"),
+    permissions: ALL_PERMISSIONS.filter((p) => p !== "roles.manage" && p !== "settings.integrations" && !isHrPermission(p)),
   },
   {
     key: "admissions",
@@ -90,6 +99,18 @@ export const SYSTEM_ROLES: { key: string; name: string; description: string; per
     name: "Mentor",
     description: "Teaches batches and schedules live classes",
     permissions: ["staff.access", "class.schedule.own"],
+  },
+  {
+    key: "hr_manager",
+    name: "HR manager",
+    description: "Employee records, attendance, leave, HR requests, salaries and advances",
+    permissions: HR_PERMISSIONS,
+  },
+  {
+    key: "employee",
+    name: "Employee",
+    description: "Uses the staff portal for their own attendance, leave, salary and requests",
+    permissions: [],
   },
   // CRM roles hold only crm.* keys (see isCrmRole), so CRM admins may manage them inside the CRM.
   {

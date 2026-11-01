@@ -31,17 +31,32 @@ export function can(perms: Set<Permission> | Permission[], ...required: Permissi
   return required.every((p) => set.has(p));
 }
 
-/** Admins and anyone who can create accounts (CRM admins) must use an authenticator app. */
+/** Admins, anyone who can create accounts (CRM admins) and anyone who opens staff records or pay must use an authenticator app. */
 export function twoFactorRequired(perms: Set<Permission>) {
   const required = env.REQUIRE_ADMIN_2FA ?? env.NODE_ENV === "production";
-  return required && (perms.has("admin.access") || perms.has("crm.staff.manage"));
+  return required && (perms.has("admin.access") || perms.has("crm.staff.manage") || perms.has("hr.manage") || perms.has("hr.payroll"));
 }
 
 export interface Viewer {
   userId: string;
-  user: { id: string; name: string; email: string; phoneNumber: string | null; phoneNumberVerified: boolean; twoFactorEnabled: boolean; mustChangePassword: boolean; disabledAt: Date | null };
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    phoneNumber: string | null;
+    phoneNumberVerified: boolean;
+    twoFactorEnabled: boolean;
+    mustChangePassword: boolean;
+    disabledAt: Date | null;
+  };
   permissions: Set<Permission>;
-  student: { country: string; pendingPhone: string | null; jetaFxClientId: string | null; marketingConsent: boolean; marketingConsentAt: Date | null } | null;
+  student: {
+    country: string;
+    pendingPhone: string | null;
+    jetaFxClientId: string | null;
+    marketingConsent: boolean;
+    marketingConsentAt: Date | null;
+  } | null;
   staff: { title: string | null; workspaceEmail: string | null } | null;
   twoFactorRequired: boolean;
 }
@@ -49,7 +64,11 @@ export interface Viewer {
 export async function loadViewer(userId: string): Promise<Viewer | null> {
   if (!Types.ObjectId.isValid(userId)) return null;
   const _id = new Types.ObjectId(userId);
-  const [u, student, staff] = await Promise.all([AuthUser.findById(_id).lean(), StudentProfile.findById(_id).lean(), StaffProfile.findById(_id).lean()]);
+  const [u, student, staff] = await Promise.all([
+    AuthUser.findById(_id).lean(),
+    StudentProfile.findById(_id).lean(),
+    StaffProfile.findById(_id).lean(),
+  ]);
   if (!u) return null;
   const permissions = staff ? await permissionsFor(staff.roleIds ?? []) : new Set<Permission>();
   return {
@@ -66,7 +85,13 @@ export async function loadViewer(userId: string): Promise<Viewer | null> {
     },
     permissions,
     student: student
-      ? { country: student.country ?? "AE", pendingPhone: student.pendingPhone ?? null, jetaFxClientId: student.jetaFxClientId ?? null, marketingConsent: !!student.marketingConsent, marketingConsentAt: student.marketingConsentAt ?? null }
+      ? {
+          country: student.country ?? "AE",
+          pendingPhone: student.pendingPhone ?? null,
+          jetaFxClientId: student.jetaFxClientId ?? null,
+          marketingConsent: !!student.marketingConsent,
+          marketingConsentAt: student.marketingConsentAt ?? null,
+        }
       : null,
     staff: staff ? { title: staff.title ?? null, workspaceEmail: staff.workspaceEmail ?? null } : null,
     twoFactorRequired: twoFactorRequired(permissions),
@@ -76,9 +101,11 @@ export async function loadViewer(userId: string): Promise<Viewer | null> {
 /** Landing page per app; null means this account cannot use that app. */
 export function homesFor(v: Viewer): { student: string | null; console: string | null; crm: string | null } {
   const student = v.student ? (v.user.phoneNumberVerified && !v.student.pendingPhone ? "/dashboard" : "/verify-phone") : null;
-  const gated = (home: string) => (v.user.mustChangePassword ? "/change-password" : v.twoFactorRequired && !v.user.twoFactorEnabled ? "/security?required=1" : home);
+  const gated = (home: string) =>
+    v.user.mustChangePassword ? "/change-password" : v.twoFactorRequired && !v.user.twoFactorEnabled ? "/security?required=1" : home;
   let consoleHome: string | null = null;
-  if (v.staff && (v.permissions.has("admin.access") || v.permissions.has("staff.access"))) consoleHome = gated(v.permissions.has("admin.access") ? "/admin" : "/staff");
+  // Every staff member has the staff portal, whatever their roles: it holds their own attendance, leave and salary.
+  if (v.staff) consoleHome = gated(v.permissions.has("admin.access") ? "/admin" : "/staff");
   const crm = v.staff && v.permissions.has("crm.access") ? gated("/") : null;
   return { student, console: consoleHome, crm };
 }
@@ -86,9 +113,24 @@ export function homesFor(v: Viewer): { student: string | null; console: string |
 export async function toViewerDto(v: Viewer): Promise<ViewerDto> {
   const unread = await InAppNotification.countDocuments({ userId: new Types.ObjectId(v.userId), readAt: null });
   return {
-    user: { id: v.user.id, name: v.user.name, email: v.user.email, phoneNumber: v.user.phoneNumber, phoneNumberVerified: v.user.phoneNumberVerified, twoFactorEnabled: v.user.twoFactorEnabled, mustChangePassword: v.user.mustChangePassword },
+    user: {
+      id: v.user.id,
+      name: v.user.name,
+      email: v.user.email,
+      phoneNumber: v.user.phoneNumber,
+      phoneNumberVerified: v.user.phoneNumberVerified,
+      twoFactorEnabled: v.user.twoFactorEnabled,
+      mustChangePassword: v.user.mustChangePassword,
+    },
     permissions: [...v.permissions],
-    student: v.student ? { country: v.student.country, pendingPhone: v.student.pendingPhone, jetaFxClientId: v.student.jetaFxClientId, marketingConsent: v.student.marketingConsent } : null,
+    student: v.student
+      ? {
+          country: v.student.country,
+          pendingPhone: v.student.pendingPhone,
+          jetaFxClientId: v.student.jetaFxClientId,
+          marketingConsent: v.student.marketingConsent,
+        }
+      : null,
     staff: v.staff,
     twoFactorRequired: v.twoFactorRequired,
     unreadNotifications: unread,

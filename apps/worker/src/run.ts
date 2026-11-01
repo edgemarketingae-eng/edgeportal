@@ -15,6 +15,8 @@ const CONCURRENCY: Partial<Record<QueueName, number>> = {
   "crm.staleSweep": 1,
   "crm.batchUrgency": 1,
   "crm.autoLink": 2,
+  "hr.leaveDaily": 1,
+  "files.orphanSweep": 1,
 };
 
 export interface WorkerOptions {
@@ -54,7 +56,8 @@ export async function startWorker(o: WorkerOptions) {
       const q = new Queue(name, { connection, prefix: o.prefix });
       queues.push(q);
       const wanted = SCHEDULES.filter((s) => s.queue === name);
-      for (const s of wanted) await q.upsertJobScheduler(s.id, { pattern: s.pattern, tz: o.tz }, { name, data: s.data ?? {}, opts: { attempts: 3 } });
+      for (const s of wanted)
+        await q.upsertJobScheduler(s.id, { pattern: s.pattern, tz: o.tz }, { name, data: s.data ?? {}, opts: { attempts: 3 } });
       // Remove schedulers from older releases that are no longer declared.
       for (const existing of await q.getJobSchedulers()) {
         if (existing.key && !wanted.some((s) => s.id === existing.key)) await q.removeJobScheduler(existing.key);

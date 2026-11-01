@@ -7,12 +7,6 @@ import { requireStaff } from "@/lib/load";
 export const metadata: Metadata = { title: "Help & docs" };
 
 export default async function DocsPage() {
-  const v = await requireStaff("staff.access");
-  return (
-    <DocsIndex
-      modules={visibleModules(staffDocs, v.permissions)}
-      basePath="/staff/docs"
-      intro="How to run your batches, live classes and recordings from the staff portal."
-    />
-  );
+  const v = await requireStaff();
+  return <DocsIndex modules={visibleModules(staffDocs, v.permissions)} basePath="/staff/docs" intro="How to use the staff portal." />;
 }

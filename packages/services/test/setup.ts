@@ -17,6 +17,7 @@ Object.assign(process.env, {
   ODOO_MODE: "mock",
   GOOGLE_MODE: "mock",
   MAILERLITE_MODE: "mock",
+  STORAGE_MODE: "mock",
   MOCK_DRIVE_FILE: fileURLToPath(new URL("../../../fixtures/sample.mp4", import.meta.url)),
   MEDIA_CACHE_DIR: path.join(tmpdir(), `edge-media-test-${process.pid}`),
 });

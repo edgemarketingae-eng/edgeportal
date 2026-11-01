@@ -69,7 +69,7 @@ export function AppShell({
   );
   return (
     <div className="flex min-h-svh">
-      <aside className="border-sidebar-border bg-sidebar text-sidebar-foreground sticky top-0 hidden h-svh w-64 shrink-0 flex-col gap-6 border-r p-4 lg:flex">
+      <aside className="border-sidebar-border bg-sidebar text-sidebar-foreground sticky top-0 hidden h-svh w-64 shrink-0 flex-col gap-6 border-r p-4 lg:flex print:hidden">
         <div className="px-2 pt-2">{logo}</div>
         <p className="text-edge-mint/60 px-3 text-[11px] font-semibold tracking-[0.18em] uppercase">{areaLabel}</p>
         <div className="sidebar-scroll flex-1 overflow-y-auto">
@@ -86,7 +86,7 @@ export function AppShell({
         </div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="bg-card/95 sticky top-0 z-30 flex h-14 items-center gap-2 border-b px-3 backdrop-blur sm:px-6">
+        <header className="bg-card/95 sticky top-0 z-30 flex h-14 items-center gap-2 border-b px-3 backdrop-blur sm:px-6 print:hidden">
           <MobileNav items={items} logo={logo} areaLabel={areaLabel} signOutHref={signOutHref} />
           <span className="text-muted-foreground text-sm font-semibold lg:hidden">{areaLabel}</span>
           <div className="ml-auto flex items-center gap-1">

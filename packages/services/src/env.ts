@@ -24,7 +24,12 @@ const schema = z
     PUBLIC_FORM_ORIGINS: z
       .string()
       .default("")
-      .transform((s) => s.split(",").map((o) => o.trim().replace(/\/+$/, "")).filter(Boolean)),
+      .transform((s) =>
+        s
+          .split(",")
+          .map((o) => o.trim().replace(/\/+$/, ""))
+          .filter(Boolean),
+      ),
     TZ_DEFAULT: z.string().default("Asia/Dubai"),
     ALLOW_MOCK_IN_PRODUCTION: z.stringbool().default(false),
     REQUIRE_ADMIN_2FA: z.stringbool().optional(),
@@ -71,15 +76,29 @@ const schema = z
     MAILERLITE_MODE: mode.default("mock"),
     MAILERLITE_API_KEY: z.string().optional(),
 
+    /** Where uploaded files live. Each module gets a folder under the root, e.g. edge-academy/hr/leave. */
+    STORAGE_MODE: mode.default("mock"),
+    CLOUDINARY_CLOUD_NAME: z.string().optional(),
+    CLOUDINARY_API_KEY: z.string().optional(),
+    CLOUDINARY_API_SECRET: z.string().optional(),
+    CLOUDINARY_ROOT_FOLDER: z.string().default("edge-academy"),
+
     /** Shared secret for POST /api/webhooks/leads/:source (website lead forms). Unset = endpoint disabled. */
     LEAD_WEBHOOK_SECRET: z.string().min(16).optional(),
   })
   .superRefine((e, ctx) => {
+    if (e.STORAGE_MODE !== "mock" && !(e.CLOUDINARY_CLOUD_NAME && e.CLOUDINARY_API_KEY && e.CLOUDINARY_API_SECRET)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["STORAGE_MODE"],
+        message: "STORAGE_MODE needs CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET",
+      });
+    }
     if (e.EMAIL_MODE === "mailersend" && !e.MAILERSEND_API_KEY) {
       ctx.addIssue({ code: "custom", path: ["MAILERSEND_API_KEY"], message: "MAILERSEND_API_KEY is required for EMAIL_MODE=mailersend" });
     }
     if (e.NODE_ENV !== "production" || e.ALLOW_MOCK_IN_PRODUCTION) return;
-    for (const key of ["OTP_MODE", "PAYMENTS_MODE", "ODOO_MODE", "GOOGLE_MODE", "MAILERLITE_MODE"] as const) {
+    for (const key of ["OTP_MODE", "PAYMENTS_MODE", "ODOO_MODE", "GOOGLE_MODE", "MAILERLITE_MODE", "STORAGE_MODE"] as const) {
       if (e[key] === "mock") ctx.addIssue({ code: "custom", path: [key], message: `${key}=mock is not allowed in production` });
     }
     // EMAIL_MODE=console is allowed in production until MailerSend is set up: emails go to the worker log.
@@ -95,7 +114,9 @@ export function getEnv(): Env {
   if (!cached) {
     const parsed = schema.safeParse(process.env);
     if (!parsed.success) {
-      throw new Error(`Invalid environment configuration:\n${parsed.error.issues.map((i) => `  - ${i.path.join(".")}: ${i.message}`).join("\n")}`);
+      throw new Error(
+        `Invalid environment configuration:\n${parsed.error.issues.map((i) => `  - ${i.path.join(".")}: ${i.message}`).join("\n")}`,
+      );
     }
     cached = parsed.data;
   }

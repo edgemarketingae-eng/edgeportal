@@ -11,6 +11,8 @@ import { discoverMeetRecordings } from "../recordings/service";
 import { linkLeadForStudent } from "../crm/autolink";
 import { sweepLeadInbox } from "../crm/ingest";
 import { runBatchUrgency, runFollowUpDigest, runStaleSweep } from "../crm/jobs";
+import { sweepOrphanFiles } from "../files/service";
+import { runLeaveDaily } from "../hr/leave";
 
 /**
  * Job handlers keyed by queue, shared by the worker and the dev-only job route.
@@ -40,6 +42,8 @@ export const baseHandlers: Handlers = {
   "crm.staleSweep": (d) => runStaleSweep(asOf(d)),
   "crm.batchUrgency": (d) => runBatchUrgency(asOf(d)),
   "crm.inboxSweep": () => sweepLeadInbox(),
+  "hr.leaveDaily": (d) => runLeaveDaily(asOf(d)),
+  "files.orphanSweep": () => sweepOrphanFiles(),
 };
 
 const extra: Handlers = {};

@@ -473,6 +473,23 @@ export async function listDeposits(filters: DepositFilters, scope: CrmScope): Pr
   };
 }
 
+/**
+ * Verified commission per person and month, for salaries: `[{ person, month: "2026-10", minor }]`, by deposit date in
+ * `[from, to)`. Read fresh every time, because a month's commission can still change after it ends.
+ */
+export async function verifiedCommissionByMonth(from: Date, to: Date) {
+  const rows = await LeadDeposit.aggregate<{ _id: { p: Types.ObjectId; m: string }; v: number }>([
+    { $match: { status: "VERIFIED", depositedAt: { $gte: from, $lt: to } } },
+    {
+      $group: {
+        _id: { p: "$creditedToId", m: { $dateToString: { format: "%Y-%m", date: "$depositedAt" } } },
+        v: { $sum: { $ifNull: ["$commissionMinor", 0] } },
+      },
+    },
+  ]);
+  return rows.map((r) => ({ person: String(r._id.p), month: r._id.m, minor: r.v }));
+}
+
 /** One person's earnings for their staff page (commission managers only). */
 export async function getStaffCommission(userId: string, scope: CrmScope): Promise<StaffCommissionDto> {
   if (!canManage(scope)) throw new NotFoundError("Staff");

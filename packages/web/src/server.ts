@@ -12,7 +12,10 @@ function apiConfig() {
 }
 
 /** Raw fetch to the internal API with the browser's session forwarded (for non-JSON responses such as CSV). */
-export async function apiFetch(path: string, init: { method?: string; body?: string; headers?: Record<string, string> } = {}) {
+export async function apiFetch(
+  path: string,
+  init: { method?: string; body?: string | Uint8Array<ArrayBuffer>; headers?: Record<string, string> } = {},
+) {
   const h = await headers(); // request data first: marks the caller dynamic before any work happens
   const { url, token } = apiConfig();
   const forward: Record<string, string> = { "x-internal-token": token };
@@ -36,6 +39,25 @@ export async function apiFetch(path: string, init: { method?: string; body?: str
  */
 export const api = createClient((path, init) => apiFetch(path, init));
 
+/** Sends a file from a Server Action to the API's storage route. Returns the stored file's id, for the feature route to claim. */
+export async function apiUpload(file: File, target: { module: string; area: string; ownerId?: string }) {
+  const qs = new URLSearchParams({
+    module: target.module,
+    area: target.area,
+    name: file.name,
+    ...(target.ownerId ? { ownerId: target.ownerId } : {}),
+  });
+  const res = await apiFetch(`/api/v1/files?${qs}`, {
+    method: "POST",
+    headers: { "content-type": "application/octet-stream" },
+    body: new Uint8Array(await file.arrayBuffer()),
+  });
+  const text = await res.text();
+  const json = text ? JSON.parse(text) : null;
+  if (!res.ok) throw ApiError.fromBody(res.status, json);
+  return json as { id: string; name: string };
+}
+
 /** The signed-in viewer (or null), fetched once per request. */
 export const getViewer = cache(async (): Promise<ViewerDto | null> => {
   try {
@@ -47,7 +69,10 @@ export const getViewer = cache(async (): Promise<ViewerDto | null> => {
 });
 
 /** Turn auth-related API errors into redirects; anything else propagates to error.tsx. */
-export function redirectOnAuthError(e: unknown, routes: { login: string; verifyPhone?: string; changePassword?: string; security?: string }): never {
+export function redirectOnAuthError(
+  e: unknown,
+  routes: { login: string; verifyPhone?: string; changePassword?: string; security?: string },
+): never {
   if (e instanceof ApiError) {
     if (e.status === 401) redirect(routes.login);
     if (e.code === "PHONE_NOT_VERIFIED" && routes.verifyPhone) redirect(routes.verifyPhone);

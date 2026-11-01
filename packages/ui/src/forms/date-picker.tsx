@@ -66,8 +66,11 @@ export interface DatePickerProps {
   className?: string;
   "aria-invalid"?: boolean;
   "aria-describedby"?: string;
+  "aria-label"?: string;
   /** Time used when a date is picked before a time (datetime mode). */
   defaultTime?: string;
+  /** Called with `yyyy-mm-dd` (empty when cleared) when the date changes, for pickers that aren't posted with a form. */
+  onValueChange?: (date: string) => void;
 }
 
 /**
@@ -84,6 +87,7 @@ export function DatePicker({
   placeholder,
   className,
   defaultTime = "10:00",
+  onValueChange,
   ...aria
 }: DatePickerProps) {
   const initial = split(defaultValue, mode);
@@ -119,6 +123,7 @@ export function DatePicker({
     setDate(next);
     setText(next ? formatDateValue(next) : "");
     if (mode === "datetime" && next && !time) setTime(defaultTime);
+    onValueChange?.(next);
   }
 
   const value = mode === "date" ? date : date ? `${date}T${time || defaultTime}` : "";
@@ -139,15 +144,20 @@ export function DatePicker({
               required={required}
               disabled={disabled}
               placeholder={placeholder ?? "dd/mm/yyyy"}
+              aria-label={aria["aria-label"]}
               aria-invalid={aria["aria-invalid"]}
               aria-describedby={aria["aria-describedby"]}
               onChange={(e) => {
                 setText(e.target.value);
-                if (!e.target.value.trim()) setDate("");
+                if (!e.target.value.trim()) {
+                  setDate("");
+                  onValueChange?.("");
+                }
                 const parsed = parseDateText(e.target.value);
                 if (parsed) {
                   setDate(parsed);
                   if (mode === "datetime" && !time) setTime(defaultTime);
+                  onValueChange?.(parsed);
                 }
               }}
               onBlur={() => setText(date ? formatDateValue(date) : "")}

@@ -14,6 +14,7 @@ import {
   Upload,
   Users,
   UsersRound,
+  Wallet,
 } from "lucide-react";
 import { Suspense } from "react";
 import { can, CONSOLE_URL, load, requireCrm } from "@/lib/load";
@@ -55,6 +56,7 @@ async function CrmShell({ children }: { children: React.ReactNode }) {
     [
       "More",
       [
+        { href: `${CONSOLE_URL()}/staff`, label: "Leave & salary", icon: <Wallet />, show: true },
         { href: "/notifications", label: "Notifications", icon: <Bell />, show: true },
         { href: "/docs", label: "Help & docs", icon: <LifeBuoy />, show: true },
       ],
@@ -65,7 +67,7 @@ async function CrmShell({ children }: { children: React.ReactNode }) {
   );
   const areas: AreaLink[] = [{ href: "/dashboard", label: "CRM" }];
   if (can(v, "admin.access")) areas.push({ href: `${CONSOLE_URL()}/admin`, label: "Admin panel" });
-  else if (can(v, "staff.access")) areas.push({ href: `${CONSOLE_URL()}/staff`, label: "Staff portal" });
+  areas.push({ href: `${CONSOLE_URL()}/staff`, label: "Staff portal" });
   return (
     <AppShell
       items={items}

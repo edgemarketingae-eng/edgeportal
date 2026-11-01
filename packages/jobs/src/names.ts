@@ -19,6 +19,8 @@ export const QUEUES = {
   CRM_STALE_SWEEP: "crm.staleSweep",
   CRM_BATCH_URGENCY: "crm.batchUrgency",
   CRM_INBOX_SWEEP: "crm.inboxSweep",
+  HR_LEAVE_DAILY: "hr.leaveDaily",
+  FILES_ORPHAN_SWEEP: "files.orphanSweep",
 } as const;
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
@@ -38,11 +40,19 @@ export interface JobPayloads {
   "recordings.cacheFill": { recordingId: string };
   "recordings.cacheEvict": Record<string, never>;
   "outbox.sweep": Record<string, never>;
-  "crm.autoLink": { userId: string; phone?: string | null; email?: string | null; reason: "signup" | "verified" | "payment" | "manual"; paymentId?: string | null };
+  "crm.autoLink": {
+    userId: string;
+    phone?: string | null;
+    email?: string | null;
+    reason: "signup" | "verified" | "payment" | "manual";
+    paymentId?: string | null;
+  };
   "crm.followUpDigest": { asOf?: string };
   "crm.staleSweep": { asOf?: string };
   "crm.batchUrgency": { asOf?: string };
   "crm.inboxSweep": Record<string, never>;
+  "hr.leaveDaily": { asOf?: string };
+  "files.orphanSweep": Record<string, never>;
 }
 
 export interface SendOptions {
@@ -67,4 +77,6 @@ export const SCHEDULES: { id: string; queue: QueueName; pattern: string; data?: 
   { id: "crm-batch-urgency-daily", queue: QUEUES.CRM_BATCH_URGENCY, pattern: "15 9 * * *" },
   { id: "crm-stale-sweep-daily", queue: QUEUES.CRM_STALE_SWEEP, pattern: "30 9 * * *" },
   { id: "crm-inbox-sweep", queue: QUEUES.CRM_INBOX_SWEEP, pattern: "*/5 * * * *" },
+  { id: "hr-leave-daily", queue: QUEUES.HR_LEAVE_DAILY, pattern: "30 0 * * *" },
+  { id: "files-orphan-sweep-weekly", queue: QUEUES.FILES_ORPHAN_SWEEP, pattern: "0 3 * * 0" },
 ];

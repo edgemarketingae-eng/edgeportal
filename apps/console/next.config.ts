@@ -24,6 +24,8 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
   poweredByHeader: false,
   allowedDevOrigins: ["console.localhost"],
+  // HR attachments go through Server Actions: 5 MB files plus multipart overhead.
+  experimental: { serverActions: { bodySizeLimit: "6mb" } },
   transpilePackages: ["@edge/domain", "@edge/contracts", "@edge/ui", "@edge/web"],
   turbopack: {
     rules: {

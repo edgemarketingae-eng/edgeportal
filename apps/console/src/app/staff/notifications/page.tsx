@@ -9,7 +9,7 @@ import { load, requireStaff } from "@/lib/load";
 export const metadata: Metadata = { title: "Notifications" };
 
 export default async function StaffNotificationsPage(props: PageProps<"/staff/notifications">) {
-  await requireStaff("staff.access");
+  await requireStaff();
   const sp = await props.searchParams;
   const page = await load(() =>
     api(meRoutes.notifications, { query: { page: Number(sp.page) || 1, pageSize: Number(sp.pageSize) || 25 } }),

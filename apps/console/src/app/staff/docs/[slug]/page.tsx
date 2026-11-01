@@ -10,7 +10,7 @@ export async function generateMetadata(props: PageProps<"/staff/docs/[slug]">): 
 }
 
 export default async function DocsArticlePage(props: PageProps<"/staff/docs/[slug]">) {
-  const v = await requireStaff("staff.access");
+  const v = await requireStaff();
   const { slug } = await props.params;
   return <DocsArticle modules={visibleModules(staffDocs, v.permissions)} slug={slug} basePath="/staff/docs" />;
 }

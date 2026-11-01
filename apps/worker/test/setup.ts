@@ -13,4 +13,5 @@ Object.assign(process.env, {
   ODOO_MODE: "mock",
   GOOGLE_MODE: "mock",
   MAILERLITE_MODE: "mock",
+  STORAGE_MODE: "mock",
 });

@@ -11,6 +11,8 @@ export * from "./models/payments";
 export * from "./models/classes";
 export * from "./models/ops";
 export * from "./models/crm";
+export * from "./models/hr";
+export * from "./models/files";
 export { Types } from "mongoose";
 export type { Model, PipelineStage } from "mongoose";
 export type { ClientSession } from "mongoose";
