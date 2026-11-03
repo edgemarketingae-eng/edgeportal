@@ -57,8 +57,17 @@ Two-factor authentication is mandatory in production for anyone with `admin.acce
 A project is a sales campaign or pipeline with its own team: a name and code, an optional target course and batch,
 dates, and numeric targets (leads, conversions). **Every lead belongs to exactly one project.**
 
-- The seeded **General** project is the default: website enquiries land there, and every CRM user may work its
-  unassigned leads. Managers move leads from it into projects.
+- The seeded **General** project is the default: server-to-server website webhook enquiries and leads added without a
+  project land there, and every CRM user may work its unassigned leads. Managers move leads from it into projects.
+- **None of the public pages use General.** The portal landing page sends new leads to `FREE-COURSE-MAL`; the
+  contact page and Forex Growth Hub to `FREE-COURSE-SUPPORT` (codes in `packages/services/src/crm/landing.ts`). A
+  paused project still receives them. Only if the project is missing or archived does a lead fall back to General,
+  and everyone with `crm.projects.manage` gets an in-app alert ("Project … is missing", at most once an hour).
+- Moving the existing General leads (one-off, run on the server; a dry run unless `--apply`):
+  `pnpm --filter @edge/api move-general-leads` then `pnpm --filter @edge/api move-general-leads -- --apply`
+  (`--to CODE` for another project; default `FREE-COURSE-MAL`). Every lead in General moves with its owner and open
+  tasks, gets a PROJECT_CHANGED timeline entry, and one audit entry records the batch. Running it again moves only
+  what has landed in General since.
 - A project has **managers** (project managers; they see and run everything inside) and **members** (sales
   executives). Membership is set on the project page or when creating a CRM account.
 
@@ -326,8 +335,8 @@ on the public API host; rate limited to 10 per 10 minutes per visitor IP; a hidd
 
 - The lead goes through the same intake as the website form (`ingestInboundLead`): source WEBSITE, detail "Free live
   class landing page", tag `free-live-class`, the ad's UTM tags, WhatsApp consent.
-- A new lead is always round-robined in **General**, whatever the Settings checkbox, but only among **reachable**
-  sales executives (see Chat channel). A known lead keeps its owner; an unowned one is assigned the same way.
+- A new lead goes to the **Free Course Malayalam** project (code `FREE-COURSE-MAL`) and is always round-robined
+  among the **reachable** sales executives on its team (see Chat channel), whatever the Settings checkbox. A known lead keeps its owner; an unowned one is assigned the same way.
 - An existing owner who is Off, disabled or not reachable hands the lead to a reachable sales executive (ASSIGNED
   activity); with nobody available the owner is kept and the visitor goes to Support WhatsApp.
 - Response: `{ ok, contactUrl, channel, contactName }`. The visitor is sent to the owner's WhatsApp or Telegram with a
@@ -356,7 +365,8 @@ number, optional), `email`, `jetaFxClientId`, `page`, `utm{}`. Response: `{ ok, 
   - Source WEBSITE, detail "Forex Growth Hub" (or "Forex Growth Hub · Inner Circle"), tag `growth-hub` (plus
     `inner-circle`), WhatsApp consent.
   - It is round-robined among the **reachable** sales executives on that project's team.
-  - If that project is missing or not ACTIVE, the lead goes to General instead and the API logs a warning.
+  - A paused project still receives leads. If it is missing or archived, the lead goes to General instead, the API
+    logs an error and the project admins get an in-app alert.
   - A known lead stays in its own project and keeps its owner; an owner who is Off or not reachable hands it to
     someone else on that project.
   - With no eligible owner (for example nobody on the team is reachable), the lead is left unassigned and the

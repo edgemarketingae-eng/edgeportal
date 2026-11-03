@@ -1,5 +1,15 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { Course, Lead, LeadInboundEvent, Project, Types, withTx, type LeadInboundEventDoc, type ProjectDoc } from "@edge/db";
+import {
+  Course,
+  InAppNotification,
+  Lead,
+  LeadInboundEvent,
+  Project,
+  Types,
+  withTx,
+  type LeadInboundEventDoc,
+  type ProjectDoc,
+} from "@edge/db";
 import { now } from "@edge/domain/clock";
 import { INBOUND_SOURCES } from "@edge/domain/crm/enums";
 import { normalizeLanguage, parseTags } from "@edge/domain/crm/machine";
@@ -8,7 +18,7 @@ import { parsePhone } from "@edge/domain/phone";
 import { ApiError } from "@edge/contracts";
 import { z } from "zod";
 import { env } from "../env";
-import { notifyUser } from "../notifications/in-app";
+import { notifyPermissionHolders, notifyUser } from "../notifications/in-app";
 import { queuePush } from "../notifications/push";
 import { flushOutbox } from "../runtime";
 import { getSetting } from "../settings";
@@ -130,12 +140,24 @@ async function matchCourse(text?: string) {
   return c ? String(c._id) : null;
 }
 
-/** The active project with this code for a new lead; General when there is no code, or it is missing or not active. */
+/**
+ * The project with this code for a new lead (a paused project still receives them); General when there is no code.
+ * A page's project that is missing or archived must never lose the lead: it is saved in General and the CRM admins
+ * are told to fix the project.
+ */
 async function intakeProject(code?: string): Promise<ProjectDoc> {
-  if (code) {
-    const p = await Project.findOne({ code, status: "ACTIVE" }).lean();
-    if (p) return p as ProjectDoc;
-    console.warn(`[lead-intake] project ${code} is missing or not active; the lead goes to the default project`);
+  if (!code) return getDefaultProject();
+  const p = await Project.findOne({ code, status: { $ne: "ARCHIVED" } }).lean();
+  if (p) return p as ProjectDoc;
+  console.error(`[lead-intake] project ${code} is missing or archived; the lead goes to the default project`);
+  // Once an hour, not once per lead (checked in the database, so it holds across API processes).
+  const title = `Project ${code} is missing`;
+  if (!(await InAppNotification.exists({ title, createdAt: { $gt: new Date(now().getTime() - 3600_000) } }))) {
+    await notifyPermissionHolders("crm.projects.manage", {
+      title,
+      body: `New leads from the website pages that belong in ${code} are going to General. Create the project (or un-archive it) with that code.`,
+      href: `${env.CRM_APP_URL}/projects`,
+    });
   }
   return getDefaultProject();
 }
@@ -146,6 +168,7 @@ async function intakeProject(code?: string): Promise<ProjectDoc> {
  * with on their channel, whatever the CRM's round-robin setting, because the visitor is sent to that person's chat.
  * `altPhone` is a second number of the visitor's (e.g. calls vs WhatsApp): an existing lead under it also matches.
  * `projectCode` puts a new lead in that project (and its team's round-robin); an existing lead stays where it is.
+ * The website pages always pass one, so none of their leads land in General unless that project is gone.
  */
 export async function ingestInboundLead(
   source: string,

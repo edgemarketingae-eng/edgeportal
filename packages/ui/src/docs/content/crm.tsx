@@ -1513,17 +1513,22 @@ export const crmDocs: DocModule[] = [
             </P>
             <List>
               <>
-                The <b>General</b> project is the default. Everyone with CRM access works there, so it has no team to manage. Enquiries from
-                the website land there, and round-robin shares General leads across every active sales executive. Managers then move leads
-                from General into the right project.
+                The <b>General</b> project is the default. Everyone with CRM access works there, so it has no team to manage. Leads added
+                without a project land there, and round-robin shares General leads across every active sales executive. Managers then move
+                leads from General into the right project. The public pages never use General.
+              </>
+              <>
+                The <b>Free Course Malayalam</b> project (code <i>FREE-COURSE-MAL</i>) receives new leads from the portal&apos;s home page.
+                Each goes round-robin to one of its sales executives, and the visitor is sent to that person&apos;s WhatsApp or Telegram.
               </>
               <>
                 The <b>Free Course support</b> project (code <i>FREE-COURSE-SUPPORT</i>) receives new enquiries from the Forex Growth Hub
                 forms and from the contact page (the student app&apos;s <i>/support</i> page: help and support, broker account opening,
                 course joining, Inner Circle access, free live classes). Each new enquiry goes round-robin to one of its sales executives,
                 and the visitor is sent to that person&apos;s WhatsApp or Telegram. While its team is empty, enquiries wait there unassigned
-                and visitors go to the academy&apos;s support WhatsApp; if the project is missing or not active, they go to General. Someone
-                who is already a lead stays in their project and with their owner.
+                and visitors go to the academy&apos;s support WhatsApp. A paused project still receives enquiries; only if a page&apos;s
+                project is missing or archived do its leads go to General, and the people who manage projects get an alert to fix it.
+                Someone who is already a lead stays in their project and with their owner.
               </>
               <>
                 A project has <b>project managers</b>, who see and run everything inside it, and <b>sales executives</b> (team members), who

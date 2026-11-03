@@ -390,3 +390,48 @@ export async function moveLeadToProject(leadId: string, projectId: string, actor
     });
   });
 }
+
+/**
+ * One-off: move every lead in the default (General) project to the project with `toCode`, keeping owners (owners
+ * always see their own leads) and taking their open tasks along. Each lead's timeline records the move. A dry run
+ * unless `apply`; returns what moves, per owner.
+ */
+export async function moveDefaultProjectLeads(toCode: string, opts: { apply: boolean }, actor: Actor) {
+  const [from, to] = await Promise.all([
+    Project.findOne({ isDefault: true }).lean(),
+    Project.findOne({ code: toCode.trim().toUpperCase() }).lean(),
+  ]);
+  if (!from) throw new NotFoundError("Default project");
+  if (!to) throw new BusinessError(`No project with code ${toCode}. Create it in the CRM first.`);
+  if (to.status === "ARCHIVED") throw new BusinessError(`Project ${to.code} is archived`);
+  if (to._id.equals(from._id)) throw new BusinessError("That is the default project");
+  const leads = await Lead.find({ projectId: from._id }, { _id: 1, ownerId: 1 }).lean();
+  const owners = await userNames(leads.map((l) => l.ownerId));
+  const byOwner = new Map<string, number>();
+  for (const l of leads) {
+    const k = l.ownerId ? (owners.get(String(l.ownerId)) ?? String(l.ownerId)) : "Unassigned";
+    byOwner.set(k, (byOwner.get(k) ?? 0) + 1);
+  }
+  const summary = { from: from.name, to: `${to.name} (${to.code})`, total: leads.length, byOwner: Object.fromEntries(byOwner) };
+  if (!opts.apply || !leads.length) return summary;
+  for (let i = 0; i < leads.length; i += 200) {
+    const ids = leads.slice(i, i + 200).map((l) => l._id);
+    await withTx(async () => {
+      await Lead.updateMany({ _id: { $in: ids }, projectId: from._id }, { $set: { projectId: to._id } });
+      await CrmTask.updateMany({ leadId: { $in: ids }, status: { $in: [...OPEN_TASK_STATUSES] } }, { $set: { projectId: to._id } });
+      for (const id of ids)
+        await recordActivity(id, "PROJECT_CHANGED", actor, {
+          data: { from: String(from._id), fromName: from.name, to: String(to._id), toName: to.name, ownerKept: true },
+        });
+    });
+  }
+  await audit({
+    actor,
+    action: "lead.bulkMoveProject",
+    entityType: "Project",
+    entityId: String(to._id),
+    before: { projectId: String(from._id) },
+    after: { projectId: String(to._id), leads: leads.length },
+  });
+  return summary;
+}

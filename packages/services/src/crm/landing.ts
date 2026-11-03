@@ -19,8 +19,9 @@ import { reachableExec } from "./round-robin";
 
 const SOURCE_DETAIL = "Free live class landing page";
 const GROWTH_HUB_DETAIL = "Forex Growth Hub";
-/** CRM project (by code) for new Growth Hub and contact page leads; General if it is missing or not active. */
-const FREE_COURSE_SUPPORT = "FREE-COURSE-SUPPORT";
+/** CRM projects (by code) for new leads from these pages. None of them use General; it is only the fallback when the project is missing or archived. */
+const FREE_COURSE_MAL = "FREE-COURSE-MAL"; // portal landing page (student app home)
+const FREE_COURSE_SUPPORT = "FREE-COURSE-SUPPORT"; // Growth Hub and the contact page
 
 type Utm = { source?: string; medium?: string; campaign?: string; content?: string; term?: string };
 
@@ -56,7 +57,7 @@ async function contactFor(ownerId: string | null) {
 const CHANNEL_NAME: Record<ContactChannel, string> = { WHATSAPP: "WhatsApp", TELEGRAM: "Telegram" };
 
 /**
- * Create (or refresh) the CRM lead in the General project (or `projectCode`), round-robin it to a sales executive
+ * Create (or refresh) the CRM lead in the page's project, round-robin it to a sales executive
  * on that project who can be chatted with, note on the timeline where the visitor was sent, and return the chat link.
  */
 async function captureLandingLead(input: {
@@ -119,6 +120,7 @@ export async function captureFreeClassLead(input: { name: string; phone: string;
     phone: input.phone,
     page: SOURCE_DETAIL,
     tags: ["free-live-class"],
+    projectCode: FREE_COURSE_MAL,
     landing: { id: "free-class", label: "the free class page" },
     utm: input.utm,
     text: (greet, visitor) => `Hi ${greet}, I'm ${visitor}. I need help with something. Can you assist me, please?`,

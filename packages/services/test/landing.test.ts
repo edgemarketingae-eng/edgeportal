@@ -1,4 +1,4 @@
-import { Lead, LeadActivity, Project, StaffProfile, Types } from "@edge/db";
+import { CrmTask, InAppNotification, Lead, LeadActivity, Project, StaffProfile, Types } from "@edge/db";
 import { closeTestDb, connectTestDb, resetDb } from "@edge/db/testing";
 import { freezeClock, setClock } from "@edge/domain/clock";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -12,6 +12,7 @@ import {
   getPublicFreeClass,
   listCrmUsers,
   listStaff,
+  moveDefaultProjectLeads,
   normalizeTelegram,
   NotFoundError,
   salesExecutivesFor,
@@ -19,6 +20,7 @@ import {
   setSetting,
   setStaffAvailable,
   updateStaff,
+  BusinessError,
   ValidationError,
 } from "../src";
 import { producer, sent } from "./helpers";
@@ -107,13 +109,18 @@ describe("staff Telegram", () => {
 });
 
 describe("free class landing", () => {
-  it("gives leads in General to the sales executives with a phone in turn, whatever they hold and whatever the round-robin setting", async () => {
+  it("puts leads in FREE-COURSE-MAL and gives them to its sales executives with a phone in turn, whatever the round-robin setting", async () => {
     const busy = await exec("Busy Bee", "+971500000001");
     const free = await exec("Free Fatima", "+971500000002");
-    await exec("Nophone Nadia"); // no phone: never picked
-    const g = await getDefaultProject();
+    const nophone = await exec("Nophone Nadia"); // no phone: never picked
+    await exec("Outside Omar", "+971500000003"); // not on the project's team: never picked
+    const mal = await Project.create({
+      name: "Free Course Malayalam",
+      code: "FREE-COURSE-MAL",
+      memberIds: [busy, free, nophone].map((x) => new Types.ObjectId(x)),
+    });
     await createLead(
-      { projectId: String(g._id), name: "Existing", phone: "+971509990000", source: "WEBSITE", ownerId: busy },
+      { projectId: String(mal._id), name: "Existing", phone: "+971509990000", source: "WEBSITE", ownerId: busy },
       { type: "SYSTEM" },
     );
 
@@ -125,7 +132,7 @@ describe("free class landing", () => {
     expect(textOf(r.contactUrl!)).toBe("Hi Busy, I'm Ali Hassan. I need help with something. Can you assist me, please?");
 
     const lead = (await Lead.findOne({ phone: "+971551112233" }).lean())!;
-    expect(String(lead.projectId)).toBe(String(g._id));
+    expect(String(lead.projectId)).toBe(String(mal._id));
     expect(lead.source).toBe("WEBSITE");
     expect(lead.sourceDetail).toBe("Free live class landing page");
     expect(lead.tags).toContain("free-live-class");
@@ -184,6 +191,31 @@ describe("free class landing", () => {
     expect(support.contactName).toBe("Edge Trading Academy");
     expect(support.contactUrl).toMatch(/^https:\/\/wa\.me\/971507654321\?/);
     expect(textOf(support.contactUrl!)).toMatch(/^Hi Edge Trading Academy, I'm Later Lead\./);
+  });
+
+  it("never uses General while the project exists, even paused; a missing or archived project falls back to General and alerts once", async () => {
+    const e = await exec("Mal Exec", "+971500000004");
+    const admin = await exec("Project Admin", undefined, "crm_admin");
+    const mal = await Project.create({
+      name: "Free Course Malayalam",
+      code: "FREE-COURSE-MAL",
+      status: "PAUSED",
+      memberIds: [new Types.ObjectId(e)],
+    });
+    await captureFreeClassLead({ name: "Paused Ok", phone: "+971551118801" });
+    expect(String((await Lead.findOne({ phone: "+971551118801" }).lean())!.projectId)).toBe(String(mal._id));
+    expect(await ownerOf("+971551118801")).toBe(e);
+
+    await Project.updateOne({ _id: mal._id }, { $set: { status: "ARCHIVED" } });
+    await captureFreeClassLead({ name: "Archived One", phone: "+971551118802" });
+    await captureFreeClassLead({ name: "Archived Two", phone: "+971551118803" });
+    const g = String((await getDefaultProject())._id);
+    expect(String((await Lead.findOne({ phone: "+971551118802" }).lean())!.projectId)).toBe(g);
+    expect(String((await Lead.findOne({ phone: "+971551118803" }).lean())!.projectId)).toBe(g);
+    // Saved, not lost, and the people who can fix projects hear about it once, not once per lead.
+    expect(await InAppNotification.countDocuments({ userId: new Types.ObjectId(admin), title: "Project FREE-COURSE-MAL is missing" })).toBe(
+      1,
+    );
   });
 
   it("rejects an invalid phone", async () => {
@@ -367,7 +399,7 @@ describe("Forex Growth Hub form", () => {
     expect(await LeadActivity.countDocuments({ leadId: lead._id, type: "SYSTEM", "data.landing": "growth-hub-inner-circle" })).toBe(1);
   });
 
-  it("uses support WhatsApp when nobody on the project team can take it, and General when the project is not active", async () => {
+  it("uses support WhatsApp when nobody on the project team can take it, keeps paused projects, and uses General only when it is archived", async () => {
     await exec("General Gina", "+971500000091");
     const fcs = await Project.create({ name: "Free Course support", code: "FREE-COURSE-SUPPORT", memberIds: [] });
     const none = await captureGrowthHubLead({ name: "Empty Team", whatsapp: "+971551110040" });
@@ -377,9 +409,13 @@ describe("Forex Growth Hub form", () => {
     expect(lead.ownerId).toBeNull();
 
     await Project.updateOne({ _id: fcs._id }, { $set: { status: "PAUSED" } });
-    const r = await captureGrowthHubLead({ name: "Paused Project", whatsapp: "+971551110041" });
+    await captureGrowthHubLead({ name: "Paused Project", whatsapp: "+971551110041" });
+    expect(String((await Lead.findOne({ phone: "+971551110041" }).lean())!.projectId)).toBe(String(fcs._id));
+
+    await Project.updateOne({ _id: fcs._id }, { $set: { status: "ARCHIVED" } });
+    const r = await captureGrowthHubLead({ name: "Archived Project", whatsapp: "+971551110042" });
     expect(r.contactName).toBe("General Gina");
-    expect(String((await Lead.findOne({ phone: "+971551110041" }).lean())!.projectId)).toBe(String((await getDefaultProject())._id));
+    expect(String((await Lead.findOne({ phone: "+971551110042" }).lean())!.projectId)).toBe(String((await getDefaultProject())._id));
   });
 });
 
@@ -511,5 +547,50 @@ describe("staff Off", () => {
     const e = await exec("Crm Exec", "+971500000041");
     await setCrmStaffAvailable(e, false, actor);
     expect((await StaffProfile.findById(e).lean())!.available).toBe(false);
+  });
+});
+
+describe("moving General leads to FREE-COURSE-MAL", () => {
+  it("is a dry run until applied, then moves every General lead with its owner and open tasks, and logs it on each timeline", async () => {
+    const owner = await exec("Kept Owner", "+971500000061");
+    const g = await getDefaultProject();
+    const owned = await createLead(
+      { projectId: String(g._id), name: "Owned", phone: "+971551119901", source: "WEBSITE", ownerId: owner },
+      { type: "SYSTEM" },
+    );
+    const pool = await createLead(
+      { projectId: String(g._id), name: "Pool", phone: "+971551119902", source: "WEBSITE" },
+      { type: "SYSTEM" },
+    );
+    const other = await Project.create({ name: "Other", code: "OTHER-1" });
+    const elsewhere = await createLead(
+      { projectId: String(other._id), name: "Elsewhere", phone: "+971551119903", source: "WEBSITE" },
+      { type: "SYSTEM" },
+    );
+    await CrmTask.create({
+      leadId: new Types.ObjectId(owned),
+      projectId: g._id,
+      title: "Call back",
+      assigneeId: new Types.ObjectId(owner),
+    });
+    const actor = { type: "SYSTEM" as const, id: "test" };
+
+    await expect(moveDefaultProjectLeads("FREE-COURSE-MAL", { apply: true }, actor)).rejects.toBeInstanceOf(BusinessError); // not created yet
+    const mal = await Project.create({ name: "Free Course Malayalam", code: "FREE-COURSE-MAL" }); // owner is not on its team
+
+    const dry = await moveDefaultProjectLeads("FREE-COURSE-MAL", { apply: false }, actor);
+    expect(dry).toMatchObject({ total: 2, byOwner: { "Kept Owner": 1, Unassigned: 1 } });
+    expect(await Lead.countDocuments({ projectId: mal._id })).toBe(0);
+
+    await moveDefaultProjectLeads("FREE-COURSE-MAL", { apply: true }, actor);
+    const [a, b, c] = await Promise.all([Lead.findById(owned).lean(), Lead.findById(pool).lean(), Lead.findById(elsewhere).lean()]);
+    expect(String(a!.projectId)).toBe(String(mal._id));
+    expect(String(a!.ownerId)).toBe(owner);
+    expect(String(b!.projectId)).toBe(String(mal._id));
+    expect(String(c!.projectId)).toBe(String(other._id));
+    expect(String((await CrmTask.findOne({ leadId: a!._id }).lean())!.projectId)).toBe(String(mal._id));
+    expect(await LeadActivity.countDocuments({ type: "PROJECT_CHANGED", "data.to": String(mal._id) })).toBe(2);
+    expect(await Lead.countDocuments({ projectId: g._id })).toBe(0);
+    expect((await moveDefaultProjectLeads("FREE-COURSE-MAL", { apply: true }, actor)).total).toBe(0); // safe to run again
   });
 });
