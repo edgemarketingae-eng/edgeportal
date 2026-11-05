@@ -2,11 +2,18 @@ import type { Permission } from "@edge/domain/auth/permissions";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
+/** Values a section may need at render time (the app passes them to DocsArticle). */
+export interface DocContext {
+  /** The public API host, e.g. https://api.edgeacademy.ae. */
+  apiUrl: string;
+}
+
 export interface DocSection {
   /** Anchor id, unique within the module. */
   id: string;
   title: string;
-  body: ReactNode;
+  /** Content, or a function of the app's DocContext (for real URLs in samples). */
+  body: ReactNode | ((ctx: DocContext) => ReactNode);
 }
 
 export interface DocModule {

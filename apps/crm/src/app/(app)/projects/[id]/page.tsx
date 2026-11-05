@@ -35,7 +35,9 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
   const canDelete = can(v, "crm.projects.delete") && !p.isDefault;
   const deleteBlockers = [
     leadCount ? `move its ${leadCount} lead${leadCount === 1 ? "" : "s"} to another project` : null,
-    p.stats.team ? `remove ${p.stats.team === 1 ? "the 1 person" : `the ${p.stats.team} people`} on its team` : null,
+    p.stats.team && !can(v, "records.delete")
+      ? `remove ${p.stats.team === 1 ? "the 1 person" : `the ${p.stats.team} people`} on its team`
+      : null,
   ]
     .filter(Boolean)
     .join(" and ");
@@ -273,7 +275,9 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
             <CardDescription>
               {deleteBlockers
                 ? `Only an empty project can be deleted: ${deleteBlockers} first.`
-                : "Nothing is left in this project: no leads and no team."}
+                : p.stats.team
+                  ? "No leads are left. Its team comes off the project with it."
+                  : "Nothing is left in this project: no leads and no team."}
             </CardDescription>
           </CardHeader>
           {deleteBlockers ? null : (

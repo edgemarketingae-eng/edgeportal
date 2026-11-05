@@ -7,7 +7,7 @@ import { Label } from "@edge/ui/components/label";
 import { SegmentedControl } from "@edge/ui/forms/segmented-control";
 import { Trash2, UserPlus } from "lucide-react";
 import { deleteProjectAction, projectMemberAction, removeProjectMemberAction } from "@/lib/actions/projects";
-import { ConfirmDelete } from "./lead-controls";
+import { TypeToConfirm } from "@edge/ui/blocks/delete-dialog";
 import { sortForTeam } from "./project-form";
 
 export function AddMemberDialog({
@@ -98,7 +98,7 @@ export function DeleteProjectDialog({ projectId, name }: { projectId: string; na
       submitLabel="Delete project"
       destructive
     >
-      <ConfirmDelete />
+      <TypeToConfirm />
     </ActionDialog>
   );
 }

@@ -9,6 +9,7 @@ import {
   Inbox,
   LayoutDashboard,
   LifeBuoy,
+  ListChecks,
   MessageSquare,
   PlayCircle,
   Settings,
@@ -36,6 +37,7 @@ async function StaffShell({ children }: { children: React.ReactNode }) {
       undefined,
       [
         { href: "/staff", label: "Dashboard", icon: <LayoutDashboard />, exact: true, show: true },
+        { href: "/staff/updates", label: "Work updates", icon: <ListChecks />, show: true },
         { href: "/staff/attendance", label: "My attendance", icon: <CalendarCheck />, show: true },
         { href: "/staff/leave", label: "My leave", icon: <CalendarOff />, show: true },
         { href: "/staff/salary", label: "My salary", icon: <Wallet />, show: true },
@@ -55,6 +57,7 @@ async function StaffShell({ children }: { children: React.ReactNode }) {
       [
         { href: "/staff/hr/team", label: "Team", icon: <UsersRound />, show: can(v, "hr.manage") },
         { href: "/staff/hr/attendance", label: "Mark attendance", icon: <UserCheck />, show: can(v, "hr.manage") },
+        { href: "/staff/hr/updates", label: "Team updates", icon: <ListChecks />, show: can(v, "hr.manage") },
         { href: "/staff/hr/leave", label: "Leave approvals", icon: <ClipboardCheck />, show: can(v, "hr.manage") },
         { href: "/staff/hr/requests", label: "Requests inbox", icon: <Inbox />, show: can(v, "hr.manage") },
         { href: "/staff/hr/salary", label: "Salary months", icon: <Banknote />, show: can(v, "hr.payroll") },

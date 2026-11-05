@@ -117,6 +117,53 @@ export function onPaymentSucceeded(e: EnrollmentSnapshot, batch: BatchTerms, p: 
   return { patch, from: e.status, to, effects };
 }
 
+/**
+ * A succeeded payment was deleted: the money fields are worked out again from the payments that remain (each with
+ * when it succeeded). With nothing paid any more, the enrollment goes back to waiting for payment if it was waiting for
+ * approval; other statuses (active, locked…) stay as they are for staff to decide.
+ */
+export function onPaymentRemoved(
+  e: EnrollmentSnapshot,
+  batch: BatchTerms,
+  remaining: { courseMinor: number; succeededAt: Date; vatTreatment: VatTreatment; billingCountry: string }[],
+): { patch: Partial<EnrollmentSnapshot>; to: EnrollmentStatus } {
+  const paid = remaining.reduce((sum, p) => sum + p.courseMinor, 0);
+  const state = derivePaymentState(paid, e.feeMinor);
+  if (!remaining.length)
+    return {
+      patch: {
+        paidCourseMinor: 0,
+        paymentState: "UNPAID",
+        firstPaidAt: null,
+        fullyPaidAt: null,
+        balanceDueOn: null,
+        lockAt: null,
+        vatTreatment: null,
+        taxCountry: null,
+      },
+      to: e.status === "PENDING_APPROVAL" ? "PENDING_PAYMENT" : e.status,
+    };
+  const ordered = [...remaining].sort((a, b) => a.succeededAt.getTime() - b.succeededAt.getTime());
+  const first = ordered[0]!;
+  let running = 0;
+  let fullyPaidAt: Date | null = null;
+  for (const p of ordered) {
+    running += p.courseMinor;
+    if (!fullyPaidAt && running >= e.feeMinor) fullyPaidAt = p.succeededAt;
+  }
+  const patch: Partial<EnrollmentSnapshot> = {
+    paidCourseMinor: paid,
+    paymentState: state,
+    firstPaidAt: first.succeededAt,
+    fullyPaidAt,
+    vatTreatment: first.vatTreatment,
+    taxCountry: first.billingCountry,
+  };
+  if (state === "PAID") patch.lockAt = null;
+  else Object.assign(patch, computeBalanceDue(batch, first.succeededAt));
+  return { patch, to: e.status };
+}
+
 export class TransitionError extends Error {}
 
 export function assertCan(action: string, status: EnrollmentStatus, allowed: EnrollmentStatus[]) {

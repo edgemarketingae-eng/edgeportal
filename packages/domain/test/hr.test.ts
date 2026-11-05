@@ -1,6 +1,6 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { ALL_PERMISSIONS, HR_PERMISSIONS, isCrmRole, SYSTEM_ROLES } from "../src/auth/permissions";
+import { ALL_PERMISSIONS, HR_PERMISSIONS, isCrmRole, SUPER_ADMIN_ONLY, SYSTEM_ROLES } from "../src/auth/permissions";
 import { addMonths, daysBetween, formatMonth, isMonth, monthOf, monthRange, monthsBetween, type WorkCalendar } from "../src/hr/calendar";
 import { carryForward, centiByYear, formatDays, leaveDays, monthlyAccrual, sumCenti } from "../src/hr/leave";
 import { formatPayAmount, formatPayTotal, negativeTotals, netIn, splitInstallments, totalsByCurrency } from "../src/hr/pay";
@@ -11,12 +11,17 @@ const cal: WorkCalendar = { weeklyOffDays: [0], holidays: ["2026-12-02"] };
 describe("HR roles", () => {
   const role = (key: string) => SYSTEM_ROLES.find((r) => r.key === key)!;
 
+  it("gives super-admin-only keys to the super admin role alone", () => {
+    for (const r of SYSTEM_ROLES)
+      for (const p of SUPER_ADMIN_ONLY) expect(r.permissions.includes(p), `${r.key} ${p}`).toBe(r.key === "super_admin");
+  });
+
   it("keeps pay with HR and super admins: the admin role holds no hr.* key", () => {
     expect(HR_PERMISSIONS).toEqual(["hr.manage", "hr.payroll", "hr.settings"]);
     expect(role("hr_manager").permissions).toEqual(HR_PERMISSIONS);
     for (const p of HR_PERMISSIONS) expect(role("super_admin").permissions).toContain(p);
     for (const p of HR_PERMISSIONS) expect(role("admin").permissions).not.toContain(p);
-    expect(role("admin").permissions.length).toBe(ALL_PERMISSIONS.length - 2 - HR_PERMISSIONS.length);
+    expect(role("admin").permissions.length).toBe(ALL_PERMISSIONS.length - 2 - HR_PERMISSIONS.length - SUPER_ADMIN_ONLY.length);
   });
 
   it("gives the employee role nothing and leaves CRM roles pure", () => {

@@ -2,6 +2,7 @@ import { crmRoutes } from "@edge/contracts";
 import { LEAD_STAGES } from "@edge/domain/crm/enums";
 import { LEAD_SOURCE_LABELS, LEAD_STAGE_LABELS } from "@edge/domain/crm/labels";
 import { TableEmpty } from "@edge/ui/blocks/empty-state";
+import { InstallAppHint } from "@edge/ui/blocks/install-app";
 import { Alert, AlertDescription } from "@edge/ui/components/alert";
 import { FilterBar, FilterResults, FilterScope, FilterSelect } from "@edge/ui/blocks/filter-bar";
 import { StatCard } from "@edge/ui/blocks/stat-card";
@@ -64,6 +65,7 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
           <AlertDescription>You do not have permission for that page.</AlertDescription>
         </Alert>
       ) : null}
+      <InstallAppHint appName="Edge CRM" className="mb-4" />
       <FilterResults>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Open leads" value={d.openLeads} href={`/leads?${q.slice(1)}`} />

@@ -3,6 +3,7 @@ import { ROUND_ROBIN } from "@edge/domain/crm/enums";
 import { LEAD_STAGE_LABELS } from "@edge/domain/crm/labels";
 import type { Permission } from "@edge/domain/auth/permissions";
 import {
+  changeCrmStaffEmail,
   addActivity,
   addTaskComment,
   assignLead,
@@ -61,6 +62,7 @@ import {
   saveCommissionSettings,
   saveCrmRole,
   saveCrmSettings,
+  saveFormOrigins,
   setCrmStaffAvailable,
   setCrmStaffDisabled,
   setProjectMember,
@@ -338,6 +340,10 @@ export function crmRouter() {
     await setCrmStaffAvailable(req.valid.params.id, req.valid.body.available, actor);
     return ok(req.valid.body.available ? "Back on: receiving leads again." : "Marked Off: no new leads until they're back.");
   });
+  register(r, crmRoutes.changeStaffEmail, async (req) => {
+    const { actor } = await crm(req, "crm.staff.manage");
+    return ok(await changeCrmStaffEmail(req.valid.params.id, req.valid.body.email, actor));
+  });
   register(r, crmRoutes.resetStaffPassword, async (req) => {
     const { actor } = await crm(req, "crm.staff.manage");
     return { ok: true as const, tempPassword: await resetCrmStaffPassword(req.valid.params.id, actor) };
@@ -353,6 +359,10 @@ export function crmRouter() {
   register(r, crmRoutes.saveSettings, async (req) => {
     await saveCrmSettings(req.valid.body, (await crm(req, "crm.manage")).actor);
     return ok("CRM settings saved.");
+  });
+  register(r, crmRoutes.saveFormOrigins, async (req) => {
+    const list = await saveFormOrigins(req.valid.body.origins, (await crm(req, "crm.manage")).actor);
+    return ok(list.length ? `${list.length} website${list.length === 1 ? "" : "s"} allowed.` : "No websites allowed in Settings.");
   });
   register(r, crmRoutes.commissionSettings, async (req) => (await crm(req, "crm.commission.manage"), getCommissionSettings()));
   register(r, crmRoutes.saveCommissionSettings, async (req) => {

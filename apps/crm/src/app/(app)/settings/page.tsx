@@ -7,7 +7,7 @@ import { PageHeader } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CrmSettingsForm } from "@/components/crm/crm-settings-form";
+import { CrmSettingsForm, FormOriginsForm } from "@/components/crm/crm-settings-form";
 import { CommissionSettingsForm } from "@/components/crm/deposit-actions";
 import { can, load, requireCrm } from "@/lib/load";
 
@@ -51,12 +51,48 @@ export default async function CrmSettingsPage() {
         ) : null}
         <Card>
           <CardHeader>
-            <CardTitle>Website lead form</CardTitle>
+            <CardTitle>Website forms</CardTitle>
             <CardDescription>
-              The academy website posts new enquiries to this endpoint, server to server, signed with <code>LEAD_WEBHOOK_SECRET</code>{" "}
-              (docs/CRM.md has the payload and the HMAC header). New enquiries land in{" "}
+              Forms on the websites below can send leads straight from the visitor&apos;s browser, with no key. New leads land in{" "}
               <Link href={`/projects/${s.defaultProject.id}`} className="underline">
                 {s.defaultProject.name}
+              </Link>{" "}
+              unless the form names a project code.{" "}
+              <Link href="/docs/website-forms" className="underline">
+                How to build the form
+              </Link>
+              .
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 text-sm">
+            <p className="flex flex-wrap items-center gap-2">
+              <span className="font-medium">POST</span>
+              <code className="bg-muted rounded px-2 py-1 text-xs break-all">{s.publicFormUrl}</code>
+              <CopyButton value={s.publicFormUrl} label="Copy form URL" />
+            </p>
+            <FormOriginsForm s={s} />
+            {s.envFormOrigins.length ? (
+              <div className="grid gap-1.5">
+                <p className="text-muted-foreground">Also allowed by the server setup (PUBLIC_FORM_ORIGINS):</p>
+                <ul className="flex flex-wrap gap-1.5">
+                  {s.envFormOrigins.map((o) => (
+                    <li key={o}>
+                      <Badge variant="outline">{o}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Server-to-server webhook</CardTitle>
+            <CardDescription>
+              For a website&apos;s own server: it posts JSON to this endpoint, signed with <code>LEAD_WEBHOOK_SECRET</code> (never put the
+              secret in a web page).{" "}
+              <Link href="/docs/website-forms#server-to-server" className="underline">
+                Payload and signature
               </Link>
               .
             </CardDescription>

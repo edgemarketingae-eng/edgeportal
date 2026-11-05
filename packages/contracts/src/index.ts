@@ -15,3 +15,4 @@ export * from "./classes";
 export * from "./crm";
 export * from "./hr";
 export * from "./mobile";
+export * from "./records";

@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { Button } from "../components/button";
 import { PageHeader } from "../shell/app-shell";
 import { DocsGrid } from "./search";
-import type { DocModule } from "./types";
+import type { DocContext, DocModule } from "./types";
 
 /** The docs home: every module the reader can use, grouped and searchable. */
 export function DocsIndex({
@@ -39,7 +39,19 @@ export function DocsIndex({
 }
 
 /** One module: its sections with a sticky contents list, and links to the neighbouring modules. */
-export function DocsArticle({ modules, slug, basePath }: { modules: DocModule[]; slug: string; basePath: string }) {
+const DEFAULT_CONTEXT: DocContext = { apiUrl: "https://api.edgeacademy.ae" };
+
+export function DocsArticle({
+  modules,
+  slug,
+  basePath,
+  context = DEFAULT_CONTEXT,
+}: {
+  modules: DocModule[];
+  slug: string;
+  basePath: string;
+  context?: DocContext;
+}) {
   const i = modules.findIndex((m) => m.slug === slug);
   const m = modules[i];
   if (!m) notFound();
@@ -76,7 +88,7 @@ export function DocsArticle({ modules, slug, basePath }: { modules: DocModule[];
           {m.sections.map((s) => (
             <section key={s.id} id={s.id} className="grid scroll-mt-20 gap-4">
               <h2 className="font-sans text-lg font-bold tracking-normal normal-case">{s.title}</h2>
-              <div className="grid gap-4">{s.body}</div>
+              <div className="grid gap-4">{typeof s.body === "function" ? s.body(context) : s.body}</div>
             </section>
           ))}
           <nav aria-label="More guides" className="grid gap-3 border-t pt-6 sm:grid-cols-2">

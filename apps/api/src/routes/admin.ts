@@ -1,5 +1,6 @@
 import { adminRoutes, catalogRoutes, enrollmentRoutes, settingsRoutes, staffRoutes } from "@edge/contracts";
 import {
+  changeStaffEmail,
   approveEnrollment,
   assignStudentToBatch,
   changeBatch,
@@ -144,6 +145,10 @@ export function adminRouter() {
       message: req.valid.body.available ? "Back on: receiving leads again." : "Marked Off: no new leads until they're back.",
     };
   });
+  register(r, staffRoutes.changeEmail, async (req) => ({
+    ok: true as const,
+    message: await changeStaffEmail(req.valid.params.id, req.valid.body.email, actorOf(requirePermission(req, "staff.manage"))),
+  }));
   register(r, staffRoutes.resetPassword, async (req) => ({
     ok: true as const,
     tempPassword: await resetStaffPassword(req.valid.params.id, actorOf(requirePermission(req, "staff.manage"))),

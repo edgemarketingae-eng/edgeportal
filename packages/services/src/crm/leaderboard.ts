@@ -67,7 +67,7 @@ export async function getLeaderboard(q: { period?: LeaderboardPeriod; project?: 
   const depositsBy = new Map(deposits.map((d) => [String(d._id), d]));
   // Sales executives always appear; anyone else (managers, admins) only once they have a conversion in the period.
   const ids = [...new Set([...execs, ...byPerson.keys()])];
-  const names = await userNames(ids);
+  const names = await userNames(ids, { missing: null });
   const showCommission = has(scope, "crm.commission.manage");
   const rows: LeaderboardRow[] = ids
     .filter((id) => names.has(id))

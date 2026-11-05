@@ -8,6 +8,7 @@ import { api } from "@edge/web/server";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { FollowUpDue, TimeAgo } from "@/components/crm/due";
+import { DeleteButton } from "@/components/delete-button";
 import { CancelTaskButton, CompleteTaskDialog, RescheduleTaskDialog } from "@/components/crm/task-actions";
 import { TaskCommentForm, TaskForm } from "@/components/crm/task-form";
 import { can, load, requireCrm } from "@/lib/load";
@@ -21,6 +22,7 @@ export default async function TaskDetailPage(props: PageProps<"/tasks/[id]">) {
   const t = detail.task;
   const open = t.status === "TODO" || t.status === "IN_PROGRESS" || t.status === "WAITING";
   const canWrite = can(v, "crm.write") && detail.canEdit;
+  const canPurge = can(v, "records.delete");
   return (
     <>
       <PageHeader
@@ -45,13 +47,16 @@ export default async function TaskDetailPage(props: PageProps<"/tasks/[id]">) {
           </>
         }
         actions={
-          canWrite && open ? (
-            <>
-              <CompleteTaskDialog taskId={t.id} type={t.type} title={t.title} lead={!!t.leadId} />
-              <RescheduleTaskDialog taskId={t.id} dueAt={t.dueAt} />
-              <CancelTaskButton taskId={t.id} />
-            </>
-          ) : null
+          <>
+            {canWrite && open ? (
+              <>
+                <CompleteTaskDialog taskId={t.id} type={t.type} title={t.title} lead={!!t.leadId} />
+                <RescheduleTaskDialog taskId={t.id} dueAt={t.dueAt} />
+                <CancelTaskButton taskId={t.id} />
+              </>
+            ) : null}
+            {canPurge ? <DeleteButton type="task" id={t.id} next="/tasks" /> : null}
+          </>
         }
       />
       <div className="grid gap-4 lg:grid-cols-3">
@@ -110,7 +115,10 @@ export default async function TaskDetailPage(props: PageProps<"/tasks/[id]">) {
               <ul className="grid gap-3 text-sm">
                 {detail.comments.map((c) => (
                   <li key={c.id} className="rounded-lg border p-3">
-                    <p className="whitespace-pre-wrap">{c.body}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="whitespace-pre-wrap">{c.body}</p>
+                      {canPurge ? <DeleteButton type="taskComment" id={c.id} iconOnly label="Delete comment" /> : null}
+                    </div>
                     <p className="text-muted-foreground mt-1 text-xs">
                       {c.author?.name ?? "Unknown"} · <TimeAgo at={c.createdAt} />
                     </p>

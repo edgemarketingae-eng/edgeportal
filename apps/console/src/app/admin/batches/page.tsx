@@ -12,12 +12,14 @@ import { Plus, Star } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CourseForm } from "@/components/catalog/course-form";
-import { load, requireStaff } from "@/lib/load";
+import { DeleteButton } from "@/components/delete-button";
+import { can, load, requireStaff } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Courses & batches" };
 
 export default async function BatchesPage() {
-  await requireStaff("catalog.manage");
+  const v = await requireStaff("catalog.manage");
+  const canPurge = can(v, "records.delete");
   const courses = await load(() => api(catalogRoutes.listCourses));
   return (
     <>
@@ -80,8 +82,13 @@ export default async function BatchesPage() {
             </Table>
             <details className="border-t px-6 py-4">
               <summary className="text-edge-emerald cursor-pointer text-sm font-semibold">Edit course</summary>
-              <div className="mt-4">
+              <div className="mt-4 grid gap-4">
                 <CourseForm course={{ id: c.id, code: c.code, title: c.title, description: c.description, isActive: c.isActive }} />
+                {canPurge ? (
+                  <div className="border-t pt-4">
+                    <DeleteButton type="course" id={c.id} label="Delete course" />
+                  </div>
+                ) : null}
               </div>
             </details>
           </Card>

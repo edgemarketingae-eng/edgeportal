@@ -496,10 +496,56 @@ export const HrHome = z.object({
   pendingLeave: z.number(),
   openRequests: z.number(),
   repayingAdvances: z.number(),
+  /** Whether the person has written today's work update. */
+  workUpdateToday: z.boolean(),
   /** What HR should look at. Only filled for people who can act on it. */
   queue: z.object({ leave: z.number(), requests: z.number(), advances: z.number(), notSetUp: z.number() }).nullable(),
 });
 export type HrHome = z.infer<typeof HrHome>;
+
+/* Work updates: short points about the day's work, one entry per person per Dubai day. */
+
+export const WORK_UPDATE_MAX_ITEMS = 20;
+export const WORK_UPDATE_MAX_CHARS = 300;
+/** How far back someone may still write or change an update. */
+export const WORK_UPDATE_BACKFILL_DAYS = 31;
+
+export const WorkUpdateInput = z.object({
+  day: zDateOnly,
+  /** Blank points are dropped; an empty list clears the day. */
+  items: z
+    .array(z.string().trim().max(WORK_UPDATE_MAX_CHARS, `Keep each point to ${WORK_UPDATE_MAX_CHARS} characters or fewer`))
+    .max(WORK_UPDATE_MAX_ITEMS, `Add up to ${WORK_UPDATE_MAX_ITEMS} points`),
+});
+export type WorkUpdateInput = z.input<typeof WorkUpdateInput>;
+
+export const WorkUpdateDto = z.object({ id: z.string(), day: z.string(), items: z.array(z.string()), updatedAt: z.string() });
+export type WorkUpdateDto = z.infer<typeof WorkUpdateDto>;
+
+export const MyWorkUpdates = z.object({
+  /** Today in Dubai, and the earliest day that can still be written. */
+  today: z.string(),
+  earliest: z.string(),
+  day: z.string(),
+  items: z.array(z.string()),
+  updatedAt: z.string().nullable(),
+  recent: z.array(WorkUpdateDto),
+});
+export type MyWorkUpdates = z.infer<typeof MyWorkUpdates>;
+
+const zUpdatePerson = z.object({ id: z.string(), name: z.string(), title: z.string().nullable() });
+
+export const WorkUpdatesDay = z.object({
+  day: z.string(),
+  today: z.string(),
+  rows: z.array(z.object({ id: z.string(), person: zUpdatePerson, items: z.array(z.string()), updatedAt: z.string() })),
+  /** Active staff with nothing logged that day, with the reason they may be away. */
+  missing: z.array(zUpdatePerson.extend({ off: z.enum(["LEAVE", "WEEKLY_OFF", "HOLIDAY"]).nullable() })),
+});
+export type WorkUpdatesDay = z.infer<typeof WorkUpdatesDay>;
+
+export const PersonWorkUpdates = paged(WorkUpdateDto).extend({ person: zUpdatePerson });
+export type PersonWorkUpdates = z.infer<typeof PersonWorkUpdates>;
 
 export const hrRoutes = {
   home: route({ method: "GET", path: `${base}/me`, response: HrHome }),
@@ -607,4 +653,25 @@ export const hrRoutes = {
 
   settings: route({ method: "GET", path: `${base}/settings`, response: HrSettingsDto }),
   saveSettings: route({ method: "POST", path: `${base}/settings`, body: HrSettingsInput, response: zOk }),
+
+  myUpdates: route({
+    method: "GET",
+    path: `${base}/me/updates`,
+    query: z.object({ day: zDateOnly.optional() }),
+    response: MyWorkUpdates,
+  }),
+  saveMyUpdate: route({ method: "POST", path: `${base}/me/updates`, body: WorkUpdateInput, response: zOk }),
+  updatesDay: route({
+    method: "GET",
+    path: `${base}/updates`,
+    query: z.object({ day: zDateOnly.optional() }),
+    response: WorkUpdatesDay,
+  }),
+  personUpdates: route({
+    method: "GET",
+    path: `${base}/updates/people/:id`,
+    params: idParam,
+    query: zPage,
+    response: PersonWorkUpdates,
+  }),
 };

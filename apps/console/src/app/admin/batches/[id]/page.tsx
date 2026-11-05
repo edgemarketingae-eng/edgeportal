@@ -1,9 +1,12 @@
 import { catalogRoutes } from "@edge/contracts";
+import { DeleteCard } from "@edge/ui/blocks/delete-dialog";
 import { PageHeader } from "@edge/ui/shell/app-shell";
+import { deletePlanFor } from "@edge/web/records";
 import { api } from "@edge/web/server";
 import type { Metadata } from "next";
 import { BatchForm } from "@/components/catalog/batch-form";
-import { load, requireStaff } from "@/lib/load";
+import { deleteRecordAction } from "@/lib/actions/records";
+import { can, load, requireStaff } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Edit batch" };
 
@@ -11,13 +14,14 @@ export const metadata: Metadata = { title: "Edit batch" };
 const amt = (m: number) => (m / 100).toFixed(m % 100 ? 2 : 0);
 
 export default async function EditBatchPage(props: PageProps<"/admin/batches/[id]">) {
-  await requireStaff("catalog.manage");
+  const v = await requireStaff("catalog.manage");
   const { id } = await props.params;
   const sp = await props.searchParams;
-  const [b, courses, mentors] = await Promise.all([
+  const [b, courses, mentors, deletePlan] = await Promise.all([
     load(() => api(catalogRoutes.getBatch, { params: { id } })),
     load(() => api(catalogRoutes.listCourses)),
     load(() => api(catalogRoutes.listMentors)),
+    can(v, "records.delete") ? deletePlanFor("batch", id) : null,
   ]);
   return (
     <>
@@ -49,6 +53,16 @@ export default async function EditBatchPage(props: PageProps<"/admin/batches/[id
           mentorIds: b.mentors.map((m) => m.userId),
         }}
       />
+      {deletePlan ? (
+        <DeleteCard
+          title="Delete batch"
+          action={deleteRecordAction}
+          hidden={{ type: "batch", id: b.id, next: "/admin/batches" }}
+          plan={deletePlan}
+          submitLabel="Delete batch"
+          blockedHint="To stop new students joining, set its status to Archived instead."
+        />
+      ) : null}
     </>
   );
 }

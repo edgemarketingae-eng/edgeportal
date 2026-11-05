@@ -11,6 +11,7 @@ import {
   type ProjectDoc,
 } from "@edge/db";
 import { now } from "@edge/domain/clock";
+import { dubaiDateString } from "@edge/domain/dates";
 import { INBOUND_SOURCES } from "@edge/domain/crm/enums";
 import { normalizeLanguage, parseTags } from "@edge/domain/crm/machine";
 import { isCountryCode } from "@edge/domain/countries";
@@ -51,6 +52,8 @@ export const InboundLeadPayload = z
     utm_campaign: str(200),
     utm_content: str(200),
     utm_term: str(200),
+    /** A CRM project code: a new lead goes to that project (and its round-robin). Unknown or empty means General. */
+    project: z.string().trim().toUpperCase().max(40).optional(),
   })
   .loose();
 export type InboundLeadPayload = z.infer<typeof InboundLeadPayload>;
@@ -104,6 +107,53 @@ export async function handleLeadWebhook(source: string, rawBody: string, headers
   return processInboundEvent(ev._id);
 }
 
+/**
+ * A browser form on an allowed website (POST /api/public/leads, no secret). It goes through the same inbox as the
+ * webhook, so a failed attempt is retried by the sweeper and the lead is never lost. The same payload sent twice on
+ * the same Dubai day (a double click, a refresh) is one event; the same person on a later day adds a timeline entry.
+ * Throws the 4xx ApiError for a lead that can't be saved (no usable phone or email); otherwise resolves, and
+ * `queued` means it will be saved on retry.
+ */
+export async function submitWebsiteForm(
+  p: InboundLeadPayload,
+  meta: { ip: string | null; origin: string | null; userAgent: string | null },
+): Promise<{ queued: boolean }> {
+  const source = "website";
+  const digest = createHash("sha256").update(JSON.stringify(p)).digest("hex");
+  const externalEventId = `form:${dubaiDateString(now())}:${digest}`;
+  let ev: LeadInboundEventDoc | null;
+  try {
+    ev = await LeadInboundEvent.findOneAndUpdate(
+      { source, externalEventId },
+      {
+        $setOnInsert: {
+          signatureOk: false,
+          payload: { ...p, _ip: meta.ip, _origin: meta.origin, _userAgent: meta.userAgent?.slice(0, 300) ?? null, _via: "form" },
+          receivedAt: now(),
+          attempts: 0,
+        },
+      },
+      { upsert: true, returnDocument: "after" },
+    ).lean();
+  } catch (e) {
+    if ((e as { code?: number }).code !== 11000) throw e;
+    ev = await LeadInboundEvent.findOne({ source, externalEventId }).lean();
+  }
+  if (!ev) throw new ApiError(500, "INTERNAL", "Something went wrong. Please try again.");
+  if (ev.processedAt) {
+    // A repeat of an event that was refused (no usable contact) is refused again, not reported as saved.
+    if (!ev.leadId && ev.error)
+      throw new ApiError(422, "VALIDATION", "Enter a valid phone number or email.", { phone: "Invalid or missing" });
+    return { queued: false };
+  }
+  const out = await processInboundEvent(ev._id);
+  if (out.status >= 400 && out.status < 500) {
+    const fieldErrors = (out.body.fieldErrors as Record<string, string> | null) ?? undefined;
+    throw new ApiError(out.status, "VALIDATION", String(out.body.error ?? "Please check the form."), fieldErrors);
+  }
+  return { queued: out.status >= 500 };
+}
+
 async function processInboundEvent(eventId: Types.ObjectId): Promise<LeadWebhookResult> {
   const claimed = await LeadInboundEvent.findOneAndUpdate(
     { _id: eventId, processedAt: null, $or: [{ processingAt: null }, { processingAt: { $lt: minutesAgo(2) } }] },
@@ -112,7 +162,9 @@ async function processInboundEvent(eventId: Types.ObjectId): Promise<LeadWebhook
   ).lean();
   if (!claimed) return { status: 200, body: { received: true, inProgress: true } };
   try {
-    const r = await ingestInboundLead(claimed.source, claimed.payload as InboundLeadPayload, claimed._id);
+    const payload = claimed.payload as InboundLeadPayload;
+    // The project code comes from outside: an unknown one goes to General quietly instead of alerting the admins.
+    const r = await ingestInboundLead(claimed.source, payload, claimed._id, { projectCode: payload.project, quietUnknownProject: true });
     await LeadInboundEvent.updateOne(
       { _id: eventId },
       { $set: { processedAt: now(), processingAt: null, error: null, leadId: new Types.ObjectId(r.leadId) } },
@@ -143,12 +195,14 @@ async function matchCourse(text?: string) {
 /**
  * The project with this code for a new lead (a paused project still receives them); General when there is no code.
  * A page's project that is missing or archived must never lose the lead: it is saved in General and the CRM admins
- * are told to fix the project.
+ * are told to fix the project. `quietUnknown` (codes sent by outside forms) skips the alert for a code that never
+ * existed, so a typo or a bot can't flood the admins; an archived project still alerts.
  */
-async function intakeProject(code?: string): Promise<ProjectDoc> {
+async function intakeProject(code?: string, quietUnknown = false): Promise<ProjectDoc> {
   if (!code) return getDefaultProject();
-  const p = await Project.findOne({ code, status: { $ne: "ARCHIVED" } }).lean();
-  if (p) return p as ProjectDoc;
+  const p = await Project.findOne({ code }).lean();
+  if (p && p.status !== "ARCHIVED") return p as ProjectDoc;
+  if (!p && quietUnknown) return getDefaultProject();
   console.error(`[lead-intake] project ${code} is missing or archived; the lead goes to the default project`);
   // Once an hour, not once per lead (checked in the database, so it holds across API processes).
   const title = `Project ${code} is missing`;
@@ -174,7 +228,13 @@ export async function ingestInboundLead(
   source: string,
   p: InboundLeadPayload,
   eventId: Types.ObjectId | null,
-  opts: { assignReachableExec?: boolean; altPhone?: string | null; projectCode?: string; jetaFxClientId?: string } = {},
+  opts: {
+    assignReachableExec?: boolean;
+    altPhone?: string | null;
+    projectCode?: string;
+    quietUnknownProject?: boolean;
+    jetaFxClientId?: string;
+  } = {},
 ): Promise<{ leadId: string; existing: boolean; ownerId: string | null }> {
   const email = normalizeEmail(p.email);
   const parsedPhone = p.phone?.trim() ? parsePhone(p.phone, p.country?.toUpperCase()) : null;
@@ -241,7 +301,7 @@ export async function ingestInboundLead(
   }
 
   const cfg = await getSetting("crm.config");
-  const project = await intakeProject(opts.projectCode);
+  const project = await intakeProject(opts.projectCode, opts.quietUnknownProject);
   const picker = opts.assignReachableExec
     ? await roundRobinPicker(project, { withContact: true })
     : cfg.roundRobin

@@ -39,6 +39,7 @@ export function ActionDialog({
   submitLabel = "Confirm",
   cancelLabel = "Cancel",
   destructive,
+  submitDisabled,
   size = "sm",
   bodyClassName,
   toastOptions,
@@ -55,6 +56,8 @@ export function ActionDialog({
   /** The dismiss button; name it for what it keeps ("Keep class") when the action itself is a cancel. */
   cancelLabel?: string;
   destructive?: boolean;
+  /** Keeps the submit button disabled, e.g. until a confirmation is typed. */
+  submitDisabled?: boolean;
   /** Width from the sm breakpoint up: sm 24rem, md 32rem, lg 42rem, xl 56rem. */
   size?: keyof typeof SIZES;
   bodyClassName?: string;
@@ -96,7 +99,7 @@ export function ActionDialog({
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
               {cancelLabel}
             </Button>
-            <Button type="submit" variant={destructive ? "destructive" : "default"} pending={pending}>
+            <Button type="submit" variant={destructive ? "destructive" : "default"} pending={pending} disabled={submitDisabled}>
               {submitLabel}
             </Button>
           </DialogFooter>

@@ -12,5 +12,7 @@ export async function generateMetadata(props: PageProps<"/docs/[slug]">): Promis
 export default async function DocsArticlePage(props: PageProps<"/docs/[slug]">) {
   const v = await requireCrm("crm.access");
   const { slug } = await props.params;
-  return <DocsArticle modules={visibleModules(crmDocs, v.permissions)} slug={slug} basePath="/docs" />;
+  // Code samples show this server's public API host (the root .env, loaded by next.config.ts).
+  const apiUrl = (process.env.API_PUBLIC_URL ?? "https://api.edgeacademy.ae").replace(/\/+$/, "");
+  return <DocsArticle modules={visibleModules(crmDocs, v.permissions)} slug={slug} basePath="/docs" context={{ apiUrl }} />;
 }

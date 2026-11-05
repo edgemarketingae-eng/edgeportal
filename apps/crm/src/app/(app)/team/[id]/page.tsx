@@ -3,17 +3,21 @@ import { DEPOSIT_SEQUENCE_LABELS } from "@edge/domain/crm/labels";
 import { formatDate, formatDateTime } from "@edge/domain/dates";
 import { formatMoney } from "@edge/domain/money";
 import { ActionButton, ActionDialog } from "@edge/ui/blocks/action-dialog";
+import { ChangeEmailButton } from "@edge/ui/blocks/change-email";
+import { DeleteCard } from "@edge/ui/blocks/delete-dialog";
 import { Button } from "@edge/ui/components/button";
 import { AvailabilitySwitch } from "@edge/ui/blocks/availability";
 import { PendingInvite } from "@edge/ui/blocks/secret-reveal";
 import { DepositStatusBadge } from "@edge/ui/blocks/status-badges";
 import { Card, CardContent, CardHeader, CardTitle } from "@edge/ui/components/card";
 import { PageHeader } from "@edge/ui/shell/app-shell";
+import { deletePlanFor } from "@edge/web/records";
 import { api } from "@edge/web/server";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { EditCrmStaffForm, ResetPasswordButton } from "@/components/team/team-forms";
-import { toggleCrmStaffAction, toggleCrmStaffAvailableAction } from "@/lib/actions/team";
+import { deleteRecordAction } from "@/lib/actions/records";
+import { changeCrmStaffEmailAction, toggleCrmStaffAction, toggleCrmStaffAvailableAction } from "@/lib/actions/team";
 import { can, load, requireCrm } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Team member" };
@@ -21,10 +25,11 @@ export const metadata: Metadata = { title: "Team member" };
 export default async function TeamMemberPage(props: PageProps<"/team/[id]">) {
   const v = await requireCrm("crm.staff.manage");
   const { id } = await props.params;
-  const [s, roles, c] = await Promise.all([
+  const [s, roles, c, deletePlan] = await Promise.all([
     load(() => api(crmRoutes.staff, { params: { id } })),
     load(() => api(crmRoutes.roles)),
     can(v, "crm.commission.manage") ? load(() => api(crmRoutes.staffCommission, { params: { id } })) : null,
+    deletePlanFor("crmStaff", id),
   ]);
   const usd = (minor: number) => formatMoney(minor, "USD");
   return (
@@ -39,6 +44,7 @@ export default async function TeamMemberPage(props: PageProps<"/team/[id]">) {
             {s.roles.some((r) => r.key === "sales_executive") || !s.available ? (
               <AvailabilitySwitch action={toggleCrmStaffAvailableAction} userId={s.id} name={s.name} available={s.available} showLabel />
             ) : null}
+            <ChangeEmailButton action={changeCrmStaffEmailAction} userId={s.id} email={s.email} />
             <ResetPasswordButton userId={s.id} />
             {s.disabled ? (
               <ActionButton action={toggleCrmStaffAction} hidden={{ userId: s.id, disable: "0" }}>
@@ -159,6 +165,17 @@ export default async function TeamMemberPage(props: PageProps<"/team/[id]">) {
           </Card>
         ) : null}
       </div>
+      {deletePlan ? (
+        <DeleteCard
+          title="Delete account"
+          action={deleteRecordAction}
+          hidden={{ type: "crmStaff", id: s.id, next: "/team" }}
+          plan={deletePlan}
+          submitLabel="Delete account"
+          description="For an account made by mistake or never used: the login and profile are removed for good."
+          blockedHint="To keep someone's history, disable the account instead: they can't sign in and nothing new reaches them."
+        />
+      ) : null}
     </>
   );
 }

@@ -1,7 +1,7 @@
 "use server";
 
 import { crmRoutes, type RouteBody } from "@edge/contracts";
-import { dialogError, text, toActionState, values, type ActionState } from "@edge/web/actions";
+import { type ActionState, confirmed, dialogError, text, toActionState, values } from "@edge/web/actions";
 import { api } from "@edge/web/server";
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
@@ -68,7 +68,7 @@ export async function projectMemberAction(_prev: ActionState, form: FormData): P
 }
 
 export async function deleteProjectAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  if (text(form, "confirm").trim().toUpperCase() !== "DELETE") return { error: "Type DELETE to confirm." };
+  if (!confirmed(form)) return { error: "Type DELETE to confirm." };
   try {
     await api(crmRoutes.deleteProject, { params: { id: text(form, "id") } });
   } catch (e) {

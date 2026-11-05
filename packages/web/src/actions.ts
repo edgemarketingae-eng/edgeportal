@@ -12,13 +12,25 @@ export function checked(form: FormData, key: string) {
   return v === "on" || v === "true" || v === "1";
 }
 
+/** The typed confirmation of a permanent delete (the dialog's "Type DELETE to confirm" box). */
+export function confirmed(form: FormData) {
+  return text(form, "confirm").toUpperCase() === "DELETE";
+}
+
+/** A same-site path to go to after an action; anything else (absolute or protocol-relative URLs) is dropped. */
+export function safeNext(form: FormData, key = "next") {
+  const v = text(form, key);
+  return v.startsWith("/") && !v.startsWith("//") && !v.startsWith("/\\") ? v : null;
+}
+
 export function values(form: FormData, keys: string[]) {
   return Object.fromEntries(keys.map((k) => [k, text(form, k)]));
 }
 
 /** Map an API (or unexpected) error to form state; rethrows Next control-flow errors (redirect/notFound). */
 export function toActionState(e: unknown, vals?: Record<string, string>): ActionState {
-  if (e instanceof ApiError) return { error: e.code === "VALIDATION" && e.fieldErrors ? undefined : e.message, fieldErrors: e.fieldErrors, values: vals };
+  if (e instanceof ApiError)
+    return { error: e.code === "VALIDATION" && e.fieldErrors ? undefined : e.message, fieldErrors: e.fieldErrors, values: vals };
   if (isNextControlFlow(e)) throw e;
   console.error("[action]", e);
   return { error: "Something went wrong. Please try again.", values: vals };
@@ -33,5 +45,8 @@ export function dialogError(e: unknown): ActionState {
 
 function isNextControlFlow(e: unknown) {
   const digest = (e as { digest?: unknown } | null)?.digest;
-  return typeof digest === "string" && (digest.startsWith("NEXT_REDIRECT") || digest.startsWith("NEXT_HTTP_ERROR_FALLBACK") || digest === "NEXT_NOT_FOUND");
+  return (
+    typeof digest === "string" &&
+    (digest.startsWith("NEXT_REDIRECT") || digest.startsWith("NEXT_HTTP_ERROR_FALLBACK") || digest === "NEXT_NOT_FOUND")
+  );
 }

@@ -4,18 +4,83 @@ import type { Actor } from "@edge/domain/enums";
 import { toMajor, toMinor } from "@edge/domain/money";
 import { audit } from "../audit";
 import { env } from "../env";
+import { ValidationError } from "../errors";
 import { getSetting, setSetting } from "../settings";
 import { rerateCurrentMonth } from "./deposits";
 import { getDefaultProject } from "./scope";
 
 export async function getCrmSettings(): Promise<CrmSettingsDto> {
-  const [cfg, def] = await Promise.all([getSetting("crm.config"), getDefaultProject()]);
+  const [cfg, def, formOrigins] = await Promise.all([getSetting("crm.config"), getDefaultProject(), getSetting("crm.formOrigins")]);
   return {
     ...cfg,
     webhookUrl: `${env.API_PUBLIC_URL}/api/webhooks/leads/website`,
     webhookConfigured: !!env.LEAD_WEBHOOK_SECRET,
+    publicFormUrl: `${env.API_PUBLIC_URL}/api/public/leads`,
+    formOrigins,
+    envFormOrigins: [...env.PUBLIC_FORM_ORIGINS],
     defaultProject: { id: String(def._id), name: def.name, code: def.code },
   };
+}
+
+const ORIGINS_TTL_MS = 60_000;
+let originsCache: { at: number; origins: ReadonlySet<string> } | null = null;
+
+/**
+ * Websites whose browsers may call /api/public/*: PUBLIC_FORM_ORIGINS plus the list CRM admins keep in Settings.
+ * Cached for a minute per API process (saving clears this process's copy at once).
+ */
+export async function allowedFormOrigins(): Promise<ReadonlySet<string>> {
+  if (originsCache && Date.now() - originsCache.at < ORIGINS_TTL_MS) return originsCache.origins;
+  const saved = await getSetting("crm.formOrigins");
+  const origins = new Set([...env.PUBLIC_FORM_ORIGINS, ...saved]);
+  originsCache = { at: Date.now(), origins };
+  return origins;
+}
+
+export function invalidateFormOrigins() {
+  originsCache = null;
+}
+
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/**
+ * "https://edgeacademy.ae/free-class/" → "https://edgeacademy.ae": the browser sends only the origin, so a pasted page
+ * address is reduced to it. HTTPS only; plain http is accepted for localhost outside production (testing a form).
+ */
+export function parseFormOrigins(text: string): string[] {
+  const lines = [
+    ...new Set(
+      text
+        .split(/[\s,]+/)
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
+  ];
+  if (lines.length > 20) throw new ValidationError({ origins: "Up to 20 websites" });
+  const out = new Set<string>();
+  for (const line of lines) {
+    let u: URL;
+    try {
+      u = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(line) ? line : `https://${line}`);
+    } catch {
+      throw new ValidationError({ origins: `"${line}" isn't a website address, e.g. https://edgeacademy.ae` });
+    }
+    const local = LOCAL_HOSTS.has(u.hostname);
+    if (u.protocol !== "https:" && !(u.protocol === "http:" && local && env.NODE_ENV !== "production"))
+      throw new ValidationError({ origins: `${u.origin} must start with https://` });
+    if (u.username || u.password) throw new ValidationError({ origins: `"${line}" isn't a website address, e.g. https://edgeacademy.ae` });
+    out.add(u.origin);
+  }
+  return [...out];
+}
+
+export async function saveFormOrigins(text: string, actor: Actor & { type: "USER" }) {
+  const next = parseFormOrigins(text);
+  const before = await getSetting("crm.formOrigins");
+  await setSetting("crm.formOrigins", next, actor.id);
+  await audit({ actor, action: "crm.formOrigins.update", entityType: "Setting", entityId: "crm.formOrigins", before, after: next });
+  invalidateFormOrigins();
+  return next;
 }
 
 export async function saveCrmSettings(

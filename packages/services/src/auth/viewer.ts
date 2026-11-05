@@ -34,7 +34,14 @@ export function can(perms: Set<Permission> | Permission[], ...required: Permissi
 /** Admins, anyone who can create accounts (CRM admins) and anyone who opens staff records or pay must use an authenticator app. */
 export function twoFactorRequired(perms: Set<Permission>) {
   const required = env.REQUIRE_ADMIN_2FA ?? env.NODE_ENV === "production";
-  return required && (perms.has("admin.access") || perms.has("crm.staff.manage") || perms.has("hr.manage") || perms.has("hr.payroll"));
+  return (
+    required &&
+    (perms.has("admin.access") ||
+      perms.has("crm.staff.manage") ||
+      perms.has("hr.manage") ||
+      perms.has("hr.payroll") ||
+      perms.has("records.delete"))
+  );
 }
 
 export interface Viewer {

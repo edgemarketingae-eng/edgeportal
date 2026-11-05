@@ -7,9 +7,11 @@ import {
   FileClock,
   KeyRound,
   LayoutDashboard,
+  ListChecks,
   PlayCircle,
   Settings,
   ShieldCheck,
+  Trash2,
   UserCog,
   Users,
   Wallet,
@@ -63,6 +65,40 @@ function gettingStarted(home: string, security: string): DocModule {
               read. The <Ui>?</Ui> button next to it opens these guides.
             </>
           </List>
+        ),
+      },
+      {
+        id: "install-app",
+        title: "Add it to your phone's home screen",
+        body: (
+          <>
+            <P>
+              The console can sit on your phone&apos;s home screen like an app. It opens full screen, without the browser bar. Nothing to
+              download from a store.
+            </P>
+            <Terms
+              head={["Phone", "How"]}
+              rows={[
+                [
+                  "Android (Chrome)",
+                  <>
+                    Tap <Ui>Install app</Ui> on the staff portal home page. No button? Open Chrome&apos;s menu (⋮) and tap{" "}
+                    <Ui>Add to Home screen</Ui> or <Ui>Install app</Ui>.
+                  </>,
+                ],
+                [
+                  "iPhone or iPad",
+                  <>
+                    Open the console in Safari, tap <Ui>Share</Ui>, then <Ui>Add to Home Screen</Ui>.
+                  </>,
+                ],
+              ]}
+            />
+            <Note kind="tip">
+              On an iPhone the home screen app keeps its own sign-in, separate from Safari, so sign in once inside it. If you dismiss the
+              suggestion on the home page, you can still add it from the browser&apos;s menu at any time.
+            </Note>
+          </>
         ),
       },
     ],
@@ -1216,6 +1252,10 @@ const staff: DocModule = {
                 </>,
               ],
               [
+                <Ui key="c">Change email</Ui>,
+                "Changes the email they sign in with. Their password stays the same and they stay signed in. Both the old and the new address get an email about it; someone who never signed in gets their invitation again at the new address. Only a super admin can change a super admin's email or the email of someone with HR access.",
+              ],
+              [
                 <Ui key="r">Reset password</Ui>,
                 "Creates a new temporary password, emails it to them and signs them out everywhere. The password also stays on screen until you close the message, and on the staff list until they change it.",
               ],
@@ -1226,6 +1266,34 @@ const staff: DocModule = {
               [<Ui key="e">Enable account</Ui>, "Lets a disabled person sign in again."],
             ]}
           />
+        </>
+      ),
+    },
+    {
+      id: "delete",
+      title: "Delete an account",
+      body: (
+        <>
+          <P>
+            For an account made by mistake or never used. Anyone with a history (leads, deposits, calls, tasks, an HR record, classes,
+            approvals, payments recorded, work updates) is kept: disable them instead, so their name stays on what they did.
+          </P>
+          <Steps>
+            <>
+              Open the person and click <Ui>Disable account</Ui> first. That stops anything new reaching them.
+            </>
+            <>
+              Scroll to <Ui>Delete account</Ui> at the bottom. If something still names them, it&apos;s listed there with a link.
+            </>
+            <>
+              Click <Ui>Delete account</Ui>, type <Ui>DELETE</Ui> and confirm.
+            </>
+          </Steps>
+          <P>
+            Their sign-in, sessions, phones and notifications go, and they come off any CRM project team. The audit log keeps a copy, and
+            old entries show them as &quot;Deleted user&quot;. You can&apos;t delete yourself, only a super admin can delete a super admin,
+            and the last super admin always stays.
+          </P>
         </>
       ),
     },
@@ -1635,6 +1703,82 @@ const notifications: DocModule = {
   ],
 };
 
+const deletingRecords: DocModule = {
+  slug: "deleting-records",
+  title: "Deleting records",
+  summary: "Super admins can delete any record for good, after typing DELETE. What can go, what goes with it, and what stays.",
+  icon: Trash2,
+  group: "Team & settings",
+  audience: ["records.delete"],
+  sections: [
+    {
+      id: "how",
+      title: "How it works",
+      body: (
+        <>
+          <P>
+            Only super admins see these <Ui>Delete</Ui> buttons. Every delete opens a check first: it lists what goes with the record and
+            what&apos;s still in the way. Type <Ui>DELETE</Ui> to confirm. A delete can&apos;t be undone in the app; the audit log keeps a
+            full copy (without pay figures), so a mistake can be put back by hand.
+          </P>
+          <Note kind="warning" title="Linked money and people block a delete">
+            A record&apos;s own small parts go with it (a task&apos;s comments, a class&apos;s join records). Anything about money or
+            another person (payments, deposits, payslips, someone else&apos;s work) blocks it, and the dialog names it so you can deal with
+            that first.
+          </Note>
+        </>
+      ),
+    },
+    {
+      id: "what",
+      title: "What can be deleted",
+      body: (
+        <Terms
+          rows={[
+            [
+              "Students",
+              "Only with no payment received or open. Their enrollments, failed payment attempts and class logs go too. A CRM lead that became the student keeps its history.",
+            ],
+            ["Enrollments", "The same payment rule. Their history entries go too."],
+            [
+              "Payments",
+              "Not once Odoo has invoiced them. A received payment comes off the student's paid total; the money itself stays with the gateway or bank, so refund it there.",
+            ],
+            [
+              "Courses and batches",
+              "A course with no batches; a batch with no enrollments, classes or recordings that isn't the current one.",
+            ],
+            [
+              "Classes and recordings",
+              "Cancel a scheduled class first. A Meet recording can go 48 hours after its class. The video stays in Google Drive.",
+            ],
+            ["Roles", "Custom roles nobody holds. Built-in roles come back with every update."],
+            [
+              "HR",
+              "An HR record nobody has been paid through yet, pay changes no closed month used, leave (approved leave gives its days back), HR requests, advances nothing was repaid on, the salary month in progress, and work updates.",
+            ],
+            [
+              "CRM",
+              "Tasks and comments, notes and logged contacts on a lead, tracked calls older than a day, products nobody converted to, and deposits (a verified later deposit re-rates its month; one already paid comes off the next salary month).",
+            ],
+          ]}
+        />
+      ),
+    },
+    {
+      id: "never",
+      title: "What never goes",
+      body: (
+        <List>
+          <>The audit log, the payment and lead inboxes and the email log.</>
+          <>Closed salary months and their payslips: later commission differences are worked out from them.</>
+          <>Settings and gateway fee rates (switch a fee rate off instead).</>
+        </List>
+      ),
+    },
+  ],
+};
+
 export const adminDocs: DocModule[] = [
   gettingStarted("/admin", "/security"),
   overview,
@@ -1650,6 +1794,7 @@ export const adminDocs: DocModule[] = [
   settings,
   audit,
   notifications,
+  deletingRecords,
 ];
 
 /* ------------------------------------------------------------------------------------------------
@@ -1835,6 +1980,23 @@ const myRequestsDoc = hrDoc({
   points: ["Choose what you need and add a short subject.", "HR's reply and any letter appear here, and you get an email."],
 });
 
+const myWorkUpdatesDoc = hrDoc({
+  slug: "work-updates",
+  title: "Work updates",
+  summary: "Write a few points on what you worked on each day.",
+  icon: ListChecks,
+  group: "My HR",
+  href: "/staff/updates",
+  points: [
+    "The page opens on today. Write one short point per line: press Enter to start the next one, then Save.",
+    "Up to 20 points a day, each up to 300 characters.",
+    "Pick another day to fill in one you missed or fix it. You can go back 31 days, but not ahead.",
+    "Saving replaces that day's points. Clear removes them all.",
+    "HR and super admins can read everyone's updates. Other staff can't see yours.",
+    "You don't need HR to set up your record first. If you also work in the CRM, Work updates is in its menu too.",
+  ],
+});
+
 const hrTeamDoc = hrDoc({
   slug: "hr-team",
   title: "Team",
@@ -1863,6 +2025,22 @@ const hrAttendanceDoc = hrDoc({
     "Pick a day, set each person's status, and save. Mark all present fills only the empty rows.",
     "Approved leave fills itself in and can't be overwritten here.",
     "Attendance never changes pay by itself. Closed months lock.",
+  ],
+});
+
+const hrWorkUpdatesDoc = hrDoc({
+  slug: "hr-work-updates",
+  title: "Team updates",
+  summary: "Read everyone's work updates, by day or by person.",
+  icon: ListChecks,
+  group: "HR",
+  href: "/staff/hr/updates",
+  audience: ["hr.manage"],
+  points: [
+    "The page opens on today: each person's points, and a Not logged yet list of active staff who haven't written one.",
+    "Not logged yet leaves out disabled accounts and people who had left or not yet joined. It tags people on leave, a weekly off or a holiday.",
+    "Pick a day to see another date, or pick a person to see all their updates, newest first.",
+    "Updates are notes. They don't change attendance or pay.",
   ],
 });
 
@@ -1952,13 +2130,16 @@ export const staffDocs: DocModule[] = [
   mySalaryDoc,
   myAdvancesDoc,
   myRequestsDoc,
+  myWorkUpdatesDoc,
   staffClasses,
   staffRecordings,
   hrTeamDoc,
   hrAttendanceDoc,
+  hrWorkUpdatesDoc,
   hrLeaveDoc,
   hrRequestsDoc,
   hrSalaryDoc,
   hrAdvancesDoc,
   hrSettingsDoc,
+  deletingRecords,
 ];

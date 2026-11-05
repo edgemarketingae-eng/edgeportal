@@ -2,6 +2,7 @@ import { classRoutes, hrRoutes } from "@edge/contracts";
 import { formatDate, formatDateTime } from "@edge/domain/dates";
 import { formatMonth } from "@edge/domain/hr/calendar";
 import { formatDays } from "@edge/domain/hr/leave";
+import { InstallAppHint } from "@edge/ui/blocks/install-app";
 import { PayAmount } from "@edge/ui/blocks/pay-amount";
 import { StatCard } from "@edge/ui/blocks/stat-card";
 import { Alert, AlertDescription } from "@edge/ui/components/alert";
@@ -26,6 +27,7 @@ export default async function StaffHome(props: PageProps<"/staff">) {
         </Alert>
       ) : null}
       <PageHeader help="/staff/docs/dashboard" title={`Hello, ${v.user.name.split(" ")[0]}`} description={v.staff.title ?? undefined} />
+      <InstallAppHint appName="Edge Console" className="mb-6" />
       <HrOverview />
       {can(v, "staff.access") ? <TeachingOverview /> : null}
     </>
@@ -39,6 +41,17 @@ async function HrOverview() {
   return (
     <div className="mb-6 grid gap-4">
       {!h.setUp ? <NotSetUp /> : null}
+      {!h.workUpdateToday ? (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            label="Today's work update"
+            value="Not written"
+            hint="Add a few points on what you worked on"
+            href="/staff/updates"
+            tone="warn"
+          />
+        </div>
+      ) : null}
       {q ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Leave to approve" value={q.leave} href="/staff/hr/leave?status=PENDING" tone={q.leave ? "warn" : undefined} />

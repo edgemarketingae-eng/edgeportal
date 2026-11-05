@@ -71,6 +71,9 @@ export interface DatePickerProps {
   defaultTime?: string;
   /** Called with `yyyy-mm-dd` (empty when cleared) when the date changes, for pickers that aren't posted with a form. */
   onValueChange?: (date: string) => void;
+  /** Earliest and latest days the calendar offers (`yyyy-mm-dd`). Typed dates aren't checked: the server still validates. */
+  min?: string;
+  max?: string;
 }
 
 /**
@@ -88,6 +91,8 @@ export function DatePicker({
   className,
   defaultTime = "10:00",
   onValueChange,
+  min,
+  max,
   ...aria
 }: DatePickerProps) {
   const initial = split(defaultValue, mode);
@@ -128,6 +133,9 @@ export function DatePicker({
 
   const value = mode === "date" ? date : date ? `${date}T${time || defaultTime}` : "";
   const selected = date ? toLocalDate(date) : undefined;
+  const minDate = min ? toLocalDate(min) : undefined;
+  const maxDate = max ? toLocalDate(max) : undefined;
+  const outOfRange = [...(minDate ? [{ before: minDate }] : []), ...(maxDate ? [{ after: maxDate }] : [])];
 
   return (
     <div data-slot="date-picker" className={cn("flex w-full flex-wrap gap-2", className)}>
@@ -186,6 +194,7 @@ export function DatePicker({
             endMonth={new Date(new Date().getFullYear() + 5, 11)}
             selected={selected}
             defaultMonth={selected}
+            disabled={outOfRange.length ? outOfRange : undefined}
             onSelect={(d) => {
               choose(d ? fromLocalDate(d) : "");
               setOpen(false);

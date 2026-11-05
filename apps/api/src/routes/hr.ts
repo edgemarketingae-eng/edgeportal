@@ -33,6 +33,8 @@ import {
   myPayslip,
   myPayslips,
   myRequests,
+  myWorkUpdates,
+  personWorkUpdates,
   refreshMonth,
   rejectAdvance,
   rejectLeave,
@@ -44,7 +46,9 @@ import {
   saveEmployee,
   saveHrSettings,
   savePay,
+  saveWorkUpdate,
   startMonth,
+  workUpdatesDay,
 } from "@edge/services";
 import { Router, type Request } from "express";
 import { actorOf, requirePermission, requireStaffUser } from "../http/guards";
@@ -69,6 +73,15 @@ export function hrRouter() {
     const { v, userId } = self(req);
     return hrHome(userId, { manage: v.permissions.has("hr.manage"), payroll: v.permissions.has("hr.payroll") });
   });
+
+  // Work updates: anyone with a staff account writes their own, without an HR record; HR reads everyone's.
+  register(r, hrRoutes.myUpdates, async (req) => myWorkUpdates(self(req).userId, req.valid.query.day));
+  register(r, hrRoutes.saveMyUpdate, async (req) => {
+    const { cleared } = await saveWorkUpdate(self(req).userId, req.valid.body);
+    return ok(cleared ? "Update cleared." : "Update saved.");
+  });
+  register(r, hrRoutes.updatesDay, async (req) => (hr(req, "hr.manage"), workUpdatesDay(req.valid.query.day)));
+  register(r, hrRoutes.personUpdates, async (req) => (hr(req, "hr.manage"), personWorkUpdates(req.valid.params.id, req.valid.query)));
 
   register(r, hrRoutes.team, async (req) => (hr(req, "hr.manage"), listTeam()));
   register(r, hrRoutes.member, async (req) => (hr(req, "hr.manage"), getTeamMember(req.valid.params.id)));

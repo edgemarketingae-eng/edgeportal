@@ -268,7 +268,8 @@ export async function updateProject(id: string, input: Partial<ProjectInput>, ac
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 /**
- * Delete a project with nothing left in it (CRM admins): not the default project, no team and no leads. Its tasks
+ * Delete a project with nothing left in it (CRM admins): not the default project, no team and no leads. A super admin
+ * may delete it with its team still on it: the team places go with the project. Its tasks
  * without a lead go with it; tasks of leads that moved away (closed ones stay behind on a move) and duplicates merged
  * away from it follow their lead, or the default project when that lead is gone.
  */
@@ -277,11 +278,16 @@ export async function deleteProject(id: string, actor: Actor & { type: "USER" },
   const p = await loadProject(id, scope);
   if (p.isDefault) throw new BusinessError("The General project can't be deleted");
   const team = new Set([...p.managerIds, ...p.memberIds].map(String)).size;
-  if (team) throw new BusinessError(`Remove ${team === 1 ? "the 1 person" : `the ${team} people`} on its team first`);
+  const withTeam = has(scope, "records.delete");
+  if (team && !withTeam) throw new BusinessError(`Remove ${team === 1 ? "the 1 person" : `the ${team} people`} on its team first`);
   const leads = await Lead.countDocuments({ projectId: p._id, mergedIntoId: null });
   if (leads) throw new BusinessError(`Move its ${plural(leads, "lead")} to another project first`);
   await withTx(async () => {
-    const r = await Project.deleteOne({ _id: p._id, isDefault: { $ne: true }, managerIds: { $size: 0 }, memberIds: { $size: 0 } });
+    const r = await Project.deleteOne(
+      withTeam
+        ? { _id: p._id, isDefault: { $ne: true } }
+        : { _id: p._id, isDefault: { $ne: true }, managerIds: { $size: 0 }, memberIds: { $size: 0 } },
+    );
     if (r.deletedCount !== 1) throw new BusinessError("The project changed meanwhile; reload and try again");
     if (await Lead.exists({ projectId: p._id, mergedIntoId: null }))
       throw new BusinessError("A lead was just added to this project; reload and try again");
@@ -306,7 +312,7 @@ export async function deleteProject(id: string, actor: Actor & { type: "USER" },
       action: "project.delete",
       entityType: "Project",
       entityId: id,
-      before: { name: p.name, code: p.code, status: p.status },
+      before: { name: p.name, code: p.code, status: p.status, managerIds: p.managerIds.map(String), memberIds: p.memberIds.map(String) },
       after: { tasksDeleted: loose.length, leadTasksMoved: leadTasks.length, mergedLeadsMoved: merged.length },
     });
   });

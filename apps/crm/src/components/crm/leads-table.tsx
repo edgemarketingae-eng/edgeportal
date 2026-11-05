@@ -19,7 +19,7 @@ import { useActionState, useState, type ComponentProps } from "react";
 import { toast } from "sonner";
 import { bulkAssignAction, bulkDeleteLeadsAction } from "@/lib/actions/leads";
 import { UNASSIGN } from "@/lib/bulk";
-import { ConfirmDelete } from "./lead-controls";
+import { TypeToConfirm } from "@edge/ui/blocks/delete-dialog";
 import { FollowUpDue, TimeAgo } from "./due";
 
 /** What a bulk action applies to: ticked ids, or every lead matching the current filters. */
@@ -79,7 +79,7 @@ function BulkDelete({ target, onDone }: { target: Target; onDone: () => void }) 
             </DialogHeader>
             <TargetFields t={target} />
             <FormError state={state} />
-            <ConfirmDelete />
+            <TypeToConfirm />
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
                 Cancel

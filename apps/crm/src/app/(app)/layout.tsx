@@ -8,9 +8,10 @@ import {
   FolderKanban,
   LayoutDashboard,
   LifeBuoy,
+  ListChecks,
   Package,
-  Settings,
   PhoneCall,
+  Settings,
   Trophy,
   Upload,
   Users,
@@ -58,6 +59,7 @@ async function CrmShell({ children }: { children: React.ReactNode }) {
     [
       "More",
       [
+        { href: `${CONSOLE_URL()}/staff/updates`, label: "Work updates", icon: <ListChecks />, show: true },
         { href: `${CONSOLE_URL()}/staff`, label: "Leave & salary", icon: <Wallet />, show: true },
         { href: "/notifications", label: "Notifications", icon: <Bell />, show: true },
         { href: "/docs", label: "Help & docs", icon: <LifeBuoy />, show: true },

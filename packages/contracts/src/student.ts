@@ -107,8 +107,68 @@ export const studentRoutes = {
   updateProfile: route({ method: "POST", path: "/api/v1/student/profile", body: ProfileInput, response: zOk }),
 };
 
+const formText = (max: number) => z.string().trim().max(max).optional();
+/** A checkbox: "on" (its default value), "true", "1" or "yes" is ticked; JSON may send a real boolean. */
+const formBool = z
+  .preprocess((v) => (typeof v === "string" ? ["on", "true", "1", "yes"].includes(v.trim().toLowerCase()) : v), z.boolean())
+  .optional();
+
+/**
+ * A lead from any website form (plain HTML or JavaScript), sent as JSON or as a form post. Field names match the
+ * signed webhook's, so one form can use either. Needs a name and a phone or an email.
+ */
+export const WebsiteLeadInput = z
+  .object({
+    name: z.string().trim().min(1, "Enter your name").max(80, "Name is too long"),
+    phone: formText(40),
+    email: z.preprocess((v) => (typeof v === "string" ? v.trim() : v), z.union([z.literal(""), zEmail()])).optional(),
+    /** Two-letter country code (AE, IN…) for numbers typed without +; anything else is ignored. */
+    country: formText(60),
+    message: formText(5000),
+    course: formText(200),
+    page: formText(500),
+    language: formText(20),
+    /** An array, or comma separated text in a form. */
+    tags: z
+      .preprocess(
+        (v) =>
+          typeof v === "string"
+            ? v
+                .split(",")
+                .map((t) => t.trim())
+                .filter(Boolean)
+            : v,
+        z.array(z.string().trim().max(50)).max(20),
+      )
+      .optional(),
+    consent: formBool,
+    whatsappConsent: formBool,
+    utm: z.object({ source: utmField, medium: utmField, campaign: utmField, content: utmField, term: utmField }).optional(),
+    utm_source: utmField,
+    utm_medium: utmField,
+    utm_campaign: utmField,
+    utm_content: utmField,
+    utm_term: utmField,
+    /** CRM project code for new leads; unknown or empty means General. */
+    project: formText(40),
+    /** Plain form posts: where to send the visitor afterwards (a page on an allowed website). */
+    redirect: formText(1000),
+    /** Honeypot: hide it from people; bots that fill it get a fake success. */
+    website: z.string().max(500).optional(),
+  })
+  .superRefine((d, ctx) => {
+    if (!d.phone && !d.email) ctx.addIssue({ code: "custom", path: ["phone"], message: "Enter a phone number or an email" });
+  });
+export type WebsiteLeadInput = z.infer<typeof WebsiteLeadInput>;
+
 /** Browser-facing routes on the public API host (api.edgeacademy.ae/api/public/...), for the academy's other sites. */
 export const publicRoutes = {
   /** CORS: PUBLIC_FORM_ORIGINS only. Creates the CRM lead and returns the owner's chat link (WhatsApp or Telegram). */
   growthHubLead: route({ method: "POST", path: "/api/public/growth-hub/leads", body: GrowthHubLeadInput, response: LandingLeadResult }),
+  /**
+   * Any allowed website's form (CRM Settings → Website forms, plus PUBLIC_FORM_ORIGINS). JSON or
+   * application/x-www-form-urlencoded. JSON callers get `{ ok: true }`; a browser form post is redirected to `redirect`
+   * (303) or shown a short thank-you page. Never says whether the person was already a lead.
+   */
+  websiteLead: route({ method: "POST", path: "/api/public/leads", body: WebsiteLeadInput, response: z.object({ ok: z.literal(true) }) }),
 };

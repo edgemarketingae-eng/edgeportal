@@ -2,6 +2,7 @@ import {
   Banknote,
   CheckSquare,
   FolderKanban,
+  Globe,
   GraduationCap,
   IdCard,
   KeyRound,
@@ -16,7 +17,7 @@ import {
   Users,
   UsersRound,
 } from "lucide-react";
-import { Flow, List, Note, P, Steps, Terms, To, Ui } from "../kit";
+import { Code, Flow, List, Note, P, Steps, Terms, To, Ui } from "../kit";
 import type { DocModule } from "../types";
 
 /** CRM guides. Every label inside <Ui> matches the screen; check apps/crm before renaming anything. */
@@ -105,6 +106,40 @@ export const crmDocs: DocModule[] = [
             <Note kind="info">
               If you open a page your role can&apos;t use, you are sent back to the dashboard with the message{" "}
               <Ui>You do not have permission for that page.</Ui> Ask a CRM admin if you think you need it.
+            </Note>
+          </>
+        ),
+      },
+      {
+        id: "install-app",
+        title: "Add the CRM to your phone's home screen",
+        body: (
+          <>
+            <P>
+              On an iPhone, or any phone without the Edge CRM Android app, you can put the CRM on your home screen. It opens full screen,
+              without the browser bar.
+            </P>
+            <Terms
+              head={["Phone", "How"]}
+              rows={[
+                [
+                  "iPhone or iPad",
+                  <>
+                    Open the CRM in Safari, tap <Ui>Share</Ui>, then <Ui>Add to Home Screen</Ui>.
+                  </>,
+                ],
+                [
+                  "Android (Chrome)",
+                  <>
+                    Tap <Ui>Install app</Ui> on the dashboard, or open Chrome&apos;s menu (⋮) and tap <Ui>Add to Home screen</Ui>. Sales
+                    executives usually want the <To href="/docs/calls">phone app</To> instead.
+                  </>,
+                ],
+              ]}
+            />
+            <Note kind="tip">
+              On an iPhone the home screen app keeps its own sign-in, separate from Safari, so sign in once inside it. Dismissed the
+              suggestion on the dashboard? You can still add it from the browser&apos;s menu.
             </Note>
           </>
         ),
@@ -1332,7 +1367,17 @@ export const crmDocs: DocModule[] = [
                 bulk delete, these leads are simply skipped.
               </>
               <>Every deletion is recorded in the audit log, with who deleted what and when.</>
+              <>
+                A lead with deposits can&apos;t be deleted either. A super admin can delete the deposits first (a trash button on each
+                deposit), then the lead.
+              </>
             </List>
+            <Note kind="info" title="Super admins">
+              Super admins also see a trash button on tasks, task comments, notes and logged contacts on a lead&apos;s timeline, tracked
+              calls older than a day, products nobody converted to, roles nobody holds, and deposits of any status. Each asks you to type{" "}
+              <Ui>DELETE</Ui> and lists what goes with it. Deleting a verified later deposit re-rates that person&apos;s month, and one
+              already paid comes off the next salary month.
+            </Note>
             <Note kind="warning">
               Check your ticks before confirming a bulk delete. With &quot;select all matching&quot;, the delete reaches leads on pages you
               haven&apos;t looked at. There is no undo and no recycle bin.
@@ -1752,8 +1797,17 @@ export const crmDocs: DocModule[] = [
                 leads and tasks, and you can still assign to them by hand. Turn it back on when they return.
               </>
               <>
+                <Ui>Change email</Ui> changes the email they sign in with. Their password stays and they stay signed in; both addresses get
+                an email about it. Someone who never signed in gets their invitation again at the new address, which is how to fix a typo.
+              </>
+              <>
                 <Ui>Disable account</Ui> blocks sign-in and signs them out straight away. <Ui>Enable account</Ui> lets them back in. Use it
                 for people who leave, not for time off.
+              </>
+              <>
+                <Ui>Delete account</Ui> (at the bottom, once the account is disabled) removes an account made by mistake or never used.
+                Anyone with leads, deposits, calls, tasks or an HR record is kept: the box lists what still names them. Type <Ui>DELETE</Ui>{" "}
+                to confirm. You can&apos;t delete yourself.
               </>
               <>
                 Under <Ui>Details and roles</Ui>, change their name, job title or roles and press <Ui>Save</Ui>.
@@ -1911,8 +1965,7 @@ export const crmDocs: DocModule[] = [
   {
     slug: "settings",
     title: "CRM settings",
-    summary:
-      "Pipeline rules (first response, cold leads, batch reminders, round-robin, lost reasons), commission rates and the website lead form.",
+    summary: "Pipeline rules (first response, cold leads, batch reminders, round-robin, lost reasons), commission rates and website forms.",
     icon: Settings,
     group: "Admin",
     audience: ["crm.manage"],
@@ -1987,28 +2040,349 @@ export const crmDocs: DocModule[] = [
       },
       {
         id: "website",
-        title: "The website lead form",
+        title: "Website forms and the webhook",
         body: (
           <>
-            <P>
-              Enquiries from the academy website arrive in the CRM automatically. The <Ui>Website lead form</Ui> box shows where the website
-              sends them and whether the connection is switched on.
-            </P>
+            <P>Enquiries from websites arrive in the CRM automatically, in two ways:</P>
             <List>
               <>
-                <Ui>secret configured</Ui> means the connection is on.
+                <Ui>Website forms</Ui>: forms on the websites you list in <Ui>Allowed websites (one per line)</Ui> send leads straight from
+                the visitor&apos;s browser. Add a website and press <Ui>Save websites</Ui>. Websites your technical team set up on the
+                server are listed underneath and can&apos;t be removed here.
               </>
-              <>If the badge says it is disabled, website enquiries are not arriving. Ask your technical team to switch it on.</>
               <>
-                New website leads land in the General project. With round-robin on, each goes to a sales executive, who is notified.
-                Otherwise it waits unassigned and the General project&apos;s managers are notified (or, if it has none, the CRM managers and
-                admins).
+                <Ui>Server-to-server webhook</Ui>: for a website&apos;s own server, signed with a secret key. <Ui>secret configured</Ui>{" "}
+                means it is on; if the badge says it is disabled, ask your technical team to switch it on.
+              </>
+              <>
+                New website leads land in the General project unless the form names a project code. With round-robin on, each goes to a
+                sales executive, who is notified. Otherwise it waits unassigned and the project&apos;s managers are notified (or, if it has
+                none, the CRM managers and admins).
               </>
               <>
                 When someone who already has a lead enquires again, the enquiry is added to that lead&apos;s timeline instead of creating a
                 duplicate.
               </>
             </List>
+            <P>
+              <To href="/docs/website-forms">Website forms &amp; API</To> has everything a web team needs: the URL, the fields and ready
+              samples.
+            </P>
+          </>
+        ),
+      },
+    ],
+  },
+  // ---------------------------------------------------------------------------------------------
+  {
+    slug: "website-forms",
+    title: "Website forms & API",
+    summary:
+      "For web teams: send leads from any website form into the CRM. The URL, the fields, a ready HTML form, JavaScript and server samples.",
+    icon: Globe,
+    group: "Admin",
+    audience: ["crm.manage"],
+    href: "/settings",
+    sections: [
+      {
+        id: "two-ways",
+        title: "Two ways to send a lead",
+        body: ({ apiUrl }) => (
+          <>
+            <P>
+              Share this page with whoever builds the form. Every lead lands in the CRM as a new lead with source Website, or is added to
+              the person&apos;s existing lead.
+            </P>
+            <Terms
+              head={["Way", "When to use it"]}
+              rows={[
+                [
+                  "Browser form",
+                  <>
+                    Any HTML page or JavaScript form. No key needed, but the website must be on the allowed list first. Send to{" "}
+                    <code className="break-all">POST {apiUrl}/api/public/leads</code>
+                  </>,
+                ],
+                [
+                  "Server to server",
+                  <>
+                    The website&apos;s own server (PHP, Node, WordPress plugin, Zapier…) sends JSON signed with the secret key. Send to{" "}
+                    <code className="break-all">POST {apiUrl}/api/webhooks/leads/website</code>. Never put the key in a web page.
+                  </>,
+                ],
+              ]}
+            />
+          </>
+        ),
+      },
+      {
+        id: "allow",
+        title: "Get the website allowed",
+        body: (
+          <>
+            <Steps>
+              <>
+                Open <To href="/settings">Settings</To> and find <Ui>Website forms</Ui>.
+              </>
+              <>
+                In <Ui>Allowed websites (one per line)</Ui>, add the address the form&apos;s page is on, for example{" "}
+                <code>https://offers.edgeacademy.ae</code>. A page address is shortened to the website, so{" "}
+                <code>https://edgeacademy.ae/free-class</code> becomes <code>https://edgeacademy.ae</code>.
+              </>
+              <>
+                Press <Ui>Save websites</Ui>. Forms on that website work within a minute.
+              </>
+            </Steps>
+            <Note kind="warning">
+              Each website needs its own line: <code>https://edgeacademy.ae</code> and <code>https://www.edgeacademy.ae</code> are different
+              websites. A form on a website that isn&apos;t on the list is refused (403), and so is an HTML file opened straight from a
+              computer. Test on the real website.
+            </Note>
+          </>
+        ),
+      },
+      {
+        id: "fields",
+        title: "Fields",
+        body: (
+          <>
+            <P>
+              Send a <b>name</b> and at least a <b>phone</b> or an <b>email</b>. Everything else is optional. The field names are the same
+              for both ways.
+            </P>
+            <Terms
+              head={["Field", "What to send"]}
+              rows={[
+                [<code key="a">name</code>, "Required. The person's name, up to 80 characters."],
+                [
+                  <code key="b">phone</code>,
+                  "Mobile number, best with the country code (+971 50 123 4567). A number the CRM can't read is kept in the notes.",
+                ],
+                [<code key="c">email</code>, "Email address. Phone or email is required."],
+                [<code key="d">country</code>, "Two-letter country code (AE, IN, SA…), used for numbers typed without +."],
+                [<code key="e">message</code>, "What they asked. Saved in the lead's notes, up to 5,000 characters."],
+                [<code key="f">course</code>, "The course they're interested in (its code or title). Matched to a course when possible."],
+                [<code key="g">page</code>, "The page the form is on. Shown as the lead's source detail."],
+                [<code key="h">language</code>, "Malayalam, Tamil, English or Hindi; anything else is saved as Other."],
+                [
+                  <code key="i">tags</code>,
+                  "Labels for the lead: comma separated in a form (offer, ramadan), or a list in JSON. Up to 20.",
+                ],
+                [<code key="j">consent</code>, "Agreed to marketing emails. A ticked checkbox, or true in JSON."],
+                [<code key="k">whatsappConsent</code>, "Agreed to be contacted on WhatsApp. A ticked checkbox, or true in JSON."],
+                [
+                  <code key="l">utm_source, utm_medium, utm_campaign, utm_content, utm_term</code>,
+                  "Ad tracking. JSON may send them as utm: { source, medium, … } instead.",
+                ],
+                [
+                  <code key="m">project</code>,
+                  "A project code from the CRM (shown on each project). New leads go to that project and its team. Unknown or empty means General.",
+                ],
+                [
+                  <code key="n">redirect</code>,
+                  "Browser form only: the page to send the visitor to afterwards, on an allowed website (a thank-you page).",
+                ],
+                [
+                  <code key="o">website</code>,
+                  "Browser form only: a hidden spam trap. Keep it empty and hidden from people (see the sample).",
+                ],
+                [<code key="p">id</code>, "Server to server only: your own id for the enquiry. Sending the same id again is ignored."],
+              ]}
+            />
+          </>
+        ),
+      },
+      {
+        id: "html-form",
+        title: "Plain HTML form",
+        body: ({ apiUrl }) => (
+          <>
+            <P>
+              Copy this into the page and change the hidden values. After sending, the visitor goes to the <code>redirect</code> page. If
+              something is wrong, they go to the same page with <code>?error=invalid</code> (or <code>?error=rate_limited</code>) added, so
+              it can show a message. Without a <code>redirect</code>, they see a short thank-you page.
+            </P>
+            <Code label="HTML">{`
+<form action="${apiUrl}/api/public/leads" method="post">
+  <input name="name" placeholder="Your name" required>
+  <input name="phone" type="tel" placeholder="Mobile with country code, e.g. +971 50 123 4567">
+  <input name="email" type="email" placeholder="Email">
+  <textarea name="message" placeholder="How can we help?"></textarea>
+  <label><input type="checkbox" name="whatsappConsent"> You can contact me on WhatsApp</label>
+
+  <!-- Change these for your page. Leave out "project" to use General. -->
+  <input type="hidden" name="page" value="https://example.com/free-class">
+  <input type="hidden" name="project" value="PROJECT-CODE">
+  <input type="hidden" name="redirect" value="https://example.com/thank-you">
+
+  <!-- Spam trap: people never see it, so keep it empty. -->
+  <div style="position:absolute;left:-9999px" aria-hidden="true">
+    <input name="website" tabindex="-1" autocomplete="off">
+  </div>
+
+  <button type="submit">Send</button>
+</form>`}</Code>
+          </>
+        ),
+      },
+      {
+        id: "javascript",
+        title: "JavaScript (fetch)",
+        body: ({ apiUrl }) => (
+          <>
+            <P>
+              To stay on the page and show your own message, send the same form with <code>fetch</code>. Wrap the form data in{" "}
+              <code>URLSearchParams</code>: plain <code>FormData</code> is sent as multipart, which is refused (415).
+            </P>
+            <Code label="JavaScript">{`
+const form = document.querySelector("#lead-form");
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const res = await fetch("${apiUrl}/api/public/leads", {
+    method: "POST",
+    body: new URLSearchParams(new FormData(form)),
+  });
+  if (res.ok) {
+    form.replaceWith("Thank you! We'll contact you soon.");
+    return;
+  }
+  const { error } = await res.json();
+  alert(Object.values(error.fieldErrors ?? {})[0] ?? error.message);
+});`}</Code>
+            <P>JSON works too:</P>
+            <Code label="JavaScript (JSON)">{`
+await fetch("${apiUrl}/api/public/leads", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    name: "Amal Rahman",
+    phone: "+971501234567",
+    email: "amal@example.com",
+    message: "Interested in the Forex course",
+    page: location.href,
+    project: "PROJECT-CODE",
+    utm: { source: "instagram", campaign: "november" },
+  }),
+});`}</Code>
+          </>
+        ),
+      },
+      {
+        id: "server-to-server",
+        title: "Server to server (signed)",
+        body: ({ apiUrl }) => (
+          <>
+            <P>
+              For a website&apos;s own server. The body is JSON with the same fields (tags as a list, consent as true or false). Prove it
+              comes from you with the secret key <code>LEAD_WEBHOOK_SECRET</code>, which your technical team holds, in one of two ways:
+            </P>
+            <List>
+              <>
+                <code>x-edge-lead-token</code>: the key itself.
+              </>
+              <>
+                <code>x-edge-signature</code>: an HMAC-SHA256 of the exact body, keyed with the key, in hex. Safer, because the key never
+                travels.
+              </>
+            </List>
+            <Code label="curl with the key">{`
+curl -X POST ${apiUrl}/api/webhooks/leads/website \\
+  -H "Content-Type: application/json" \\
+  -H "x-edge-lead-token: $LEAD_WEBHOOK_SECRET" \\
+  -d '{"id":"site-123","name":"Amal Rahman","phone":"+971501234567","email":"amal@example.com","message":"Interested in the Forex course","page":"https://example.com/forex","project":"PROJECT-CODE"}'`}</Code>
+            <Code label="curl with a signature">{`
+BODY='{"id":"site-124","name":"Amal Rahman","phone":"+971501234567"}'
+SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$LEAD_WEBHOOK_SECRET" -hex | sed 's/^.* //')
+curl -X POST ${apiUrl}/api/webhooks/leads/website \\
+  -H "Content-Type: application/json" \\
+  -H "x-edge-signature: $SIG" \\
+  -d "$BODY"`}</Code>
+            <Code label="Node.js">{`
+import { createHmac } from "node:crypto";
+
+const body = JSON.stringify({ id: "site-125", name: "Amal Rahman", phone: "+971501234567" });
+const signature = createHmac("sha256", process.env.LEAD_WEBHOOK_SECRET).update(body).digest("hex");
+await fetch("${apiUrl}/api/webhooks/leads/website", {
+  method: "POST",
+  headers: { "Content-Type": "application/json", "x-edge-signature": signature },
+  body,
+});`}</Code>
+            <Note kind="info">
+              Sign the exact text you send: re-encoding the JSON after signing changes it and the request is refused (401).
+            </Note>
+          </>
+        ),
+      },
+      {
+        id: "responses",
+        title: "Responses",
+        body: (
+          <>
+            <P>Browser form:</P>
+            <Terms
+              head={["Answer", "Meaning"]}
+              rows={[
+                [<code key="a">200 {"{ ok: true }"}</code>, "Received. It never says whether the person was already a lead."],
+                [
+                  <code key="b">303</code>,
+                  "A plain form post with an allowed redirect: the visitor is sent there (with ?error=… on a problem).",
+                ],
+                [
+                  <code key="c">400</code>,
+                  <>
+                    Missing or wrong fields. The body is{" "}
+                    <code>{'{ "error": { "code": "VALIDATION", "message": "…", "fieldErrors": { "phone": "…" } } }'}</code>.
+                  </>,
+                ],
+                [<code key="d">403</code>, "The website isn't on the allowed list."],
+                [<code key="e">415</code>, "Sent as multipart (plain FormData). Use URLSearchParams or JSON."],
+                [<code key="f">422</code>, "The phone number couldn't be read and there's no email."],
+                [<code key="g">429</code>, "More than 10 sends in 10 minutes from one visitor. Try again later."],
+              ]}
+            />
+            <P>Server to server:</P>
+            <Terms
+              head={["Answer", "Meaning"]}
+              rows={[
+                [<code key="a">200</code>, "Received: { received: true, leadId, existing }, or duplicate: true for an id sent before."],
+                [<code key="b">400</code>, "Not JSON, or a field is wrong (the body lists the issues)."],
+                [<code key="c">401</code>, "Wrong key or signature."],
+                [<code key="d">404</code>, "The webhook isn't switched on (no LEAD_WEBHOOK_SECRET on the server)."],
+                [<code key="e">422</code>, "No usable phone or email."],
+                [<code key="f">429</code>, "More than 20 requests a minute."],
+              ]}
+            />
+          </>
+        ),
+      },
+      {
+        id: "duplicates",
+        title: "Duplicates and repeat enquiries",
+        body: (
+          <List>
+            <>
+              If the phone or email already belongs to a lead, no new lead is made: the enquiry is added to that lead&apos;s timeline and
+              its owner is notified. A Lost lead reopens as New.
+            </>
+            <>The same form sent twice on the same day (a double click, a refresh) counts once.</>
+            <>Bots that fill the hidden spam trap are told it worked, and nothing is saved.</>
+          </List>
+        ),
+      },
+      {
+        id: "projects",
+        title: "Which project a lead goes to",
+        body: (
+          <>
+            <P>
+              With <code>project</code> set to a project&apos;s code, new leads go to that project. With round-robin on in{" "}
+              <To href="/settings">Settings</To>, each goes to the next sales executive in that project&apos;s team; otherwise it waits
+              unassigned and the project&apos;s managers are notified.
+            </P>
+            <P>
+              Without a code, or with a code that doesn&apos;t exist, the lead goes to General. If the project is archived, the lead goes to
+              General and the admins are told to fix it.
+            </P>
           </>
         ),
       },

@@ -160,3 +160,24 @@ test("7. the breakdown opens by tap on a phone", async ({ browser }) => {
   await expect(page.getByRole("dialog").getByText("Top seller")).toBeVisible();
   await context.close();
 });
+
+test("8. a salesperson writes today's work update", async ({ page }) => {
+  await signIn(page, STAFF);
+  await page.goto(`${E2E.console}/staff/updates`);
+  await page.getByLabel("Point 1", { exact: true }).fill("Followed up five leads");
+  await page.getByLabel("Point 1", { exact: true }).press("Enter");
+  await expect(page.getByLabel("Point 2", { exact: true })).toBeFocused();
+  await page.keyboard.type("Demo call with a new prospect");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("Update saved.")).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel("Point 2", { exact: true })).toHaveValue("Demo call with a new prospect");
+});
+
+// A test of its own: each test starts signed out, and /login sends a signed-in person straight to their portal.
+test("9. HR reads it on Team updates, with who hasn't written one yet", async ({ page }) => {
+  await signIn(page, HR);
+  await page.goto(`${E2E.console}/staff/hr/updates`);
+  await expect(page.getByText("Followed up five leads")).toBeVisible();
+  await expect(page.getByText(/Not logged yet \(\d+\)/)).toBeVisible();
+});

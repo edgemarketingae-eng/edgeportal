@@ -3,6 +3,7 @@ import { Employee, HrRequest, LeaveRequest, Payslip, SalaryAdvance, StaffProfile
 import { totalsByCurrency } from "@edge/domain/hr/pay";
 import { oid } from "../ids";
 import { myBalances } from "./leave";
+import { workUpdateToday } from "./updates";
 
 const lineDto = (l: PayslipDoc["lines"][number]) => ({
   id: String(l._id),
@@ -18,7 +19,7 @@ const lineDto = (l: PayslipDoc["lines"][number]) => ({
 export async function hrHome(userId: string, can: { manage: boolean; payroll: boolean }): Promise<HrHome> {
   const _id = oid(userId);
   const e = (await Employee.findById(_id).lean()) as EmployeeDoc | null;
-  const [balances, slip, pendingLeave, openRequests, repayingAdvances, queue] = await Promise.all([
+  const [balances, slip, pendingLeave, openRequests, repayingAdvances, queue, wroteToday] = await Promise.all([
     e ? myBalances(e) : [],
     Payslip.findOne({ employeeId: _id, closedAt: { $ne: null } })
       .sort({ month: -1 })
@@ -27,6 +28,7 @@ export async function hrHome(userId: string, can: { manage: boolean; payroll: bo
     HrRequest.countDocuments({ employeeId: _id, status: { $in: ["OPEN", "IN_PROGRESS"] } }),
     SalaryAdvance.countDocuments({ employeeId: _id, status: "APPROVED" }),
     can.manage || can.payroll ? queues(can) : null,
+    workUpdateToday(userId),
   ]);
   return {
     setUp: !!e,
@@ -35,6 +37,7 @@ export async function hrHome(userId: string, can: { manage: boolean; payroll: bo
     pendingLeave,
     openRequests,
     repayingAdvances,
+    workUpdateToday: wroteToday,
     queue,
   };
 }

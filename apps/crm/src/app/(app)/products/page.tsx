@@ -9,12 +9,14 @@ import { api } from "@edge/web/server";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ProductDialog } from "@/components/crm/product-dialog";
-import { load, requireCrm } from "@/lib/load";
+import { DeleteButton } from "@/components/delete-button";
+import { can, load, requireCrm } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Products" };
 
 export default async function ProductsPage() {
-  await requireCrm("crm.manage");
+  const v = await requireCrm("crm.manage");
+  const canPurge = can(v, "records.delete");
   const products = await load(() => api(crmRoutes.products));
   return (
     <>
@@ -57,7 +59,10 @@ export default async function ProductsPage() {
                   <TableCell className="text-right tabular-nums">{p.conversionsMonth}</TableCell>
                   <TableCell className="text-right font-semibold tabular-nums">{p.conversionsTotal}</TableCell>
                   <TableCell className="text-right">
-                    <ProductDialog product={p} />
+                    <span className="inline-flex items-center gap-1">
+                      <ProductDialog product={p} />
+                      {canPurge ? <DeleteButton type="product" id={p.id} iconOnly label={`Delete ${p.name}`} /> : null}
+                    </span>
                   </TableCell>
                 </TableRow>
               ))
@@ -66,7 +71,8 @@ export default async function ProductsPage() {
         </Table>
       </Card>
       <p className="text-muted-foreground mt-3 text-xs">
-        Archived products disappear from the “Mark conversion” list but keep their history. Products are never deleted.
+        Archived products disappear from the “Mark conversion” list but keep their history.
+        {canPurge ? " A product nobody has converted to can be deleted." : ""}
       </p>
     </>
   );

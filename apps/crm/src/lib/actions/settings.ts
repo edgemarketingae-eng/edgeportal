@@ -25,3 +25,14 @@ export async function saveCrmSettingsAction(_prev: ActionState, form: FormData):
   refresh();
   return { ok: true, message: "CRM settings saved." };
 }
+
+export async function saveFormOriginsAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  let message: string | undefined;
+  try {
+    message = (await api(crmRoutes.saveFormOrigins, { body: { origins: text(form, "origins") } })).message;
+  } catch (e) {
+    return fail(e, values(form, ["origins"]));
+  }
+  refresh();
+  return { ok: true, message };
+}

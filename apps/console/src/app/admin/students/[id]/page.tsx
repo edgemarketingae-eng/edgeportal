@@ -6,15 +6,19 @@ import { formatMoney } from "@edge/domain/money";
 import { TableEmpty } from "@edge/ui/blocks/empty-state";
 import { GATEWAY_LABELS, KIND_LABELS, PaymentStatusBadge } from "@edge/ui/blocks/payment-status-badge";
 import { EnrollmentBadge, PaymentStateBadge, SyncBadge } from "@edge/ui/blocks/status-badges";
-import { Card, CardContent, CardHeader, CardTitle } from "@edge/ui/components/card";
+import { DeleteCard } from "@edge/ui/blocks/delete-dialog";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@edge/ui/components/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@edge/ui/components/table";
 import { PageHeader } from "@edge/ui/shell/app-shell";
+import { deletePlanFor } from "@edge/web/records";
 import { api } from "@edge/web/server";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DaysLeft } from "@/components/admin-ops/days-until";
 import { EnrollmentControls } from "@/components/admin-ops/enrollment-controls";
 import { StudentCountryForm } from "@/components/admin-ops/student-country-form";
+import { DeleteButton } from "@/components/delete-button";
+import { deleteRecordAction } from "@/lib/actions/records";
 import { can, load, requireStaff } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Student" };
@@ -34,9 +38,11 @@ export default async function StudentDetailPage(props: PageProps<"/admin/student
   const v = await requireStaff("student.read");
   const { id } = await props.params;
   const canSeePayments = can(v, "payment.read");
-  const [{ student: s, enrollment: e, events, batches, lead }, payments] = await Promise.all([
+  const canPurge = can(v, "records.delete");
+  const [{ student: s, enrollment: e, events, batches, lead }, payments, deletePlan] = await Promise.all([
     load(() => api(adminRoutes.student, { params: { id } })),
     canSeePayments ? load(() => api(paymentRoutes.adminStudentPayments, { params: { id } })) : null,
+    canPurge ? deletePlanFor("student", id) : null,
   ]);
 
   return (
@@ -71,6 +77,11 @@ export default async function StudentDetailPage(props: PageProps<"/admin/student
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Enrollment</CardTitle>
+            {canPurge && e ? (
+              <CardAction>
+                <DeleteButton type="enrollment" id={e.id} label="Delete enrollment" />
+              </CardAction>
+            ) : null}
           </CardHeader>
           <CardContent>
             {e ? (
@@ -201,11 +212,12 @@ export default async function StudentDetailPage(props: PageProps<"/admin/student
                 <TableHead className="text-right">Total</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="hidden lg:table-cell">Odoo</TableHead>
+                {canPurge ? <TableHead className="w-10" /> : null}
               </TableRow>
             </TableHeader>
             <TableBody>
               {payments.length === 0 ? (
-                <TableEmpty colSpan={7} title="No payments." />
+                <TableEmpty colSpan={canPurge ? 8 : 7} title="No payments." />
               ) : (
                 payments.map((pay) => (
                   <TableRow key={pay.id}>
@@ -224,6 +236,11 @@ export default async function StudentDetailPage(props: PageProps<"/admin/student
                     <TableCell className="hidden lg:table-cell">
                       {pay.status === "SUCCEEDED" ? <SyncBadge status={pay.odoo.status} /> : null}
                     </TableCell>
+                    {canPurge ? (
+                      <TableCell>
+                        <DeleteButton type="payment" id={pay.id} iconOnly label="Delete payment" />
+                      </TableCell>
+                    ) : null}
                   </TableRow>
                 ))
               )}
@@ -258,6 +275,17 @@ export default async function StudentDetailPage(props: PageProps<"/admin/student
             </ol>
           </CardContent>
         </Card>
+      ) : null}
+
+      {deletePlan ? (
+        <DeleteCard
+          title="Delete student"
+          action={deleteRecordAction}
+          hidden={{ type: "student", id: s.id, next: "/admin/students" }}
+          plan={deletePlan}
+          submitLabel="Delete student"
+          description="Their account, enrollment history and unpaid payment attempts are removed for good."
+        />
       ) : null}
     </>
   );

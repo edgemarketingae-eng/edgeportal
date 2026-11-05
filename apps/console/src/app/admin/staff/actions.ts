@@ -79,6 +79,17 @@ export async function toggleStaffAvailableAction(_prev: ActionState, form: FormD
   return { ok: true, message: message ?? "Saved." };
 }
 
+export async function changeStaffEmailAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  let message: string | undefined;
+  try {
+    ({ message } = await api(staffRoutes.changeEmail, { params: { id: text(form, "userId") }, body: { email: text(form, "email") } }));
+  } catch (e) {
+    return fail(e);
+  }
+  refresh();
+  return { ok: true, message: message ?? "Email changed." };
+}
+
 export async function resetStaffPasswordAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   let pw: string;
   try {

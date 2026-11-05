@@ -38,3 +38,4 @@ export * from "./crm/index";
 export * from "./staff/crm-team";
 export * from "./files/service";
 export * from "./hr/index";
+export * from "./records/index";

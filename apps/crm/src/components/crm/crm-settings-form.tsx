@@ -8,7 +8,7 @@ import { Textarea } from "@edge/ui/components/textarea";
 import { Field, FormError, type ActionState } from "@edge/ui/forms/field";
 import { useActionState, useEffect } from "react";
 import { toast } from "sonner";
-import { saveCrmSettingsAction } from "@/lib/actions/settings";
+import { saveCrmSettingsAction, saveFormOriginsAction } from "@/lib/actions/settings";
 
 export function CrmSettingsForm({ s }: { s: CrmSettingsDto }) {
   const [state, action, pending] = useActionState(saveCrmSettingsAction, {} as ActionState);
@@ -57,6 +57,37 @@ export function CrmSettingsForm({ s }: { s: CrmSettingsDto }) {
       </div>
       <Button className="w-fit" pending={pending}>
         Save CRM settings
+      </Button>
+    </form>
+  );
+}
+
+/** Websites whose forms may post leads from the browser: one per line. */
+export function FormOriginsForm({ s }: { s: CrmSettingsDto }) {
+  const [state, action, pending] = useActionState(saveFormOriginsAction, {} as ActionState);
+  useEffect(() => {
+    if (state.ok) toast.success(state.message ?? "Saved");
+    if (state.error) toast.error(state.error);
+  }, [state]);
+  return (
+    <form key={JSON.stringify(state.values ?? s.formOrigins)} action={action} className="grid gap-3">
+      <FormError state={state} />
+      <div className="grid content-start gap-2">
+        <Label htmlFor="origins">Allowed websites (one per line)</Label>
+        <Textarea
+          id="origins"
+          name="origins"
+          rows={4}
+          placeholder={"https://edgeacademy.ae\nhttps://offers.edgeacademy.ae"}
+          defaultValue={state.values?.origins ?? s.formOrigins.join("\n")}
+          aria-describedby="origins-hint"
+        />
+        <p id="origins-hint" className="text-muted-foreground text-xs">
+          The address the form&apos;s page is on, starting with https://. A page address is shortened to its website. Up to 20.
+        </p>
+      </div>
+      <Button className="w-fit" pending={pending}>
+        Save websites
       </Button>
     </form>
   );

@@ -64,6 +64,16 @@ export async function createHrRequestAction(_prev: ActionState, form: FormData) 
   }, "Request sent to HR.");
 }
 
+/* Work updates */
+
+export async function saveWorkUpdateAction(_prev: ActionState, form: FormData) {
+  return run(() => api(hrRoutes.saveMyUpdate, { body: { day: text(form, "day"), items: json<string[]>(form, "items", []) } }));
+}
+
+export async function clearWorkUpdateAction(_prev: ActionState, form: FormData) {
+  return run(() => api(hrRoutes.saveMyUpdate, { body: { day: text(form, "day"), items: [] } }));
+}
+
 /* Team */
 
 export async function saveEmployeeAction(_prev: ActionState, form: FormData) {

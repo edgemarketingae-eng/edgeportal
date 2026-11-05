@@ -16,16 +16,18 @@ import { PageHeader } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
 import { HandCoins } from "lucide-react";
 import type { Metadata } from "next";
+import { DeleteButton } from "@/components/delete-button";
 import { RescheduleDialog } from "@/components/hr/reschedule-dialog";
 import { approveAdvanceAction, rejectAdvanceAction } from "@/lib/actions/hr";
-import { load, requireStaff } from "@/lib/load";
+import { can, load, requireStaff } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Advance approvals" };
 
 type Status = (typeof ADVANCE_STATUSES)[number];
 
 export default async function AdvanceApprovalsPage(props: PageProps<"/staff/hr/advances">) {
-  await requireStaff("hr.payroll");
+  const v = await requireStaff("hr.payroll");
+  const canPurge = can(v, "records.delete");
   const sp = await props.searchParams;
   const status = ADVANCE_STATUSES.includes(sp.status as Status) ? (sp.status as Status) : undefined;
   const [page, months] = await Promise.all([
@@ -55,7 +57,10 @@ export default async function AdvanceApprovalsPage(props: PageProps<"/staff/hr/a
                     <span className="font-semibold">
                       {a.employee.name}: <span className="tabular-nums">{formatPayAmount(a.amountMinor, a.currency)}</span>
                     </span>
-                    <AdvanceStatusBadge status={a.status} />
+                    <span className="flex items-center gap-1">
+                      <AdvanceStatusBadge status={a.status} />
+                      {canPurge ? <DeleteButton type="advance" id={a.id} iconOnly label="Delete advance" /> : null}
+                    </span>
                   </div>
                   <p className="text-muted-foreground text-xs">
                     Requested {formatDate(a.createdAt)}

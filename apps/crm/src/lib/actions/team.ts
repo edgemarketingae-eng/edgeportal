@@ -85,6 +85,17 @@ export async function toggleCrmStaffAvailableAction(_prev: ActionState, form: Fo
   return { ok: true, message: message ?? "Saved." };
 }
 
+export async function changeCrmStaffEmailAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  let message: string | undefined;
+  try {
+    ({ message } = await api(crmRoutes.changeStaffEmail, { params: { id: text(form, "userId") }, body: { email: text(form, "email") } }));
+  } catch (e) {
+    return fail(e);
+  }
+  refresh();
+  return { ok: true, message: message ?? "Email changed." };
+}
+
 export async function resetCrmStaffPasswordAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   let pw: string;
   try {
@@ -99,7 +110,12 @@ export async function resetCrmStaffPasswordAction(_prev: ActionState, form: Form
 export async function saveCrmRoleAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   try {
     await api(crmRoutes.saveRole, {
-      body: { id: text(form, "id") || undefined, name: text(form, "name"), description: text(form, "description"), permissions: form.getAll("permissions").map(String) } satisfies RouteBody<typeof crmRoutes.saveRole>,
+      body: {
+        id: text(form, "id") || undefined,
+        name: text(form, "name"),
+        description: text(form, "description"),
+        permissions: form.getAll("permissions").map(String),
+      } satisfies RouteBody<typeof crmRoutes.saveRole>,
     });
   } catch (e) {
     return fail(e, submitted(form, ["name", "description"], "permissions"));

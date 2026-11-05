@@ -17,14 +17,16 @@ import { Wallet } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DeleteDepositButton, RejectDepositDialog, VerifyDepositDialog } from "@/components/crm/deposit-actions";
-import { load, requireCrm } from "@/lib/load";
+import { DeleteButton } from "@/components/delete-button";
+import { can, load, requireCrm } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Deposits" };
 
 const usd = (minor: number) => formatMoney(minor, "USD");
 
 export default async function DepositsPage(props: PageProps<"/deposits">) {
-  await requireCrm("crm.read");
+  const v = await requireCrm("crm.read");
+  const canPurge = can(v, "records.delete");
   const sp = await props.searchParams;
   const one = (k: string) => (typeof sp[k] === "string" && sp[k] ? sp[k] : undefined);
   const f = {
@@ -166,7 +168,11 @@ export default async function DepositsPage(props: PageProps<"/deposits">) {
                           />
                         ) : null}
                         {d.manage && x.status !== "REJECTED" ? <RejectDepositDialog id={x.id} verified={x.status === "VERIFIED"} /> : null}
-                        {x.canDelete ? <DeleteDepositButton id={x.id} /> : null}
+                        {x.canDelete ? (
+                          <DeleteDepositButton id={x.id} />
+                        ) : canPurge ? (
+                          <DeleteButton type="deposit" id={x.id} iconOnly label="Delete deposit" />
+                        ) : null}
                       </div>
                     </TableCell>
                   </TableRow>

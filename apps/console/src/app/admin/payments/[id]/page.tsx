@@ -3,14 +3,17 @@ import { formatDateTime } from "@edge/domain/dates";
 import { formatMoney } from "@edge/domain/money";
 import { Alert, AlertDescription } from "@edge/ui/components/alert";
 import { ActionButton } from "@edge/ui/blocks/action-dialog";
+import { DeleteCard } from "@edge/ui/blocks/delete-dialog";
 import { GATEWAY_LABELS, KIND_LABELS, PaymentStatusBadge } from "@edge/ui/blocks/payment-status-badge";
 import { SyncBadge } from "@edge/ui/blocks/status-badges";
 import { Card, CardContent, CardHeader, CardTitle } from "@edge/ui/components/card";
 import { PageHeader } from "@edge/ui/shell/app-shell";
+import { deletePlanFor } from "@edge/web/records";
 import { api } from "@edge/web/server";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { recheckPaymentAction, retryOdooAction } from "@/app/admin/payments/actions";
+import { deleteRecordAction } from "@/lib/actions/records";
 import { can, load, requireStaff } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Payment" };
@@ -27,7 +30,10 @@ function Row({ k, v }: { k: string; v: React.ReactNode }) {
 export default async function AdminPaymentPage(props: PageProps<"/admin/payments/[id]">) {
   const v = await requireStaff("payment.read");
   const { id } = await props.params;
-  const p = await load(() => api(paymentRoutes.adminPayment, { params: { id } }));
+  const [p, deletePlan] = await Promise.all([
+    load(() => api(paymentRoutes.adminPayment, { params: { id } })),
+    can(v, "records.delete") ? deletePlanFor("payment", id) : null,
+  ]);
   const c = p.currency;
   return (
     <>
@@ -135,6 +141,16 @@ export default async function AdminPaymentPage(props: PageProps<"/admin/payments
           </Card>
         </div>
       </div>
+      {deletePlan ? (
+        <DeleteCard
+          title="Delete payment"
+          action={deleteRecordAction}
+          hidden={{ type: "payment", id: p.id, next: "/admin/payments" }}
+          plan={deletePlan}
+          submitLabel="Delete payment"
+          description="The payment record is removed for good."
+        />
+      ) : null}
     </>
   );
 }

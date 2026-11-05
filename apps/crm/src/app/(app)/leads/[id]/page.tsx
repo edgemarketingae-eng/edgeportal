@@ -38,6 +38,7 @@ import { MarkConversionDialog, RemoveConversionDialog } from "@/components/crm/c
 import { DeleteDepositButton, LogDepositDialog, RejectDepositDialog, VerifyDepositDialog } from "@/components/crm/deposit-actions";
 import { FollowUpDue, TimeAgo } from "@/components/crm/due";
 import { LeadControls } from "@/components/crm/lead-controls";
+import { DeleteButton } from "@/components/delete-button";
 import { EditLeadDialog } from "@/components/crm/edit-lead-dialog";
 import { QualificationForm } from "@/components/crm/qualification-form";
 import { AddTaskDialog, CancelTaskButton, CompleteTaskDialog, RescheduleTaskDialog } from "@/components/crm/task-actions";
@@ -58,6 +59,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
   const v = await requireCrm("crm.read");
   const [{ id }, sp] = await Promise.all([props.params, props.searchParams]);
   const activityWindow = Math.min(1000, Math.max(50, Number(sp.activity) || 50));
+  const canPurge = can(v, "records.delete");
   const {
     lead: l,
     activities,
@@ -293,7 +295,14 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
                         <span
                           className={`absolute top-1.5 -left-[21px] size-2.5 rounded-full ${touch ? "bg-edge-emerald" : "bg-muted-foreground/40"}`}
                         />
-                        <p className="font-medium">{title}</p>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-medium">{title}</p>
+                          {canPurge && a.callId ? (
+                            <DeleteButton type="call" id={a.callId} iconOnly label="Delete call" />
+                          ) : canPurge && ["NOTE", "CALL", "WHATSAPP", "EMAIL", "MEETING"].includes(a.type) ? (
+                            <DeleteButton type="leadActivity" id={a.id} iconOnly label="Delete entry" />
+                          ) : null}
+                        </div>
                         {a.body ? <p className="mt-0.5 whitespace-pre-wrap">{a.body}</p> : null}
                         {detail ? <p className="text-muted-foreground text-xs">{detail}</p> : null}
                         <p className="text-muted-foreground text-xs">
@@ -494,7 +503,11 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
                         {leadCan.reviewDeposits && d.status !== "REJECTED" ? (
                           <RejectDepositDialog id={d.id} verified={d.status === "VERIFIED"} />
                         ) : null}
-                        {d.canDelete ? <DeleteDepositButton id={d.id} /> : null}
+                        {d.canDelete ? (
+                          <DeleteDepositButton id={d.id} />
+                        ) : canPurge ? (
+                          <DeleteButton type="deposit" id={d.id} iconOnly label="Delete deposit" />
+                        ) : null}
                       </div>
                     ) : null}
                   </div>

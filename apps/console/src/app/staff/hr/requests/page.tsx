@@ -18,16 +18,18 @@ import { PageHeader } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
 import { Inbox } from "lucide-react";
 import type { Metadata } from "next";
+import { DeleteButton } from "@/components/delete-button";
 import { FileLink } from "@/components/hr/shared";
 import { replyRequestAction } from "@/lib/actions/hr";
-import { load, requireStaff } from "@/lib/load";
+import { can, load, requireStaff } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Requests inbox" };
 
 type Status = (typeof HR_REQUEST_STATUSES)[number];
 
 export default async function RequestsInboxPage(props: PageProps<"/staff/hr/requests">) {
-  await requireStaff("hr.manage");
+  const v = await requireStaff("hr.manage");
+  const canPurge = can(v, "records.delete");
   const sp = await props.searchParams;
   const status = HR_REQUEST_STATUSES.includes(sp.status as Status) ? (sp.status as Status) : undefined;
   const page = await load(() =>
@@ -58,7 +60,10 @@ export default async function RequestsInboxPage(props: PageProps<"/staff/hr/requ
                     <span className="font-semibold">
                       {r.employee.name}: {r.subject}
                     </span>
-                    <HrRequestStatusBadge status={r.status} />
+                    <span className="flex items-center gap-1">
+                      <HrRequestStatusBadge status={r.status} />
+                      {canPurge ? <DeleteButton type="hrRequest" id={r.id} iconOnly label="Delete request" /> : null}
+                    </span>
                   </div>
                   <p className="text-muted-foreground text-xs">
                     {HR_REQUEST_LABELS[r.type]}, {formatDate(r.createdAt)}

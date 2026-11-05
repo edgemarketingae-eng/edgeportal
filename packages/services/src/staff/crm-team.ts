@@ -6,7 +6,16 @@ import type { Actor } from "@edge/domain/enums";
 import { BusinessError, NotFoundError } from "../errors";
 import { oid } from "../ids";
 import { listRoles, listStaff } from "./queries";
-import { createStaff, resetStaffPassword, rolesByKeys, saveRole, setStaffAvailable, setStaffDisabled, updateStaff } from "./service";
+import {
+  changeStaffEmail,
+  createStaff,
+  resetStaffPassword,
+  rolesByKeys,
+  saveRole,
+  setStaffAvailable,
+  setStaffDisabled,
+  updateStaff,
+} from "./service";
 
 /**
  * Staff and role management from inside the CRM. A CRM admin may only touch "pure CRM users"
@@ -33,14 +42,21 @@ async function enrich(rows: Awaited<ReturnType<typeof listStaff>>): Promise<CrmS
   const ids = rows.map((r) => new Types.ObjectId(r.id));
   const [projects, open] = await Promise.all([
     Project.find({ $or: [{ managerIds: { $in: ids } }, { memberIds: { $in: ids } }] }, { name: 1, managerIds: 1, memberIds: 1 }).lean(),
-    Lead.aggregate<{ _id: Types.ObjectId; n: number }>([{ $match: { ownerId: { $in: ids }, mergedIntoId: null, stage: { $in: [...OPEN_LEAD_STAGES] } } }, { $group: { _id: "$ownerId", n: { $sum: 1 } } }]),
+    Lead.aggregate<{ _id: Types.ObjectId; n: number }>([
+      { $match: { ownerId: { $in: ids }, mergedIntoId: null, stage: { $in: [...OPEN_LEAD_STAGES] } } },
+      { $group: { _id: "$ownerId", n: { $sum: 1 } } },
+    ]),
   ]);
   const openMap = new Map(open.map((o) => [String(o._id), o.n]));
   return rows.map((r) => ({
     ...r,
     projects: projects
       .filter((p) => p.managerIds.some((x) => String(x) === r.id) || p.memberIds.some((x) => String(x) === r.id))
-      .map((p) => ({ id: String(p._id), name: p.name, role: (p.managerIds.some((x) => String(x) === r.id) ? "manager" : "member") as "manager" | "member" })),
+      .map((p) => ({
+        id: String(p._id),
+        name: p.name,
+        role: (p.managerIds.some((x) => String(x) === r.id) ? "manager" : "member") as "manager" | "member",
+      })),
     openLeads: openMap.get(r.id) ?? 0,
   }));
 }
@@ -73,7 +89,11 @@ export async function createCrmStaff(
   const { projectIds: _projects, ...staff } = input;
   const out = await createStaff(staff, actor);
   const projectIds = (input.projectIds ?? []).map((p) => oid(p, "Project"));
-  if (projectIds.length) await Project.updateMany({ _id: { $in: projectIds }, isDefault: { $ne: true } }, { $addToSet: { memberIds: new Types.ObjectId(out.id) } });
+  if (projectIds.length)
+    await Project.updateMany(
+      { _id: { $in: projectIds }, isDefault: { $ne: true } },
+      { $addToSet: { memberIds: new Types.ObjectId(out.id) } },
+    );
   return out;
 }
 
@@ -102,8 +122,16 @@ export async function resetCrmStaffPassword(id: string, actor: Actor & { type: "
   return resetStaffPassword(id, actor);
 }
 
+export async function changeCrmStaffEmail(id: string, email: string, actor: Actor & { type: "USER" }) {
+  await assertPureCrmUser(id);
+  return changeStaffEmail(id, email, actor);
+}
+
 /** Create or edit a CRM role; non-CRM permissions are dropped, and only CRM roles may be edited here. */
-export async function saveCrmRole(input: { id?: string; name: string; description?: string; permissions: string[] }, actor: Actor & { type: "USER" }) {
+export async function saveCrmRole(
+  input: { id?: string; name: string; description?: string; permissions: string[] },
+  actor: Actor & { type: "USER" },
+) {
   const permissions = input.permissions.filter(isCrmPermission);
   if (!permissions.length) throw new BusinessError("Choose at least one CRM permission", { permissions: "Choose a permission" });
   if (input.id) {

@@ -6,8 +6,9 @@ import { Pagination } from "@edge/ui/blocks/pagination";
 import { Badge } from "@edge/ui/components/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@edge/ui/components/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@edge/ui/components/table";
-import { api } from "@edge/web/server";
-import { load } from "@/lib/load";
+import { api, getViewer } from "@edge/web/server";
+import { DeleteButton } from "@/components/delete-button";
+import { can, load } from "@/lib/load";
 import { ClassRowActions, RecordingStatusButton, type ClassRow } from "./class-row-actions";
 import { AddRecordingForm, ScheduleClassForm } from "./forms";
 
@@ -28,10 +29,17 @@ function editable(s: ClassSessionDto): ClassRow {
 
 /** Class management for the viewer's batches (the API scopes them: a mentor's own, or all for admins). */
 /** `page`: page of the past-and-cancelled list. */
+/** Super admins get a Delete on past and cancelled classes and on recordings. */
+async function canPurge() {
+  const v = await getViewer();
+  return !!v && can(v, "records.delete");
+}
+
 export async function ClassesManager({ page = 1 }: { page?: number }) {
-  const { batches, hosts, defaultHostId, upcoming, past } = await load(() =>
-    api(classRoutes.manageClasses, { query: { page, pageSize: 25 } }),
-  );
+  const [{ batches, hosts, defaultHostId, upcoming, past }, purge] = await Promise.all([
+    load(() => api(classRoutes.manageClasses, { query: { page, pageSize: 25 } })),
+    canPurge(),
+  ]);
   return (
     <div className="grid gap-6">
       <Card>
@@ -110,10 +118,11 @@ export async function ClassesManager({ page = 1 }: { page?: number }) {
               <TableHead>When</TableHead>
               <TableHead className="text-right">Joins</TableHead>
               <TableHead>Recording</TableHead>
+              {purge ? <TableHead className="w-10" /> : null}
             </TableRow>
           </TableHeader>
           <TableBody>
-            {past.rows.length === 0 ? <TableEmpty colSpan={4} title="No past or cancelled classes yet." /> : null}
+            {past.rows.length === 0 ? <TableEmpty colSpan={purge ? 5 : 4} title="No past or cancelled classes yet." /> : null}
             {past.rows.map((s) => (
               <TableRow key={s.id}>
                 <TableCell>
@@ -133,6 +142,11 @@ export async function ClassesManager({ page = 1 }: { page?: number }) {
                     <span className="text-muted-foreground">none yet</span>
                   )}
                 </TableCell>
+                {purge ? (
+                  <TableCell>
+                    <DeleteButton type="class" id={s.id} iconOnly label={`Delete ${s.title}`} />
+                  </TableCell>
+                ) : null}
               </TableRow>
             ))}
           </TableBody>
@@ -144,7 +158,10 @@ export async function ClassesManager({ page = 1 }: { page?: number }) {
 }
 
 export async function RecordingsManager({ page = 1 }: { page?: number }) {
-  const { batches, sessions, recordings: paged } = await load(() => api(classRoutes.manageRecordings, { query: { page, pageSize: 25 } }));
+  const [{ batches, sessions, recordings: paged }, purge] = await Promise.all([
+    load(() => api(classRoutes.manageRecordings, { query: { page, pageSize: 25 } })),
+    canPurge(),
+  ]);
   const recordings = paged.rows;
   return (
     <div className="grid gap-6">
@@ -205,7 +222,10 @@ export async function RecordingsManager({ page = 1 }: { page?: number }) {
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{r.views}</TableCell>
                   <TableCell>
-                    <RecordingStatusButton id={r.id} status={r.status} />
+                    <span className="inline-flex items-center gap-1">
+                      <RecordingStatusButton id={r.id} status={r.status} />
+                      {purge ? <DeleteButton type="recording" id={r.id} iconOnly label={`Delete ${r.title}`} /> : null}
+                    </span>
                   </TableCell>
                 </TableRow>
               ))

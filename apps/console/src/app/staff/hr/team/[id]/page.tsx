@@ -2,8 +2,10 @@ import { hrRoutes } from "@edge/contracts";
 import { ALLOWED_FILE_TYPES, FILE_ACCEPT } from "@edge/domain/files";
 import { formatDate } from "@edge/domain/dates";
 import { LEAVE_LEDGER_LABELS } from "@edge/domain/hr/labels";
+import { formatMonth } from "@edge/domain/hr/calendar";
 import { formatDays } from "@edge/domain/hr/leave";
 import { ActionButton, ActionDialog } from "@edge/ui/blocks/action-dialog";
+import { DeleteCard } from "@edge/ui/blocks/delete-dialog";
 import { StatCard } from "@edge/ui/blocks/stat-card";
 import { Button } from "@edge/ui/components/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@edge/ui/components/card";
@@ -11,12 +13,15 @@ import { Select } from "@edge/ui/components/select";
 import { Field } from "@edge/ui/forms/field";
 import { FileInput } from "@edge/ui/forms/file-input";
 import { PageHeader } from "@edge/ui/shell/app-shell";
+import { deletePlanFor } from "@edge/web/records";
 import { api } from "@edge/web/server";
 import type { Metadata } from "next";
+import { DeleteButton } from "@/components/delete-button";
 import { LeaveDialog } from "@/components/hr/leave-dialog";
 import { FileLink } from "@/components/hr/shared";
 import { EmployeeForm, PayForm } from "@/components/hr/team-forms";
 import { addDocumentAction, adjustBalanceAction, fileLeaveAction, removeDocumentAction } from "@/lib/actions/hr";
+import { deleteRecordAction } from "@/lib/actions/records";
 import { can, load, requireStaff } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Team member" };
@@ -29,9 +34,11 @@ export default async function TeamMemberPage(props: PageProps<"/staff/hr/team/[i
     can(v, "hr.settings") ? load(() => api(hrRoutes.settings)) : null,
   ]);
   const seesPay = can(v, "hr.payroll") && !!m.record;
-  const [pay, leave] = await Promise.all([
+  const canPurge = can(v, "records.delete");
+  const [pay, leave, deletePlan] = await Promise.all([
     seesPay ? load(() => api(hrRoutes.pay, { params: { id } })) : null,
     m.record ? load(() => api(hrRoutes.memberLeave, { params: { id } })) : null,
+    canPurge && m.record ? deletePlanFor("employee", id) : null,
   ]);
   const balanced = leave?.balances.filter((b) => b.tracksBalance) ?? [];
   return (
@@ -62,6 +69,19 @@ export default async function TeamMemberPage(props: PageProps<"/staff/hr/team/[i
             </CardHeader>
             <CardContent>
               <PayForm key={pay.revisions[0]?.id ?? "new"} id={m.id} current={pay.revisions[0] ?? null} earliestMonth={pay.earliestMonth} />
+              {canPurge && pay.revisions.length ? (
+                <div className="mt-6 border-t pt-4">
+                  <p className="mb-2 text-sm font-medium">Pay history</p>
+                  <ul className="divide-y text-sm">
+                    {pay.revisions.map((r) => (
+                      <li key={r.id} className="flex items-center justify-between gap-2 py-1.5">
+                        <span>From {formatMonth(r.fromMonth)}</span>
+                        <DeleteButton type="payRevision" id={r.id} iconOnly label={`Delete the pay from ${formatMonth(r.fromMonth)}`} />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         ) : null}
@@ -165,6 +185,17 @@ export default async function TeamMemberPage(props: PageProps<"/staff/hr/team/[i
           </Card>
         ) : null}
       </div>
+      {deletePlan ? (
+        <DeleteCard
+          title="Delete HR record"
+          action={deleteRecordAction}
+          hidden={{ type: "employee", id: m.id, next: "/staff/hr/team" }}
+          plan={deletePlan}
+          submitLabel="Delete HR record"
+          description="For a record set up by mistake: their pay, attendance, leave, requests and documents are removed for good. Their sign-in stays."
+          blockedHint="For someone who has left, set a leaving date on the HR record instead."
+        />
+      ) : null}
     </>
   );
 }

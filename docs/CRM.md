@@ -49,8 +49,17 @@ Two-factor authentication is mandatory in production for anyone with `admin.acce
 - **From the admin console** (Staff & roles): any roles, including a mix of academy and CRM roles. The welcome
   email points at the CRM login when the account holds only CRM roles, otherwise at the console.
 - **From the CRM** (Team, needs `crm.staff.manage`): accounts that hold only CRM roles. A CRM admin can add them to
-  projects at creation, reset passwords, disable accounts and edit CRM roles. Accounts that also hold academy roles
-  are not listed there and must be managed from the console.
+  projects at creation, reset passwords, change the sign-in email, disable and delete accounts and edit CRM roles.
+  Accounts that also hold academy roles are not listed there and must be managed from the console.
+- **Changing the sign-in email** (`changeStaffEmail`, both apps): password, sessions and 2FA stay; unused password
+  reset links die. Someone still on their invitation gets it again at the new address; everyone else gets a notice at
+  the new address and one at the old address with the new one masked. Only a super admin may change a super admin's
+  email or the email of someone whose roles open HR. Audited as `staff.email.change`.
+- **Deleting an account** (`DELETE` typed, both apps): only a disabled account that nothing names. Leads it owns,
+  converted or created, deposits, conversions, calls, tasks and comments, an HR record or HR entries made for others,
+  batches it mentors, classes, enrollment approvals, payments recorded, files and work updates all block. Sessions,
+  phones, notifications and project team places go with it; audit and timeline entries stay and show "Deleted user".
+  Nobody deletes themselves, only a super admin deletes a super admin, and the last super admin stays.
 
 ## Projects
 
@@ -261,10 +270,38 @@ Sent through Firebase Cloud Messaging: a lead assigned to you, a follow-up due n
 verified or rejected. Bulk assign and CSV import send one summary per person. A missed call from a lead and the prompt to add
 an outcome come from the phone itself. Until Firebase is set up (`PUSH_MODE=live`), alerts only go to the worker log.
 
-## Website lead form (public intake)
+## Website forms (public intake)
 
-`POST https://api.edgeacademy.ae/api/webhooks/leads/website` — server to server (the website backend, a form
-service or an automation tool). Nothing is exposed until `LEAD_WEBHOOK_SECRET` is set (16+ characters).
+Two ways in, both with the same field names. The in-app guide for web teams (URL, fields, HTML/fetch/curl/Node samples)
+is the CRM docs module **Website forms & API** (`/docs/website-forms`, CRM admins and managers).
+
+### Browser forms: `POST https://api.edgeacademy.ae/api/public/leads`
+
+For any HTML or JavaScript form on an allowed website. No secret (the page is public), so:
+
+- Only allowed websites: `PUBLIC_FORM_ORIGINS` (server env) plus the list CRM admins keep under **Settings → Website
+  forms** (setting `crm.formOrigins`, origins only, HTTPS; `http://localhost` only outside production). The list is
+  cached for a minute per API process. Any other browser origin gets `403` (so does `Origin: null`, e.g. a file opened
+  from disk); requests without an Origin (servers) pass. The same list governs CORS for all of `/api/public`.
+- Rate limited to 10 per 10 minutes per visitor IP; a hidden honeypot field `website` gets a fake success and saves
+  nothing.
+- Body: JSON, or `application/x-www-form-urlencoded` (a plain `<form method="post">`, or `fetch` with
+  `new URLSearchParams(new FormData(form))`). Multipart is refused (`415`). Fields as the webhook below (minus `id`),
+  plus `redirect`. In a form, `tags` may be comma separated and `consent`/`whatsappConsent` are checkboxes (`on`).
+  `country` that isn't a two-letter code is ignored.
+- Answers: `fetch` and servers get `200 { ok: true }` (never the lead id, never whether the person was already a lead),
+  or the usual `{ error: { code, message, fieldErrors } }` with `400` (fields), `422` (no readable phone and no email),
+  `429`. A browser form post (urlencoded and preferring HTML) is redirected `303` to `redirect` when that is a page on
+  an allowed website (on an error with `?error=invalid` or `?error=rate_limited` added), otherwise it sees a small
+  thank-you or error page. `redirect` is never followed off the allowed websites.
+- Each submission is stored in the lead inbox (`leadInboundEvents`, source `website`, `signatureOk: false`, payload with
+  `_via: "form"`, `_ip`, `_origin`) under the id `form:<Dubai day>:<sha256 of the fields>`, so the same form sent twice
+  on one day counts once and the sweeper retries a failed one. A refused one stays refused.
+
+### Server to server: `POST https://api.edgeacademy.ae/api/webhooks/leads/website`
+
+For the website backend, a form service or an automation tool. Nothing is exposed until `LEAD_WEBHOOK_SECRET` is set
+(16+ characters).
 
 Authentication, either header:
 
@@ -287,7 +324,8 @@ Body (JSON):
   "tags": ["webinar-oct"],
   "consent": true,
   "whatsappConsent": true,
-  "utm": { "source": "instagram", "medium": "paid", "campaign": "oct-launch", "content": "reel-3", "term": "" }
+  "utm": { "source": "instagram", "medium": "paid", "campaign": "oct-launch", "content": "reel-3", "term": "" },
+  "project": "FREE-COURSE-MAL"
 }
 ```
 
@@ -307,9 +345,16 @@ SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$LEAD_WEBHOOK_SECRET" | 
 curl -X POST https://api.edgeacademy.ae/api/webhooks/leads/website -H "content-type: application/json" -H "x-edge-signature: $SIG" --data "$BODY"
 ```
 
+### Where new leads go (both ways)
+
 New website leads go to the **General** project, unassigned; the project's managers (or, when it has none, everyone
 with `crm.all`) are notified. With **round-robin** on in Settings, each new lead is handed to a sales executive
 instead (same rule as below; the owner is notified). If there are no sales executives it stays unassigned as above.
+
+`project` (optional, any case) puts a **new** lead in the project with that code instead, with that project's team in
+the round-robin; a known lead stays where it is. An unknown code goes to General **quietly** (outside input, so a typo
+or a bot can't flood the admins); an archived project's code goes to General and alerts the project admins once an
+hour, like the landing pages' projects.
 
 ## Chat channel (WhatsApp or Telegram)
 
@@ -353,8 +398,8 @@ after the enrollment is saved to the Google Sheet). The endpoint also takes a ge
 the site had a hero contact form for it, removed on 2026-10-29. There is no secret, because the page is public.
 Instead:
 
-- Only the site origins in `PUBLIC_FORM_ORIGINS` (comma-separated) are allowed. Any other browser origin gets `403`,
-  and the CORS preflight is answered for the listed ones only.
+- Only allowed site origins: `PUBLIC_FORM_ORIGINS` (comma-separated) plus the websites allowed in CRM Settings (see
+  Website forms above). Any other browser origin gets `403`, and the CORS preflight is answered for the listed ones only.
 - It is rate limited to 10 per 10 minutes per visitor IP, and a hidden honeypot field (`website`) drops bots.
 
 Body (JSON): `intent` (`enquiry`, the default, or `inner-circle`), `name`, `whatsapp` (required), `phone` (the call
@@ -423,8 +468,24 @@ Run any of them by hand in development: `curl -X POST localhost:4000/api/dev/job
 ## Settings (`/settings`)
 
 First-response SLA (hours), stale-after days, batch urgency days (0 = off), round-robin assignment, lost reasons.
-The webhook URL, whether the secret is configured and the default project are shown there too. Commission managers also
+The browser form URL with the allowed websites (`crm.formOrigins`, editable; `PUBLIC_FORM_ORIGINS` shown read-only),
+the webhook URL, whether the secret is configured and the default project are shown there too. Commission managers also
 see the commission rates per deposit (setting `crm.commission`, stored as fractions).
+
+## Super-admin deletes
+
+`records.delete` is held by the super admin role only: `admin` and `crm_admin` don't get it, `saveRole` strips it
+from custom roles and the role editors don't offer it. Every delete goes through `GET/POST /api/v1/records/:type/:id/
+delete-check|delete` (body `{ confirm: "DELETE" }`), one `Deleter` per type in `packages/services/src/records/`. The
+check lists blockers, what goes with the record and warnings; the delete re-checks inside its transaction, writes the
+whole record to the audit `before` (pay figures redacted), then runs storage and notification steps after commit.
+Phones can't reach these routes. In the CRM: tasks with their comments, comments, note/contact timeline entries (not
+pipeline history or tracker entries), tracked calls older than a day (phones re-send recent ones), products nobody
+converted to and not one of the seeded defaults, roles nobody holds, deposits of any status (a verified later deposit
+re-rates its month with `rerateLaterMonth`; commission already paid on a closed payslip comes back through the next
+month's adjustment) and projects with a team still on them. Lead delete keeps its own rules: delete the deposits first,
+and a lead linked to a student stays until the student is deleted. See the console docs ("Deleting records") for the
+academy and HR side.
 
 ## Data
 

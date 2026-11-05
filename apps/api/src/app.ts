@@ -1,6 +1,6 @@
 import "./http/context";
 import { pingDb } from "@edge/db";
-import { env } from "@edge/services";
+import { allowedFormOrigins } from "@edge/services";
 import { toNodeHandler } from "better-auth/node";
 import express from "express";
 import helmet from "helmet";
@@ -20,6 +20,7 @@ import { crmRouter, leadWebhookRouter } from "./routes/crm";
 import { filesRouter } from "./routes/files";
 import { hrRouter } from "./routes/hr";
 import { mobileAuthRouter, mobileRouter } from "./routes/mobile";
+import { recordsRouter } from "./routes/records";
 
 export interface AppOptions {
   auth: Auth;
@@ -57,8 +58,8 @@ export function createApp({ auth, logger = true, extraRoutes }: AppOptions) {
   app.use(express.json({ limit: "1mb" }));
   // Browser-facing auth policy endpoints (through the apps' rewrites).
   app.use(authRouter(auth));
-  // Browser-facing forms on the academy's other sites (Forex Growth Hub), straight to the public API host.
-  app.use("/api/public", publicCors(env.PUBLIC_FORM_ORIGINS));
+  // Browser-facing forms on the academy's other sites (Forex Growth Hub, website forms), straight to the public API host.
+  app.use("/api/public", publicCors(allowedFormOrigins));
   app.use(publicRouter());
   app.use(mobileAuthRouter(auth));
   // Everything else under /api/v1 is internal (Next.js servers with the forwarded session cookie) or the CRM phone app.
@@ -71,6 +72,7 @@ export function createApp({ auth, logger = true, extraRoutes }: AppOptions) {
   app.use(crmRouter());
   app.use(mobileRouter());
   app.use(hrRouter());
+  app.use(recordsRouter());
   app.use(filesRouter());
   app.use(devRouter());
 

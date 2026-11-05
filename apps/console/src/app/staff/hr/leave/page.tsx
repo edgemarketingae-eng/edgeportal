@@ -18,16 +18,18 @@ import { PageHeader } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
 import { ClipboardCheck } from "lucide-react";
 import type { Metadata } from "next";
+import { DeleteButton } from "@/components/delete-button";
 import { FileLink } from "@/components/hr/shared";
 import { approveLeaveAction, cancelLeaveAction, rejectLeaveAction } from "@/lib/actions/hr";
-import { load, requireStaff } from "@/lib/load";
+import { can, load, requireStaff } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Leave approvals" };
 
 type Status = (typeof LEAVE_REQUEST_STATUSES)[number];
 
 export default async function LeaveApprovalsPage(props: PageProps<"/staff/hr/leave">) {
-  await requireStaff("hr.manage");
+  const v = await requireStaff("hr.manage");
+  const canPurge = can(v, "records.delete");
   const sp = await props.searchParams;
   const status = LEAVE_REQUEST_STATUSES.includes(sp.status as Status) ? (sp.status as Status) : undefined;
   const page = await load(() =>
@@ -81,7 +83,10 @@ export default async function LeaveApprovalsPage(props: PageProps<"/staff/hr/lea
                     ) : null}
                   </TableCell>
                   <TableCell>
-                    <LeaveStatusBadge status={r.status} />
+                    <span className="flex items-center gap-1">
+                      <LeaveStatusBadge status={r.status} />
+                      {canPurge ? <DeleteButton type="leave" id={r.id} iconOnly label="Delete leave request" /> : null}
+                    </span>
                     {r.allowedNegative ? <span className="text-muted-foreground block text-xs">Negative allowed</span> : null}
                   </TableCell>
                   <TableCell className="text-right whitespace-nowrap">

@@ -97,13 +97,22 @@ export const touchToTaskType = (t: LeadTouchType): FollowUpType => (t === "NOTE"
 export const taskToTouchType = (t: FollowUpType): LeadTouchType => (t === "OTHER" ? "NOTE" : t);
 export const isOpenTask = (status: string) => (OPEN_TASK_STATUSES as readonly string[]).includes(status);
 
-export async function userNames(ids: (string | Types.ObjectId | null | undefined)[]) {
+/**
+ * Names by user id. An id with no account left (the person was deleted) maps to `missing`, "Deleted user" by default;
+ * pass `{ missing: null }` to leave such ids out of the map.
+ */
+export async function userNames(
+  ids: (string | Types.ObjectId | null | undefined)[],
+  { missing = "Deleted user" }: { missing?: string | null } = {},
+) {
   const valid = [...new Set(ids.filter((x): x is string | Types.ObjectId => !!x && Types.ObjectId.isValid(String(x))).map(String))].map(
     (x) => new Types.ObjectId(x),
   );
   if (!valid.length) return new Map<string, string>();
   const users = await AuthUser.find({ _id: { $in: valid } }, { name: 1 }).lean();
-  return new Map(users.map((u) => [String(u._id), u.name]));
+  const names = new Map(users.map((u) => [String(u._id), u.name]));
+  if (missing !== null) for (const id of valid) if (!names.has(String(id))) names.set(String(id), missing);
+  return names;
 }
 
 export async function loadLead(id: string | Types.ObjectId, scope?: CrmScope): Promise<LeadDoc> {
@@ -373,6 +382,7 @@ export function toActivityDto(a: LeadActivityDoc, names: Map<string, string>): L
     data: (a.data ?? {}) as Record<string, unknown>,
     actorType: a.actorType,
     actorName: a.actorType === "USER" && a.actorId ? (names.get(a.actorId) ?? null) : null,
+    callId: a.callId ? String(a.callId) : null,
     createdAt: iso(a.createdAt)!,
   };
 }

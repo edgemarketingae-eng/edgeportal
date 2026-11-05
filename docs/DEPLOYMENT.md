@@ -151,13 +151,14 @@ Optionally `sudo reboot` and check that `pm2 status` shows all five processes on
 
 Webhook URLs to register with the payment providers:
 
-| Provider          | Webhook URL                                                                                                    |
-| ----------------- | -------------------------------------------------------------------------------------------------------------- |
-| Stripe            | `https://api.edgeacademy.ae/api/webhooks/stripe`                                                               |
-| Nomod             | `https://api.edgeacademy.ae/api/webhooks/nomod`                                                                |
-| Tabby             | `https://api.edgeacademy.ae/api/webhooks/tabby`                                                                |
-| Tamara            | none to register: sent with every checkout                                                                     |
-| Website lead form | `https://api.edgeacademy.ae/api/webhooks/leads/website` (signed with `LEAD_WEBHOOK_SECRET`, see [CRM](CRM.md)) |
+| Provider                   | Webhook URL                                                                                                    |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Stripe                     | `https://api.edgeacademy.ae/api/webhooks/stripe`                                                               |
+| Nomod                      | `https://api.edgeacademy.ae/api/webhooks/nomod`                                                                |
+| Tabby                      | `https://api.edgeacademy.ae/api/webhooks/tabby`                                                                |
+| Tamara                     | none to register: sent with every checkout                                                                     |
+| Website lead form (server) | `https://api.edgeacademy.ae/api/webhooks/leads/website` (signed with `LEAD_WEBHOOK_SECRET`, see [CRM](CRM.md)) |
+| Website forms (browser)    | `https://api.edgeacademy.ae/api/public/leads` (websites allowed in CRM Settings or `PUBLIC_FORM_ORIGINS`)      |
 
 Events, secrets and the other providers (Twilio, MailerSend, Google, Odoo, MailerLite) are in
 [RUNBOOK §3](RUNBOOK.md#3-provider-setup). With test keys, run one payment per method end to end. Test payments

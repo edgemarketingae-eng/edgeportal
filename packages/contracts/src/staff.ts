@@ -49,6 +49,8 @@ export const StaffCreateInput = z.object({
   roleKeys: z.array(z.string()).min(1, "Choose at least one role"),
 });
 export const StaffUpdateInput = StaffCreateInput.omit({ email: true });
+/** The address someone signs in with; changed on its own, not through the edit form. */
+export const StaffEmailInput = z.object({ email: zEmail() });
 
 const idParam = z.object({ id: z.string() });
 
@@ -76,6 +78,7 @@ export const staffRoutes = {
     body: z.object({ available: z.boolean() }),
     response: zOk,
   }),
+  changeEmail: route({ method: "POST", path: "/api/v1/admin/staff/:id/email", params: idParam, body: StaffEmailInput, response: zOk }),
   resetPassword: route({
     method: "POST",
     path: "/api/v1/admin/staff/:id/reset-password",

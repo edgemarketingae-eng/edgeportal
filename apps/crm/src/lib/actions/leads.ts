@@ -1,7 +1,7 @@
 "use server";
 
 import { crmRoutes, type RouteBody } from "@edge/contracts";
-import { checked, dialogError, text, toActionState, values, type ActionState } from "@edge/web/actions";
+import { type ActionState, checked, confirmed, dialogError, text, toActionState, values } from "@edge/web/actions";
 import { api } from "@edge/web/server";
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
@@ -211,7 +211,7 @@ export async function mergeAction(_prev: ActionState, form: FormData): Promise<A
 }
 
 export async function deleteLeadAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  if (text(form, "confirm").trim().toUpperCase() !== "DELETE") return { error: "Type DELETE to confirm." };
+  if (!confirmed(form)) return { error: "Type DELETE to confirm." };
   try {
     await api(crmRoutes.deleteLead, { params: { id: text(form, "id") } });
   } catch (e) {
@@ -223,7 +223,7 @@ export async function deleteLeadAction(_prev: ActionState, form: FormData): Prom
 export async function bulkDeleteLeadsAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   const target = bulkTarget(form);
   if (!target) return { error: "Select at least one lead." };
-  if (text(form, "confirm").trim().toUpperCase() !== "DELETE") return { error: "Type DELETE to confirm." };
+  if (!confirmed(form)) return { error: "Type DELETE to confirm." };
   let r: { deleted: number; skipped: number };
   try {
     r = await api(crmRoutes.bulkDelete, { body: target });

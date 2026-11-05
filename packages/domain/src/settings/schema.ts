@@ -54,6 +54,11 @@ export const SETTINGS = {
     }),
     default: { firstPct: "0", slabs: [{ fromMinor: 0, pct: "0" }] },
   },
+  /**
+   * Websites (origins such as "https://edgeacademy.ae") whose browser forms may post leads to /api/public/leads.
+   * CRM admins edit this list; PUBLIC_FORM_ORIGINS in the environment is always allowed on top of it.
+   */
+  "crm.formOrigins": { schema: z.array(z.string()), default: [] as string[] },
   /** Set by HR. `key` never changes once used, so old leave keeps pointing at its type after a rename. */
   "hr.leaveTypes": {
     schema: z

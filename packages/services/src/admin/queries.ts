@@ -21,6 +21,7 @@ import { toCsv } from "@edge/domain/csv";
 import { remainingMinor } from "@edge/domain/enrollment/machine";
 import { NotFoundError } from "../errors";
 import { oid } from "../ids";
+import { userNames } from "../crm/common";
 import { day, iso, toEnrollmentDto } from "../mappers";
 import { EXPORT_CAP, facetPage, findPage, type PageInput } from "../paging";
 
@@ -140,12 +141,6 @@ export async function studentsCsv(filters: StudentFilters) {
       formatDate(s.createdAt),
     ]),
   );
-}
-
-async function userNames(ids: (string | null | undefined)[]) {
-  const valid = [...new Set(ids.filter((x): x is string => !!x && Types.ObjectId.isValid(x)))].map((x) => new Types.ObjectId(x));
-  const users = await AuthUser.find({ _id: { $in: valid } }, { name: 1 }).lean();
-  return new Map(users.map((u) => [String(u._id), u.name]));
 }
 
 export async function getStudentDetail(id: string) {

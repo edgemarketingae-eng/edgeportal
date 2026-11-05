@@ -5,6 +5,8 @@ import { formatMoney } from "@edge/domain/money";
 export interface TemplateData {
   "auth.resetPassword": { name: string; url: string };
   "auth.staffWelcome": { name: string; email: string; tempPassword: string; loginUrl: string };
+  /** `toOld`: the notice to the previous address, which only sees the new one masked. */
+  "auth.emailChanged": { name: string; newEmail: string; loginUrl: string; toOld: boolean };
   "enrollment.paymentReceived": {
     name: string;
     batchName: string;
@@ -115,6 +117,21 @@ export function renderEmail<T extends TemplateName>(template: T, data: TemplateD
         ],
         { label: "Sign in", url: x.loginUrl },
       );
+    }
+    case "auth.emailChanged": {
+      const x = d as unknown as TemplateData["auth.emailChanged"];
+      return x.toOld
+        ? build("Your Edge Academy sign-in email was changed", "Your sign-in email changed", [
+            `Hi ${esc(x.name)},`,
+            `An administrator changed the email you sign in with to <b>${esc(x.newEmail)}</b>. This address no longer signs you in.`,
+            "If you didn't expect this, contact your manager.",
+          ])
+        : build(
+            "Your new Edge Academy sign-in email",
+            "Your sign-in email changed",
+            [`Hi ${esc(x.name)},`, `From now on you sign in with <b>${esc(x.newEmail)}</b>. Your password stays the same.`],
+            { label: "Sign in", url: x.loginUrl },
+          );
     }
     case "enrollment.paymentReceived": {
       const x = d as unknown as TemplateData["enrollment.paymentReceived"];

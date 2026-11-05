@@ -27,6 +27,7 @@ import {
   PayrollMonth,
   Payslip,
   SalaryAdvance,
+  WorkUpdate,
 } from "./models/hr";
 import { AuditLog, InAppNotification, JobOutbox, NotificationLog, OtpThrottle } from "./models/ops";
 import { FeeRate, OdooSyncLog, Payment, PaymentEvent, Setting } from "./models/payments";
@@ -82,6 +83,7 @@ export const ALL_MODELS: Model<any>[] = [
   SalaryAdvance,
   PayrollMonth,
   Payslip,
+  WorkUpdate,
   FileAsset,
 ];
 

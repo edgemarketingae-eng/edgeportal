@@ -39,6 +39,7 @@ export const PERMISSIONS = {
   "hr.manage": "Manage employee records, attendance, leave approvals and HR requests",
   "hr.payroll": "See and change salaries, run salary months and approve advances",
   "hr.settings": "Edit leave rules, weekly off days and holidays",
+  "records.delete": "Permanently delete any record (super admin only)",
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -64,6 +65,12 @@ export function isHrPermission(p: string) {
 }
 export const HR_PERMISSIONS = ALL_PERMISSIONS.filter(isHrPermission);
 
+/** Keys only the super admin role holds: no other role (system or custom) may carry them. */
+export const SUPER_ADMIN_ONLY: readonly Permission[] = ["records.delete"];
+export function isSuperAdminOnly(p: string) {
+  return (SUPER_ADMIN_ONLY as readonly string[]).includes(p);
+}
+
 /** System roles created by the seed. Admins can create more roles later. */
 export const SYSTEM_ROLES: { key: string; name: string; description: string; permissions: Permission[] }[] = [
   { key: "super_admin", name: "Super admin", description: "Full access", permissions: ALL_PERMISSIONS },
@@ -71,7 +78,9 @@ export const SYSTEM_ROLES: { key: string; name: string; description: string; per
     key: "admin",
     name: "Admin",
     description: "Runs the academy day to day",
-    permissions: ALL_PERMISSIONS.filter((p) => p !== "roles.manage" && p !== "settings.integrations" && !isHrPermission(p)),
+    permissions: ALL_PERMISSIONS.filter(
+      (p) => p !== "roles.manage" && p !== "settings.integrations" && !isHrPermission(p) && !isSuperAdminOnly(p),
+    ),
   },
   {
     key: "admissions",

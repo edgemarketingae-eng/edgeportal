@@ -5,6 +5,7 @@ import { LEAD_STAGES } from "@edge/domain/crm/enums";
 import { LEAD_STAGE_LABELS } from "@edge/domain/crm/labels";
 import { nextStage, whatsappDigits, whatsappGreeting } from "@edge/domain/crm/machine";
 import { ActionButton, ActionDialog } from "@edge/ui/blocks/action-dialog";
+import { TypeToConfirm } from "@edge/ui/blocks/delete-dialog";
 import { Button } from "@edge/ui/components/button";
 import { Checkbox } from "@edge/ui/components/checkbox";
 import {
@@ -16,7 +17,6 @@ import {
 } from "@edge/ui/components/dropdown-menu";
 import { Label } from "@edge/ui/components/label";
 import { Textarea } from "@edge/ui/components/textarea";
-import { Input } from "@edge/ui/components/input";
 import { Select } from "@edge/ui/components/select";
 import {
   ArrowRight,
@@ -333,20 +333,9 @@ export function LeadControls({ lead, options, matchingStudent, duplicates, can }
           submitLabel="Delete lead"
           destructive
         >
-          <ConfirmDelete />
+          <TypeToConfirm />
         </ActionDialog>
       ) : null}
-    </div>
-  );
-}
-
-export function ConfirmDelete() {
-  return (
-    <div className="grid content-start gap-2">
-      <Label htmlFor="confirm-delete">
-        Type <span className="font-mono font-semibold">DELETE</span> to confirm
-      </Label>
-      <Input id="confirm-delete" name="confirm" autoComplete="off" required />
     </div>
   );
 }

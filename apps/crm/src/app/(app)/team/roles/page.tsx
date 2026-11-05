@@ -1,9 +1,10 @@
 import { crmRoutes } from "@edge/contracts";
 import { CRM_PERMISSIONS, PERMISSIONS } from "@edge/domain/auth/permissions";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@edge/ui/components/card";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@edge/ui/components/card";
 import { PageHeader } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
 import type { Metadata } from "next";
+import { DeleteButton } from "@/components/delete-button";
 import { RoleForm } from "@/components/team/team-forms";
 import { can, load, requireCrm } from "@/lib/load";
 
@@ -14,6 +15,7 @@ const perms = CRM_PERMISSIONS.map((k) => [k, PERMISSIONS[k]] as [string, string]
 export default async function RolesPage() {
   const v = await requireCrm("crm.staff.manage");
   const editable = can(v, "crm.roles.manage");
+  const canPurge = can(v, "records.delete");
   const roles = await load(() => api(crmRoutes.roles));
   return (
     <>
@@ -33,6 +35,11 @@ export default async function RolesPage() {
               <CardTitle>
                 {r.name} <span className="text-muted-foreground text-sm font-normal">· {r.members} people</span>
               </CardTitle>
+              {canPurge && !r.isSystem ? (
+                <CardAction>
+                  <DeleteButton type="role" id={r.id} label="Delete role" />
+                </CardAction>
+              ) : null}
               {r.isSystem ? (
                 <CardDescription>
                   Built-in role: its permissions are restored on every deploy. To customise, create a new role below instead.

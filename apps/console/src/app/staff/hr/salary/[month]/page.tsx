@@ -4,6 +4,7 @@ import { formatMonth } from "@edge/domain/hr/calendar";
 import { PAY_CURRENCIES } from "@edge/domain/hr/enums";
 import { formatPayAmount, formatPayTotal } from "@edge/domain/hr/pay";
 import { ActionButton, ActionDialog } from "@edge/ui/blocks/action-dialog";
+import { DeleteCard } from "@edge/ui/blocks/delete-dialog";
 import { TableEmpty } from "@edge/ui/blocks/empty-state";
 import { PayAmount } from "@edge/ui/blocks/pay-amount";
 import { Alert, AlertDescription } from "@edge/ui/components/alert";
@@ -13,19 +14,22 @@ import { Select } from "@edge/ui/components/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@edge/ui/components/table";
 import { Field } from "@edge/ui/forms/field";
 import { PageHeader } from "@edge/ui/shell/app-shell";
+import { deletePlanFor } from "@edge/web/records";
 import { api } from "@edge/web/server";
 import { X } from "lucide-react";
 import type { Metadata } from "next";
 import { addLineAction, closeMonthAction, refreshMonthAction, removeLineAction } from "@/lib/actions/hr";
-import { load, requireStaff } from "@/lib/load";
+import { deleteRecordAction } from "@/lib/actions/records";
+import { can, load, requireStaff } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Salary month" };
 
 export default async function SalaryMonthPage(props: PageProps<"/staff/hr/salary/[month]">) {
-  await requireStaff("hr.payroll");
+  const v = await requireStaff("hr.payroll");
   const { month } = await props.params;
   const m = await load(() => api(hrRoutes.payrollMonth, { params: { month } }));
   const draft = m.status === "DRAFT";
+  const deletePlan = draft && can(v, "records.delete") ? await deletePlanFor("payrollMonth", month) : null;
   const blocked = m.warnings.some((w) => w.blocking);
   return (
     <>
@@ -153,6 +157,16 @@ export default async function SalaryMonthPage(props: PageProps<"/staff/hr/salary
             Closed months are final. Put any fix on the next month as a bonus or deduction.
           </CardContent>
         </Card>
+      ) : null}
+      {deletePlan ? (
+        <DeleteCard
+          title="Discard this month"
+          action={deleteRecordAction}
+          hidden={{ type: "payrollMonth", id: month, next: "/staff/hr/salary" }}
+          plan={deletePlan}
+          submitLabel="Discard month"
+          description="Its draft payslips are removed, so the month can be started again from scratch."
+        />
       ) : null}
     </>
   );

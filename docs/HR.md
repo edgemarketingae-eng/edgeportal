@@ -4,12 +4,12 @@ HR lives inside the Staff portal in the console (`/staff`). Every staff account 
 
 ## Who can do what
 
-| Role              | Access                                                        |
-| ----------------- | ------------------------------------------------------------- |
-| Any staff account | Their own attendance, leave, salary, advances and HR requests |
-| `hr_manager`      | Everything in HR, including salaries                          |
-| `super_admin`     | Everything, and also what HR can't do for themselves          |
-| `admin`           | No HR access                                                  |
+| Role              | Access                                                                      |
+| ----------------- | --------------------------------------------------------------------------- |
+| Any staff account | Their own attendance, leave, salary, advances, HR requests and work updates |
+| `hr_manager`      | Everything in HR, including salaries                                        |
+| `super_admin`     | Everything, and also what HR can't do for themselves                        |
+| `admin`           | No HR access                                                                |
 
 Permissions are `hr.manage` (records, attendance, leave, requests), `hr.payroll` (salaries, salary months, advances) and `hr.settings` (leave rules, holidays). Only a super admin can grant a role that holds them. Never put them on a CRM role: `isCrmRole` would stop treating it as a CRM role and its members would drop out of CRM Team.
 
@@ -23,6 +23,8 @@ The `employee` role has no permissions, for people who only need the Staff porta
 - **Commission adjustments.** For every closed month, actual commission now minus what closed payslips recorded becomes a line on the next payslip. A negative one is capped at that payslip's net USD, and the rest recurs.
 - **Leave.** Balances are the sum of an append-only ledger per leave year (calendar year), in hundredths of a day. `hr.leaveDaily` runs at 00:30 Dubai, rolls the year over and then posts accruals. It is safe to rerun. Accrual starts the month after set-up, so earlier leave is the opening balance HR enters.
 - **Off switch.** Leave doesn't touch `StaffProfile.available`. Managers keep using it by hand.
+- **Work updates.** One entry per person per Dubai day (`workUpdates`, unique on `userId` + `day`), keyed by the user id so nobody needs an HR record first. Up to 20 points of 300 characters. Writing is limited to today and the 31 days before it. Saving replaces the day, and an empty list deletes it. Updates aren't audited, because they're the person's own notes. `hr.manage` holders read everyone's at `/staff/hr/updates`. Its "Not logged yet" list counts active staff accounts and leaves out disabled ones and people who had left or not yet joined that day. Updates never touch attendance or pay.
+- **Super-admin deletes.** `records.delete` (super admin only) adds Delete to HR records with nothing on a closed month and no advance being repaid, pay changes no closed month used, leave (approved leave also loses its attendance marks and ledger rows, so the days come back; a day on a closed month blocks it), HR requests, advances nothing was deducted for, the draft salary month (with its payslips) and work updates. Closed months and their payslips are never deleted. Each delete locks the draft month first, like any other change a salary run reads.
 - **Privacy.** No salary figures in audit payloads or email data: audit `after` is shown to `audit.read` holders and `notificationLogs.payload` never expires. Pay has its own collection and routes because `register()` doesn't filter responses.
 
 ## Files

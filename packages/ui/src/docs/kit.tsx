@@ -1,6 +1,7 @@
 import { Info, Lightbulb, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { CopyButton } from "../blocks/copy-button";
 import { cn } from "../lib/utils";
 
 /** Building blocks for writing docs content. Keep sentences short and name buttons exactly as the app shows them. */
@@ -113,6 +114,20 @@ export function Flow({ steps }: { steps: string[] }) {
           {i < steps.length - 1 ? <span className="text-muted-foreground">→</span> : null}
         </span>
       ))}
+    </div>
+  );
+}
+
+/** A code sample (HTML, JavaScript, a terminal command) with a copy button. Lines don't wrap; it scrolls sideways. */
+export function Code({ children, label }: { children: string; label?: string }) {
+  const code = children.replace(/^\n+|\s+$/g, "");
+  return (
+    <div className="bg-edge-ink relative min-w-0 overflow-hidden rounded-xl">
+      {label ? <p className="text-edge-green/80 px-4 pt-3 text-xs font-bold tracking-[0.12em] uppercase">{label}</p> : null}
+      <pre className="overflow-x-auto px-4 py-3 pr-14 text-[0.8rem] leading-relaxed text-white/90">
+        <code>{code}</code>
+      </pre>
+      <CopyButton value={code} label="Copy code" variant="secondary" className="absolute top-2 right-2" />
     </div>
   );
 }

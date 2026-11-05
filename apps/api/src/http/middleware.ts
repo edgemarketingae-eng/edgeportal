@@ -71,22 +71,27 @@ export const sameAppOrigin: RequestHandler = (req, _res, next) => {
 };
 
 /**
- * CORS for /api/public: the academy's own static sites (allowlisted origins) call these straight from the browser.
+ * CORS for /api/public: the academy's own sites (allowlisted origins) call these straight from the browser.
+ * `allowed` is read per request (PUBLIC_FORM_ORIGINS plus the websites CRM admins allow in Settings).
  * Any other browser origin is refused; requests without an Origin (servers, curl) pass, the rate limit still applies.
  */
-export function publicCors(origins: readonly string[]): RequestHandler {
-  return (req, res, next) => {
-    const origin = req.header("origin");
-    if (origin) {
-      if (!origins.includes(origin)) return next(new ApiError(403, "FORBIDDEN", "Origin not allowed"));
-      res.vary("Origin");
-      res.setHeader("Access-Control-Allow-Origin", origin);
+export function publicCors(allowed: () => Promise<ReadonlySet<string>> | ReadonlySet<string>): RequestHandler {
+  return async (req, res, next) => {
+    try {
+      const origin = req.header("origin");
+      if (origin) {
+        if (!(await allowed()).has(origin)) return next(new ApiError(403, "FORBIDDEN", "Origin not allowed"));
+        res.vary("Origin");
+        res.setHeader("Access-Control-Allow-Origin", origin);
+      }
+      if (req.method !== "OPTIONS") return next();
+      res.setHeader("Access-Control-Allow-Methods", "POST");
+      res.setHeader("Access-Control-Allow-Headers", "content-type");
+      res.setHeader("Access-Control-Max-Age", "600");
+      res.status(204).end();
+    } catch (e) {
+      next(e);
     }
-    if (req.method !== "OPTIONS") return next();
-    res.setHeader("Access-Control-Allow-Methods", "POST");
-    res.setHeader("Access-Control-Allow-Headers", "content-type");
-    res.setHeader("Access-Control-Max-Age", "600");
-    res.status(204).end();
   };
 }
 

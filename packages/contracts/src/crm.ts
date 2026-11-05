@@ -24,7 +24,7 @@ import {
 import { ENROLLMENT_STATUSES, PAYMENT_STATES } from "@edge/domain/enums";
 import { paged, zCountry, zEmail, zOk, zPage } from "./common";
 import { route } from "./route";
-import { RoleDto, StaffCreateInput, StaffRow, StaffUpdateInput } from "./staff";
+import { RoleDto, StaffCreateInput, StaffEmailInput, StaffRow, StaffUpdateInput } from "./staff";
 
 const idParam = z.object({ id: z.string() });
 const nullable = z.string().nullable();
@@ -359,6 +359,8 @@ export const LeadActivityDto = z.object({
   data: z.record(z.string(), z.unknown()),
   actorType: z.string(),
   actorName: nullable,
+  /** Set on entries the call tracker wrote; those are deleted through their call. */
+  callId: nullable.optional(),
   createdAt: z.string(),
 });
 export type LeadActivityDto = z.infer<typeof LeadActivityDto>;
@@ -673,9 +675,17 @@ export const CrmSettingsDto = z.object({
   lostReasons: z.array(z.string()),
   webhookUrl: z.string(),
   webhookConfigured: z.boolean(),
+  /** POST /api/public/leads on the public API host: browser forms on the allowed websites. */
+  publicFormUrl: z.string(),
+  /** Websites allowed in Settings (origins, e.g. https://edgeacademy.ae). */
+  formOrigins: z.array(z.string()),
+  /** Websites allowed by the server's PUBLIC_FORM_ORIGINS; read-only here. */
+  envFormOrigins: z.array(z.string()),
   defaultProject: ProjectRef,
 });
 export type CrmSettingsDto = z.infer<typeof CrmSettingsDto>;
+/** One website per line (or comma separated); page addresses are reduced to their origin. */
+export const CrmFormOriginsInput = z.object({ origins: z.string().max(4000) });
 
 export const ImportPreviewDto = z.object({
   total: z.number(),
@@ -893,6 +903,7 @@ export const crmRoutes = {
     body: z.object({ available: z.boolean() }),
     response: zOk,
   }),
+  changeStaffEmail: route({ method: "POST", path: `${base}/team/:id/email`, params: idParam, body: StaffEmailInput, response: zOk }),
   resetStaffPassword: route({
     method: "POST",
     path: `${base}/team/:id/reset-password`,
@@ -905,6 +916,7 @@ export const crmRoutes = {
 
   settings: route({ method: "GET", path: `${base}/settings`, response: CrmSettingsDto }),
   saveSettings: route({ method: "POST", path: `${base}/settings`, body: CrmSettingsInput, response: zOk }),
+  saveFormOrigins: route({ method: "POST", path: `${base}/settings/form-origins`, body: CrmFormOriginsInput, response: zOk }),
   commissionSettings: route({ method: "GET", path: `${base}/commission`, response: CommissionSettingsDto }),
   saveCommissionSettings: route({ method: "POST", path: `${base}/commission`, body: CommissionSettingsInput, response: zOk }),
 

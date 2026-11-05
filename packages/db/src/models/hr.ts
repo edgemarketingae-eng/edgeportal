@@ -230,6 +230,22 @@ const payslipSchema = new Schema(
 payslipSchema.index({ month: 1, employeeId: 1 }, { unique: true });
 payslipSchema.index({ employeeId: 1, month: -1 });
 
+/**
+ * A staff member's work update for one Dubai day: short free-text points. Keyed by the user id, not an Employee record,
+ * so anyone with a staff account can log one before HR sets them up.
+ */
+const workUpdateSchema = new Schema(
+  {
+    userId: { type: ObjectId, required: true },
+    /** UTC midnight of the Dubai calendar day. */
+    day: { type: Date, required: true },
+    items: { type: [String], default: [] },
+  },
+  { ...timestamps, collection: "workUpdates" },
+);
+workUpdateSchema.index({ userId: 1, day: 1 }, { unique: true });
+workUpdateSchema.index({ day: 1 });
+
 export const Employee = model("Employee", employeeSchema);
 export const EmployeePay = model("EmployeePay", employeePaySchema);
 export const AttendanceDay = model("AttendanceDay", attendanceDaySchema);
@@ -239,6 +255,7 @@ export const HrRequest = model("HrRequest", hrRequestSchema);
 export const SalaryAdvance = model("SalaryAdvance", salaryAdvanceSchema);
 export const PayrollMonth = model("PayrollMonth", payrollMonthSchema);
 export const Payslip = model("Payslip", payslipSchema);
+export const WorkUpdate = model("WorkUpdate", workUpdateSchema);
 
 export type EmployeeDoc = InferSchemaType<typeof employeeSchema> & { _id: Types.ObjectId };
 export type EmployeePayDoc = InferSchemaType<typeof employeePaySchema> & { _id: Types.ObjectId };
@@ -249,3 +266,4 @@ export type HrRequestDoc = InferSchemaType<typeof hrRequestSchema> & { _id: Type
 export type SalaryAdvanceDoc = InferSchemaType<typeof salaryAdvanceSchema> & { _id: Types.ObjectId };
 export type PayrollMonthDoc = InferSchemaType<typeof payrollMonthSchema> & { _id: Types.ObjectId };
 export type PayslipDoc = InferSchemaType<typeof payslipSchema> & { _id: Types.ObjectId };
+export type WorkUpdateDoc = InferSchemaType<typeof workUpdateSchema> & { _id: Types.ObjectId };

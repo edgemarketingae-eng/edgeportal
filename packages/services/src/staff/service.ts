@@ -1,8 +1,8 @@
 import { randomBytes } from "node:crypto";
-import { AuthAccount, AuthSession, AuthUser, Role, StaffProfile, Types, withTx } from "@edge/db";
+import { AuthAccount, AuthSession, AuthUser, AuthVerification, isDuplicateKey, Role, StaffProfile, Types, withTx } from "@edge/db";
 import type { ContactChannel } from "@edge/domain/crm/enums";
 import type { Actor } from "@edge/domain/enums";
-import { isCrmRole, isHrPermission, isPermission } from "@edge/domain/auth/permissions";
+import { isCrmRole, isHrPermission, isPermission, isSuperAdminOnly } from "@edge/domain/auth/permissions";
 import { hashPassword } from "better-auth/crypto";
 import { audit } from "../audit";
 import { env } from "../env";
@@ -14,7 +14,7 @@ import { normalizePhone } from "../crm/common";
 import { revokeDevices } from "../crm/devices";
 import { flushOutbox } from "../runtime";
 import { invalidateRoleCache } from "../auth/viewer";
-import { encryptTempPassword } from "./temp-password";
+import { decryptTempPassword, encryptTempPassword } from "./temp-password";
 
 /** Readable temporary password, e.g. "Edge-k7Qm-4tXp-9Lw2". */
 export function tempPassword() {
@@ -291,11 +291,81 @@ export async function resetStaffPassword(userId: string, actor: Actor & { type: 
   return password;
 }
 
+/** "sara.k@example.com" → "s***@example.com": the old address is told about the change without learning the new one. */
+export const maskEmail = (email: string) => {
+  const [local = "", domain = ""] = email.split("@");
+  return `${local.charAt(0)}***@${domain}`;
+};
+
+/**
+ * Change the address someone signs in with. Sessions, password and two-factor stay as they are. Reset links already
+ * sent to the old address stop working. Someone who never signed in gets their invitation again at the new address
+ * (the usual reason is a typo); everyone else gets a notice at both addresses.
+ */
+export async function changeStaffEmail(userId: string, email: string, actor: Actor & { type: "USER" }) {
+  const _id = oid(userId, "Staff member");
+  const next = email.trim().toLowerCase();
+  const [user, profile] = await Promise.all([AuthUser.findById(_id).lean(), StaffProfile.findById(_id).lean()]);
+  if (!user || !profile) throw new NotFoundError("Staff member");
+  const roles = await Role.find({ _id: { $in: profile.roleIds } }).lean();
+  if (roles.some((r) => r.key === "super_admin") && !(await isSuperAdmin(actor.id)))
+    throw new BusinessError("Only a super admin can change a super admin's email");
+  if (opensHr(roles) && !(await isSuperAdmin(actor.id)))
+    throw new BusinessError("Only a super admin can change the email of someone with HR access");
+  if (user.email === next) throw new ValidationError({ email: "That's already their sign-in email" });
+  if (await AuthUser.exists({ email: next, _id: { $ne: _id } }))
+    throw new ValidationError({ email: "Another account already uses this email" });
+  const invited = user.mustChangePassword ? await decryptTempPassword(profile.tempPasswordEnc) : null;
+  const loginUrl = loginUrlFor(roles);
+  try {
+    await withTx(async () => {
+      await AuthUser.updateOne({ _id }, { $set: { email: next, emailVerified: true, updatedAt: new Date() } });
+      // Password reset links point at the account, so one sent to the old address would still work.
+      await AuthVerification.deleteMany({ value: userId, identifier: /^reset-password:/ });
+      await audit({
+        actor,
+        action: "staff.email.change",
+        entityType: "User",
+        entityId: userId,
+        before: { email: user.email },
+        after: { email: next },
+      });
+      if (invited)
+        await queueEmail({
+          to: next,
+          userId,
+          template: "auth.staffWelcome",
+          data: { name: user.name, email: next, tempPassword: invited, loginUrl },
+        });
+      else {
+        await queueEmail({
+          to: next,
+          userId,
+          template: "auth.emailChanged",
+          data: { name: user.name, newEmail: next, loginUrl, toOld: false },
+        });
+        await queueEmail({
+          to: user.email,
+          userId,
+          template: "auth.emailChanged",
+          data: { name: user.name, newEmail: maskEmail(next), loginUrl, toOld: true },
+        });
+      }
+    });
+  } catch (e) {
+    if (isDuplicateKey(e)) throw new ValidationError({ email: "Another account already uses this email" });
+    throw e;
+  }
+  await flushOutbox();
+  return invited ? `Email changed. The invitation was sent again to ${next}.` : `Email changed. They now sign in with ${next}.`;
+}
+
 export async function saveRole(
   input: { id?: string; name: string; description?: string; permissions: string[] },
   actor: Actor & { type: "USER" },
 ) {
-  const permissions = input.permissions.filter(isPermission);
+  // Super-admin-only keys never go on another role; the super admin role gets them from the seed.
+  const permissions = input.permissions.filter((p) => isPermission(p) && !isSuperAdminOnly(p));
   if (input.id) {
     const role = await Role.findById(oid(input.id, "Role")).lean();
     if (!role) throw new NotFoundError("Role");
