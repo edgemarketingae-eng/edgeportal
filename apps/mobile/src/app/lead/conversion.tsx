@@ -47,7 +47,7 @@ export default function MarkConversion() {
           <Chip key={p.id} label={p.name} selected={picked.includes(p.id)} onPress={() => toggle(p.id)} />
         ))}
       </Wrap>
-      {detail.data && !products.length ? <Text variant="caption">Already converted to every product.</Text> : null}
+      {detail.data && !products.length ? <Text variant="caption">No more products to mark in this lead's project.</Text> : null}
       <Field label="Note" value={note} onChangeText={setNote} multiline style={{ minHeight: 72, textAlignVertical: "top" }} />
       {error ? <Notice tone="danger" text={error} /> : null}
     </Sheet>

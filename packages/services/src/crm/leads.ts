@@ -37,7 +37,7 @@ import { audit } from "../audit";
 import { EXPORT_CAP, facetPage } from "../paging";
 import { moveCallsOnMerge, withCallDetails } from "./calls";
 import { depositsForLead } from "./deposits";
-import { activeProducts, moveConversions, recordStudentConversion, toConversionDtos } from "./products";
+import { activeProducts, moveConversions, projectProducts, recordStudentConversion, toConversionDtos } from "./products";
 import { roundRobinPicker } from "./round-robin";
 import { getCurrentEnrollment } from "../enrollment/service";
 import { BusinessError, ForbiddenError, NotFoundError, TransitionError, ValidationError } from "../errors";
@@ -869,6 +869,7 @@ export async function getLeadDetail(id: string, scope: CrmScope, activityLimit =
     products,
     conversions,
     deposits,
+    sold,
   ] = await Promise.all([
     LeadActivity.find({ leadId: lead._id }).sort({ createdAt: -1, _id: -1 }).limit(limit).lean(),
     LeadActivity.countDocuments({ leadId: lead._id }),
@@ -888,6 +889,7 @@ export async function getLeadDetail(id: string, scope: CrmScope, activityLimit =
     productNames(),
     LeadConversion.find({ leadId: lead._id }).sort({ convertedAt: 1, _id: 1 }).lean(),
     depositsForLead(lead._id, scope),
+    projectProducts(lead.projectId),
   ]);
   const names = await userNames([lead.ownerId, ...activities.map((a) => a.actorId)]);
   const refs: LeadRefs = {
@@ -937,7 +939,8 @@ export async function getLeadDetail(id: string, scope: CrmScope, activityLimit =
       removeConversion: has(scope, "crm.manage"),
       reviewDeposits: has(scope, "crm.commission.manage"),
     },
-    options,
+    // What this lead can be converted to: only the products its project sells (web and phone both read this).
+    options: { ...options, products: sold },
   };
 }
 

@@ -1,7 +1,21 @@
 import type { ProjectDetail, ProjectDto, ProjectInput } from "@edge/contracts";
-import { AuthUser, Batch, Course, CrmTask, Lead, Project, Role, StaffProfile, TaskComment, Types, withTx, type ProjectDoc } from "@edge/db";
+import {
+  AuthUser,
+  Batch,
+  Course,
+  CrmProduct,
+  CrmTask,
+  Lead,
+  Project,
+  Role,
+  StaffProfile,
+  TaskComment,
+  Types,
+  withTx,
+  type ProjectDoc,
+} from "@edge/db";
 import { now } from "@edge/domain/clock";
-import { OPEN_LEAD_STAGES, OPEN_TASK_STATUSES, type ProjectStatus } from "@edge/domain/crm/enums";
+import { OPEN_LEAD_STAGES, OPEN_TASK_STATUSES, type ProductStatus, type ProjectStatus } from "@edge/domain/crm/enums";
 import { startOfDubaiDay } from "@edge/domain/dates";
 import type { Actor } from "@edge/domain/enums";
 import { audit } from "../audit";
@@ -43,6 +57,17 @@ async function crmUserIds(ids: string[], field: string) {
   return out;
 }
 
+/** The project form's Products ticks: existing products only (archived ones may stay ticked). */
+async function productIdList(ids: string[]) {
+  const unique = [...new Set(ids.filter(Boolean))];
+  const out = unique.filter((id) => Types.ObjectId.isValid(id) && id.length === 24).map((id) => new Types.ObjectId(id));
+  if (out.length !== unique.length || (await CrmProduct.countDocuments({ _id: { $in: out } })) !== out.length)
+    throw new ValidationError({ productIds: "Unknown product" });
+  return out;
+}
+
+const sameIds = (a: Types.ObjectId[], b: Types.ObjectId[]) => a.length === b.length && a.every((x) => b.some((y) => y.equals(x)));
+
 async function codeFor(name: string, given?: string) {
   const base =
     (given?.trim() || name)
@@ -79,7 +104,7 @@ export async function projectStats(projectIds: Types.ObjectId[], at: Date) {
 async function toProjectDtos(projects: ProjectDoc[], scope: CrmScope): Promise<ProjectDto[]> {
   if (!projects.length) return [];
   const at = now();
-  const [stats, names, courses, batches] = await Promise.all([
+  const [stats, names, courses, batches, products] = await Promise.all([
     projectStats(
       projects.map((p) => p._id),
       at,
@@ -87,6 +112,9 @@ async function toProjectDtos(projects: ProjectDoc[], scope: CrmScope): Promise<P
     userNames(projects.flatMap((p) => [...p.managerIds, ...p.memberIds])),
     Course.find({ _id: { $in: projects.map((p) => p.courseId).filter(Boolean) } }, { title: 1 }).lean(),
     Batch.find({ _id: { $in: projects.map((p) => p.batchId).filter(Boolean) } }, { name: 1 }).lean(),
+    CrmProduct.find({ _id: { $in: projects.flatMap((p) => (p.isDefault ? [] : (p.productIds ?? []))) }, status: "ACTIVE" }, { name: 1 })
+      .sort({ sortOrder: 1, name: 1 })
+      .lean(),
   ]);
   const courseMap = new Map(courses.map((c) => [String(c._id), c.title]));
   const batchMap = new Map(batches.map((b) => [String(b._id), b.name]));
@@ -108,6 +136,9 @@ async function toProjectDtos(projects: ProjectDoc[], scope: CrmScope): Promise<P
     isDefault: !!p.isDefault,
     managers: p.managerIds.map(ref),
     members: p.memberIds.map(ref),
+    products: p.isDefault
+      ? []
+      : products.filter((x) => (p.productIds ?? []).some((id) => id.equals(x._id))).map((x) => ({ id: String(x._id), name: x.name })),
     stats: {
       openLeads: stats.open.get(String(p._id)) ?? 0,
       convertedMonth: stats.converted.get(String(p._id)) ?? 0,
@@ -131,7 +162,7 @@ export async function getProject(id: string, scope: CrmScope): Promise<ProjectDe
   const todayStart = startOfDubaiDay(at);
   const [dto] = await toProjectDtos([p], scope);
   const teamIds = [...new Set([...p.managerIds, ...p.memberIds].map(String))].map((x) => new Types.ObjectId(x));
-  const [byStage, users, staff, perOwnerOpen, perOwnerConverted, perOwnerOverdue, recent, openTasks, courses, batches, allStaff] =
+  const [byStage, users, staff, perOwnerOpen, perOwnerConverted, perOwnerOverdue, recent, openTasks, courses, batches, allStaff, products] =
     await Promise.all([
       Lead.aggregate<{ _id: string; n: number }>([
         { $match: { projectId: p._id, mergedIntoId: null } },
@@ -161,6 +192,9 @@ export async function getProject(id: string, scope: CrmScope): Promise<ProjectDe
         .sort({ startDate: -1 })
         .lean(),
       listCrmUsers(),
+      CrmProduct.find({ $or: [{ status: "ACTIVE" }, { _id: { $in: p.productIds ?? [] } }] }, { name: 1, status: 1 })
+        .sort({ status: 1, sortOrder: 1, name: 1 })
+        .lean(),
     ]);
   const roleIds = [...new Set(staff.flatMap((s) => s.roleIds.map(String)))].map((x) => new Types.ObjectId(x));
   const roles = new Map((await Role.find({ _id: { $in: roleIds } }, { name: 1 }).lean()).map((r) => [String(r._id), r.name]));
@@ -189,6 +223,8 @@ export async function getProject(id: string, scope: CrmScope): Promise<ProjectDe
       courses: courses.map((c) => ({ id: String(c._id), title: c.title })),
       batches: batches.map((b) => ({ id: String(b._id), label: `${b.name} (${b.code})`, courseId: String(b.courseId) })),
       staff: allStaff,
+      products: products.map((x) => ({ id: String(x._id), name: x.name, status: x.status as ProductStatus })),
+      productIds: p.isDefault ? [] : (p.productIds ?? []).map(String),
     },
   };
 }
@@ -202,6 +238,8 @@ export async function createProject(input: ProjectInput, actor: Actor & { type: 
   const courseId = optId(input.courseId);
   if (input.courseId && !courseId) throw new ValidationError({ courseId: "Unknown course" });
   const batchId = optId(input.batchId);
+  if (input.productIds?.length && !has(scope, "crm.manage")) throw new BusinessError("Only a CRM manager can choose a project's products");
+  const productIds = await productIdList(input.productIds ?? []);
   const code = await codeFor(input.name, input.code);
   const [p] = await Project.create([
     {
@@ -217,6 +255,7 @@ export async function createProject(input: ProjectInput, actor: Actor & { type: 
       targetConversions: toInt(input.targetConversions),
       managerIds,
       memberIds: memberIds.filter((m) => !managerIds.some((x) => x.equals(m))),
+      productIds,
       createdById: actorId(actor),
     },
   ]);
@@ -225,7 +264,7 @@ export async function createProject(input: ProjectInput, actor: Actor & { type: 
     action: "project.create",
     entityType: "Project",
     entityId: String(p!._id),
-    after: { name: input.name, code, managerIds: managerIds.map(String) },
+    after: { name: input.name, code, managerIds: managerIds.map(String), productIds: productIds.map(String) },
   });
   for (const uid of [...managerIds, ...memberIds])
     if (String(uid) !== actor.id)
@@ -260,6 +299,14 @@ export async function updateProject(id: string, input: Partial<ProjectInput>, ac
     set.managerIds = await crmUserIds(input.managerIds, "managerIds");
   }
   if (input.memberIds !== undefined) set.memberIds = await crmUserIds(input.memberIds, "memberIds");
+  // The default project sells every product, so its list is never stored.
+  if (input.productIds !== undefined && !p.isDefault) {
+    const productIds = await productIdList(input.productIds);
+    if (!sameIds(productIds, p.productIds ?? [])) {
+      if (!has(scope, "crm.manage")) throw new BusinessError("Only a CRM manager can change a project's products");
+      set.productIds = productIds;
+    }
+  }
   if (!Object.keys(set).length) return;
   await Project.updateOne({ _id: p._id }, { $set: set });
   await audit({ actor, action: "project.update", entityType: "Project", entityId: id, after: set });

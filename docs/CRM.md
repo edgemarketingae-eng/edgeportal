@@ -79,6 +79,8 @@ dates, and numeric targets (leads, conversions). **Every lead belongs to exactly
   what has landed in General since.
 - A project has **managers** (project managers; they see and run everything inside) and **members** (sales
   executives). Membership is set on the project page or when creating a CRM account.
+- A project **sells** a set of products (see Products and conversions); its leads can only be marked converted to
+  those. General sells every product and keeps no list.
 
 What a person sees:
 
@@ -131,6 +133,17 @@ the premium course (became a student) and the premium online clubs (Wealth Circl
 four once; CRM managers and admins add, rename and archive them under **Products** (`/products`, `crm.manage`).
 Products are never deleted.
 
+- **Products belong to projects** (many to many; sales teams are split by language, and not every team sells
+  everything). A lead can only be marked converted to the products its project sells; **General sells every product**
+  and has no list. `crm.manage` holders (CRM managers and admins) set the link from either side: **Projects that sell
+  it** in the product dialog, or **Products** on the project form. Project managers see their project's products but
+  can't change them; the phone app only shows them. New projects start with no products (the project page says so).
+  Projects that existed before this (2026-11-05) were given every product once by `migrate`, to be trimmed by hand.
+- The list is checked on the server (`markConversions`) and the lead page's `options.products` is already the
+  project's list, so phones get it without an app update. Archived products and projects keep their links.
+- Conversions stay where they were made: moving a lead keeps its conversions (and the leaderboard counts them for the
+  old project); from then on the new project's products apply. The student course (below) is recorded wherever the
+  lead is, because it isn't a salesperson's choice.
 - Staff mark one or more conversions on the lead page (**Conversions → Conversion**). The CRM records no rules about
   the product (minimum deposit etc.); marking it is the sales team's call. Each product converts once per lead.
 - The first conversion moves the lead to `CONVERTED`. Each conversion is credited to the **lead owner at that moment**
@@ -140,7 +153,10 @@ Products are never deleted.
   student course backfills leads that are already students.
 - Removing a conversion needs `crm.manage`. Removing the lead's last one (when it isn't a student) reopens the lead at
   the stage it had before.
-- Converted leads drop out of the default Open view; the **Converted to** filter on Leads lists one product's leads.
+- Converted leads drop out of the default Open view; the **Converted to** filter on Leads lists one product's leads
+  (every product, whatever the project).
+- With one project chosen, the dashboard's and leaderboard's product columns are that project's products, plus any
+  product converted there in the period.
 
 ## Deposits and commission
 
@@ -489,7 +505,7 @@ academy and HR side.
 
 ## Data
 
-`crmProjects`, `leads` (one `projectId` each; `productIds` mirrors the lead's conversions; `altPhones` holds other numbers),
+`crmProjects` (`productIds`: what it sells, ignored on General), `leads` (one `projectId` each; `productIds` mirrors the lead's conversions; `altPhones` holds other numbers),
 `leadActivities` (append-only timeline), `leadCalls` (tracked calls with leads), `crmDevices` (signed-in phones),
 `crmTasks`, `crmTaskComments`, `leadInboundEvents` (intake inbox), `crmProducts`,
 `leadConversions` (one per lead and product, with the credited person), `leadDeposits` (amounts in cents, status,

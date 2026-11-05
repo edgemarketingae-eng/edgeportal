@@ -7,6 +7,7 @@ import {
   LeadActivity,
   LeadConversion,
   LeadDeposit,
+  Project,
   seedBaseData,
   Setting,
   StudentProfile,
@@ -20,15 +21,18 @@ import {
   convertLeadToStudent,
   createLead,
   createProduct,
+  createProject,
   createStaff,
   deleteDeposit,
   deleteLead,
+  deleterFor,
   ensureDefaultProducts,
   getCommissionSettings,
   getCrmDashboard,
   getDefaultProject,
   getLeadDetail,
   getLeaderboard,
+  getProject,
   getStaffCommission,
   handleLeadWebhook,
   importLeads,
@@ -41,6 +45,7 @@ import {
   logDeposit,
   markConversions,
   mergeLeads,
+  moveLeadToProject,
   NotFoundError,
   rejectDeposit,
   rerateLaterCommission,
@@ -52,6 +57,7 @@ import {
   TransitionError,
   updateLead,
   updateProduct,
+  updateProject,
   ValidationError,
   verifyDeposit,
   type CrmScope,
@@ -296,6 +302,125 @@ describe("products and conversions", () => {
     expect(keep.productIds).toHaveLength(1);
     expect(await LeadConversion.countDocuments({ leadId: a })).toBe(1);
     expect(await LeadDeposit.countDocuments({ leadId: a })).toBe(1);
+  });
+});
+
+describe("products by project", () => {
+  const names = (rows: { name: string }[]) => rows.map((r) => r.name);
+
+  it("offers a lead only what its project sells, General sells everything, and moves keep past conversions", async () => {
+    const mgr = await staff("crm_manager");
+    const exec = await staff("sales_executive");
+    const inner = await product("INNER-CIRCLE");
+    const f1 = await product("F1-CLUB");
+    const tamil = await createProject({ name: "Tamil team", memberIds: [exec.id], productIds: [inner] }, mgr.actor, await mgr.scope());
+    const arabic = await createProject({ name: "Arabic team", memberIds: [exec.id], productIds: [f1] }, mgr.actor, await mgr.scope());
+
+    const id = await createLead(
+      { projectId: tamil, name: "Tamil Lead", phone: phone(), source: "INSTAGRAM" },
+      exec.actor,
+      await exec.scope(),
+    );
+    expect(names((await getLeadDetail(id, await exec.scope())).options.products)).toEqual(["Inner Circle"]);
+    await expect(markConversions(id, { productIds: [f1] }, exec.actor, await exec.scope())).rejects.toBeInstanceOf(ValidationError);
+    await expect(markConversions(id, { productIds: [inner, f1] }, exec.actor, await exec.scope())).rejects.toBeInstanceOf(ValidationError);
+    expect(await LeadConversion.countDocuments({ leadId: id })).toBe(0);
+    await markConversions(id, { productIds: [inner] }, exec.actor, await exec.scope());
+
+    const g = await createLead(
+      { projectId: await general(), name: "Gen Lead", phone: phone(), source: "INSTAGRAM" },
+      exec.actor,
+      await exec.scope(),
+    );
+    expect(names((await getLeadDetail(g, await exec.scope())).options.products)).toEqual([
+      "Inner Circle",
+      "Premium course",
+      "Wealth Circle",
+      "F1 Club",
+    ]);
+
+    // Moving keeps the conversion; the new project's products apply from then on.
+    await moveLeadToProject(id, arabic, mgr.actor, await mgr.scope());
+    const moved = await getLeadDetail(id, await exec.scope());
+    expect(moved.conversions.map((c) => c.product.name)).toEqual(["Inner Circle"]);
+    expect(names(moved.options.products)).toEqual(["F1 Club"]);
+    await markConversions(id, { productIds: [f1] }, exec.actor, await exec.scope());
+
+    // Becoming a student records the student course wherever the lead is.
+    const s = await createLead(
+      { projectId: tamil, name: "Tamil Student", phone: phone(), email: "tamil.s@example.com", source: "WEBSITE" },
+      mgr.actor,
+      await mgr.scope(),
+    );
+    await convertLeadToStudent(s, { sendSetPassword: false, actor: mgr.actor, scope: await mgr.scope() });
+    expect(await LeadConversion.exists({ leadId: s, productId: await product("PREMIUM-COURSE") })).toBeTruthy();
+
+    // Reports for one project list what it sells, plus anything converted there in the period.
+    // A conversion counts for the project it was made in, so Inner Circle stays with Tamil after the move.
+    expect(names((await getLeaderboard({ project: arabic }, await mgr.scope())).products)).toEqual(["F1 Club"]);
+    expect(names((await getLeaderboard({ project: tamil }, await mgr.scope())).products)).toEqual(["Inner Circle", "Premium course"]);
+    const dash = await getCrmDashboard(await mgr.scope(), { project: tamil });
+    expect(names(dash.byProduct)).toEqual(["Inner Circle", "Premium course"]);
+  });
+
+  it("links from either side, and only crm.manage changes the links", async () => {
+    const mgr = await staff("crm_manager");
+    const pm = await staff("project_manager");
+    const inner = await product("INNER-CIRCLE");
+    const wealth = await product("WEALTH-CIRCLE");
+    const f1 = await product("F1-CLUB");
+    const P = await createProject({ name: "Hindi team", managerIds: [pm.id] }, mgr.actor, await mgr.scope());
+    expect((await getProject(P, await pm.scope())).project.products).toEqual([]); // new projects start with none
+
+    await expect(updateProject(P, { productIds: [inner] }, pm.actor, await pm.scope())).rejects.toBeInstanceOf(BusinessError);
+    await updateProject(P, { name: "Hindi sales", productIds: [] }, pm.actor, await pm.scope()); // unchanged list: allowed
+    await updateProject(P, { productIds: [inner, f1] }, mgr.actor, await mgr.scope());
+    expect(names((await getProject(P, await pm.scope())).project.products)).toEqual(["Inner Circle", "F1 Club"]);
+
+    await updateProduct(wealth, { projectIds: [P] }, mgr.actor, await mgr.scope());
+    await updateProduct(inner, { projectIds: [] }, mgr.actor, await mgr.scope());
+    expect(names((await getProject(P, await pm.scope())).project.products)).toEqual(["Wealth Circle", "F1 Club"]);
+    const list = await listProducts(await mgr.scope());
+    expect(names(list.find((p) => p.id === wealth)!.projects)).toEqual(["Hindi sales"]);
+    expect(list.find((p) => p.id === inner)!.projects).toEqual([]);
+
+    // A viewer only changes links on projects they can see.
+    const narrow = { ...(await mgr.scope()), all: false, managed: [], member: [] };
+    await updateProduct(f1, { projectIds: [] }, mgr.actor, narrow);
+    expect(names((await getProject(P, await pm.scope())).project.products)).toContain("F1 Club");
+    await expect(updateProduct(f1, { projectIds: [P] }, mgr.actor, narrow)).rejects.toBeInstanceOf(ValidationError);
+
+    // A new product can be sold somewhere straight away; archiving keeps the link but stops offering it.
+    const gold = await createProduct({ name: "Gold Club", projectIds: [P] }, mgr.actor, await mgr.scope());
+    await updateProduct(gold, { status: "ARCHIVED" }, mgr.actor, await mgr.scope());
+    const detail = await getProject(P, await mgr.scope());
+    expect(detail.options.productIds).toContain(gold);
+    expect(names(detail.project.products)).not.toContain("Gold Club");
+    expect(detail.options.products.find((p) => p.id === gold)?.status).toBe("ARCHIVED");
+
+    // General sells everything and keeps no list.
+    await updateProject(await general(), { productIds: [inner] }, mgr.actor, await mgr.scope());
+    expect((await getDefaultProject()).productIds ?? []).toEqual([]);
+
+    // A super admin deleting an unused product takes it off every project.
+    const boss = await staff("crm_admin");
+    await deleterFor("product").remove(gold, boss.actor);
+    expect((await Project.findById(P).lean())!.productIds.map(String)).not.toContain(gold);
+  });
+
+  it("gives projects from before every product once, and leaves new ones empty", async () => {
+    const mgr = await staff("crm_manager");
+    const old = await createProject({ name: "Old team" }, mgr.actor, await mgr.scope());
+    await Project.collection.updateOne({ _id: new Types.ObjectId(old) }, { $unset: { productIds: "" } });
+    const fresh = await createProject({ name: "New team" }, mgr.actor, await mgr.scope());
+    await ensureDefaultProducts();
+    expect((await Project.findById(old).lean())!.productIds).toHaveLength(4);
+    expect((await Project.findById(fresh).lean())!.productIds).toHaveLength(0);
+    expect((await getDefaultProject()).productIds ?? []).toHaveLength(0);
+    // Later deploys leave a trimmed list alone.
+    await Project.updateOne({ _id: old }, { $set: { productIds: [] } });
+    await ensureDefaultProducts();
+    expect((await Project.findById(old).lean())!.productIds).toHaveLength(0);
   });
 });
 

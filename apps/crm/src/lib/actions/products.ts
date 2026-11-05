@@ -16,6 +16,7 @@ export async function saveProductAction(_prev: ActionState, form: FormData): Pro
     status: (text(form, "status") || "ACTIVE") as ProductBody["status"],
     isStudentCourse: checked(form, "isStudentCourse"),
     sortOrder: text(form, "sortOrder"),
+    ...(form.has("projectIds") ? { projectIds: form.getAll("projectIds").map(String).filter(Boolean) } : {}),
   };
   return run(async () => {
     if (id) return api(crmRoutes.updateProduct, { params: { id }, body });

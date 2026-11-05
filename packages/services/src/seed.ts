@@ -1,4 +1,4 @@
-import { AuthUser, Batch, Course, Project, seedBaseData, StaffProfile } from "@edge/db";
+import { AuthUser, Batch, Course, CrmProduct, Project, seedBaseData, StaffProfile } from "@edge/db";
 import { ensureDefaultProducts } from "./crm/products";
 import { createStaff } from "./staff/service";
 
@@ -72,6 +72,7 @@ export async function seed(opts: { production: boolean; adminEmail?: string; adm
         targetConversions: 40,
         managerIds: pm ? [pm._id] : [],
         memberIds: sales ? [sales._id] : [],
+        productIds: await CrmProduct.distinct("_id"),
       },
     },
     { upsert: true },

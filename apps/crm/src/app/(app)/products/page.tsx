@@ -17,14 +17,16 @@ export const metadata: Metadata = { title: "Products" };
 export default async function ProductsPage() {
   const v = await requireCrm("crm.manage");
   const canPurge = can(v, "records.delete");
-  const products = await load(() => api(crmRoutes.products));
+  const [products, options] = await Promise.all([load(() => api(crmRoutes.products)), load(() => api(crmRoutes.options))]);
+  // General sells every product, so only the other projects are ticked in the dialog.
+  const projects = options.projects.filter((p) => !p.isDefault).map((p) => ({ id: p.id, name: p.name }));
   return (
     <>
       <PageHeader
         help="/docs/products"
         title="Products"
         description="What a lead can convert to. Sales mark conversions on the lead page; each one counts on the leaderboard."
-        actions={<ProductDialog />}
+        actions={<ProductDialog projects={projects} />}
       />
       <Card className="p-0">
         <Table>
@@ -51,6 +53,9 @@ export default async function ProductsPage() {
                       {p.isStudentCourse ? <Badge variant="outline">Student course</Badge> : null}
                       {p.status === "ARCHIVED" ? <Badge variant="outline">Archived</Badge> : null}
                     </span>
+                    <span className="text-muted-foreground block text-xs">
+                      Sold in General{p.projects.map((x) => `, ${x.name}`).join("")}
+                    </span>
                     <span className="text-muted-foreground block text-xs">Added {formatDate(p.createdAt)}</span>
                   </TableCell>
                   <TableCell className="text-muted-foreground hidden max-w-md text-sm whitespace-normal md:table-cell">
@@ -60,7 +65,7 @@ export default async function ProductsPage() {
                   <TableCell className="text-right font-semibold tabular-nums">{p.conversionsTotal}</TableCell>
                   <TableCell className="text-right">
                     <span className="inline-flex items-center gap-1">
-                      <ProductDialog product={p} />
+                      <ProductDialog product={p} projects={projects} />
                       {canPurge ? <DeleteButton type="product" id={p.id} iconOnly label={`Delete ${p.name}`} /> : null}
                     </span>
                   </TableCell>
@@ -71,7 +76,8 @@ export default async function ProductsPage() {
         </Table>
       </Card>
       <p className="text-muted-foreground mt-3 text-xs">
-        Archived products disappear from the “Mark conversion” list but keep their history.
+        A lead can be marked converted only to products its project sells; General sells all of them. Archived products disappear from the
+        “Mark conversion” list but keep their history.
         {canPurge ? " A product nobody has converted to can be deleted." : ""}
       </p>
     </>

@@ -283,6 +283,8 @@ export default function Lead() {
   const open = editable && lead.stage !== "CONVERTED";
   const canConvert = can("crm.convert") && live && !lead.studentId;
   const otherProjects = d.options.projects.filter((p) => p.id !== lead.project.id);
+  // Products this lead's project sells that it hasn't converted to yet (the server sends only the project's products).
+  const markable = d.options.products.filter((p) => !d.conversions.some((c) => c.product.id === p.id));
   const verifiedMinor = d.deposits.filter((x) => x.status === "VERIFIED").reduce((n, x) => n + x.amountMinor, 0);
   const utm = [lead.utm.source, lead.utm.medium, lead.utm.campaign, lead.utm.content, lead.utm.term].filter(Boolean).join(" / ");
   const courseAndBatch = [lead.courseTitle, lead.batchName].filter(Boolean).join(" · ");
@@ -498,7 +500,13 @@ export default function Lead() {
 
         {editable ? (
           <View style={styles.tiles}>
-            <Tile icon="trophy-outline" label="Conversion" onPress={() => router.push({ pathname: "/lead/conversion", params: { id } })} />
+            {markable.length ? (
+              <Tile
+                icon="trophy-outline"
+                label="Conversion"
+                onPress={() => router.push({ pathname: "/lead/conversion", params: { id } })}
+              />
+            ) : null}
             <Tile icon="cash-outline" label="Deposit" onPress={() => router.push({ pathname: "/lead/deposit", params: { id } })} />
             {shownStage && isOpenStage(shownStage) ? (
               <Tile

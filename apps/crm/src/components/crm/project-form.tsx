@@ -3,7 +3,6 @@
 import { PROJECT_STATUSES } from "@edge/domain/crm/enums";
 import { PROJECT_STATUS_LABELS } from "@edge/domain/crm/labels";
 import { Button } from "@edge/ui/components/button";
-import { Checkbox } from "@edge/ui/components/checkbox";
 import { Label } from "@edge/ui/components/label";
 import { Textarea } from "@edge/ui/components/textarea";
 import { Select } from "@edge/ui/components/select";
@@ -11,6 +10,7 @@ import { Field, FormError, type ActionState } from "@edge/ui/forms/field";
 import { useActionState, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { saveProjectAction } from "@/lib/actions/projects";
+import { CheckList } from "./check-list";
 
 export interface ProjectFormValues {
   id?: string;
@@ -26,6 +26,7 @@ export interface ProjectFormValues {
   targetConversions: string;
   managerIds: string[];
   memberIds: string[];
+  productIds: string[];
 }
 
 export const EMPTY_PROJECT: ProjectFormValues = {
@@ -41,11 +42,13 @@ export const EMPTY_PROJECT: ProjectFormValues = {
   targetConversions: "",
   managerIds: [],
   memberIds: [],
+  productIds: [],
 };
 
 function restore(values: ProjectFormValues, s?: Record<string, string>): ProjectFormValues {
   if (!s) return values;
-  return { ...values, ...s, managerIds: s.managerIds ? s.managerIds.split(",") : [], memberIds: s.memberIds ? s.memberIds.split(",") : [] };
+  const list = (k: string) => (s[k] ? s[k].split(",") : []);
+  return { ...values, ...s, managerIds: list("managerIds"), memberIds: list("memberIds"), productIds: list("productIds") };
 }
 
 /** People shown sales executives first, then everyone else, each with their roles. */
@@ -66,44 +69,39 @@ function People({
   selected: string[];
 }) {
   return (
-    <fieldset className="grid content-start gap-2">
-      <legend className="mb-1 text-sm font-semibold">{legend}</legend>
-      {/* Present even when nothing is ticked, so clearing the list saves. */}
-      <input type="hidden" name={name} value="" />
-      {staff.length === 0 ? <p className="text-muted-foreground text-xs">No CRM staff yet.</p> : null}
-      <div className="grid max-h-72 gap-1.5 overflow-y-auto sm:grid-cols-2">
-        {sortForTeam(staff).map((s) => (
-          <div key={s.id} className="flex items-start gap-2">
-            <Checkbox id={`${name}-${s.id}`} name={name} value={s.id} defaultChecked={selected.includes(s.id)} className="mt-0.5" />
-            <Label htmlFor={`${name}-${s.id}`} className="block leading-snug font-normal">
-              {s.name}
-              {s.roles?.length ? <span className="text-muted-foreground block text-xs">{s.roles.join(", ")}</span> : null}
-            </Label>
-          </div>
-        ))}
-      </div>
-    </fieldset>
+    <CheckList
+      name={name}
+      legend={legend}
+      items={sortForTeam(staff).map((s) => ({ id: s.id, label: s.name, note: s.roles?.length ? s.roles.join(", ") : undefined }))}
+      selected={selected}
+      empty="No CRM staff yet."
+    />
   );
 }
 
 /**
  * Create / edit a project. `canSetStatus` and `canSetManagers` follow crm.projects.manage; project managers
- * can still edit details and members of their own projects.
+ * can still edit details and members of their own projects. `canSetProducts` follows crm.manage.
  */
 export function ProjectForm({
   values,
   staff,
   courses,
   batches,
+  products,
   canSetManagers,
+  canSetProducts,
   isDefault = false,
 }: {
   values: ProjectFormValues;
   staff: { id: string; name: string; roles?: string[] }[];
   courses: { id: string; title: string }[];
   batches: { id: string; label: string; courseId: string }[];
+  /** Products to tick: active ones, plus archived ones the project still sells. */
+  products: { id: string; name: string; status?: string }[];
   canSetManagers: boolean;
-  /** The General project is open to everyone, so it has no team to pick. */
+  canSetProducts: boolean;
+  /** The General project is open to everyone and sells every product, so it has no team or products to pick. */
   isDefault?: boolean;
 }) {
   const [state, action, pending] = useActionState(saveProjectAction, {} as ActionState);
@@ -122,7 +120,9 @@ export function ProjectForm({
   }
   const courseBatches = courseId ? batches.filter((b) => b.courseId === courseId) : batches;
   return (
-    <form key={JSON.stringify(state.values ?? {})} action={action} className="grid gap-4">
+    // Keyed on the saved values after a save too: React resets a form after its action, and ticks would go back to
+    // what they first rendered.
+    <form key={JSON.stringify(state.values ?? values)} action={action} className="grid gap-4">
       {values.id ? <input type="hidden" name="id" value={values.id} /> : null}
       <FormError state={state} />
       <div className="grid gap-4 sm:grid-cols-2">
@@ -197,6 +197,17 @@ export function ProjectForm({
         <>
           {canSetManagers ? <People name="managerIds" legend="Project managers" staff={staff} selected={v.managerIds} /> : null}
           <People name="memberIds" legend="Sales executives (team members)" staff={staff} selected={v.memberIds} />
+          {canSetProducts ? (
+            <CheckList
+              name="productIds"
+              legend="Products"
+              hint="Leads in this project can only be marked converted to the products ticked here. General always sells every product."
+              items={products.map((p) => ({ id: p.id, label: p.name, note: p.status === "ARCHIVED" ? "Archived" : undefined }))}
+              selected={v.productIds}
+              empty="No products yet. Add them on the Products page."
+              error={fe.productIds}
+            />
+          ) : null}
         </>
       ) : null}
       <Button type="submit" className="w-fit" pending={pending}>

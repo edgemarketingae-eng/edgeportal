@@ -5,8 +5,8 @@ import { OPEN_LEAD_STAGES, OPEN_TASK_STATUSES } from "@edge/domain/crm/enums";
 import { startOfDubaiDay } from "@edge/domain/dates";
 import { NotFoundError } from "../errors";
 import { getSetting } from "../settings";
-import { optId, startOfDubaiMonth, tasksToDtos, userNames } from "./common";
-import { activeProducts } from "./products";
+import { optId, productNames, startOfDubaiMonth, tasksToDtos, userNames } from "./common";
+import { activeProducts, projectProducts } from "./products";
 import { projectStats } from "./projects";
 import { inProject, leadScopeFilter, projectsFor, taskScopeFilter, type CrmScope } from "./scope";
 
@@ -134,8 +134,14 @@ export async function getCrmDashboard(scope: CrmScope, f: { project?: string } =
       { $unwind: "$c" },
       { $group: { _id: "$c.productId", n: { $sum: 1 } } },
     ]),
-    activeProducts(),
+    // One project: what it sells. Products it no longer sells still show while they have conversions this month.
+    project ? projectProducts(project) : activeProducts(),
   ]);
+  const unlisted = productsMonth.filter((x) => x.n && !products.some((p) => p.id === String(x._id)));
+  if (unlisted.length) {
+    const names = await productNames();
+    products.push(...unlisted.map((x) => ({ id: String(x._id), name: names.get(String(x._id)) ?? "Unknown product" })));
+  }
 
   const names = await userNames(perOwner.map((o) => o._id));
   const overdueMap = new Map(overduePerAssignee.map((o) => [String(o._id), o.n]));

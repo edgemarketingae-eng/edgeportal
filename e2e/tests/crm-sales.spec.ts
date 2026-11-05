@@ -99,3 +99,36 @@ test("3. the sales executive sees the commission on the lead and the leaderboard
   await expect(page.getByRole("row").filter({ hasText: "Sales Desk (you)" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Commission" })).toHaveCount(0); // everyone's commission is for admins
 });
+
+test("4. a project sells only the products ticked on it, and its leads are offered just those", async ({ page }) => {
+  const projectName = `E2E Tamil ${uniq}`;
+  await crmSignIn(page, "crm-admin@edgeacademy.local");
+  await expect(page).toHaveURL(/\/dashboard$/);
+
+  await page.goto(`${E2E.crm}/projects/new`);
+  await page.getByLabel("Name", { exact: true }).fill(projectName);
+  await page.getByRole("group", { name: "Products" }).getByLabel("Wealth Circle").check();
+  await page.getByRole("button", { name: "Create project" }).click();
+  await expect(page).toHaveURL(/\/projects\/[a-f0-9]{24}/);
+  const projectId = new URL(page.url()).pathname.split("/").pop()!;
+  // Visible only: the new-project page stays mounted (hidden) with the same Products group.
+  const products = page.getByRole("group", { name: "Products" }).filter({ visible: true });
+  await expect(products.getByLabel("Wealth Circle")).toBeChecked();
+  await expect(products.getByLabel("Inner Circle")).not.toBeChecked();
+
+  await page.goto(`${E2E.crm}/leads/new?project=${projectId}`);
+  await page.getByLabel("Name", { exact: true }).filter({ visible: true }).fill(`E2E Tamil Lead ${uniq}`);
+  await page.getByLabel("Mobile (WhatsApp)").filter({ visible: true }).fill(`+97158${uniq}`);
+  await page.getByRole("button", { name: "Create lead" }).click();
+  await expect(page).toHaveURL(/\/leads\/[a-f0-9]{24}/);
+  await page.getByRole("button", { name: "Conversion", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByLabel("Wealth Circle")).toBeVisible();
+  await expect(dialog.getByLabel("Inner Circle")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  // The product side shows the same link.
+  await page.goto(`${E2E.crm}/products`);
+  const row = page.getByRole("row").filter({ has: page.getByRole("link", { name: "Wealth Circle" }) });
+  await expect(row.getByText(projectName)).toBeVisible();
+});

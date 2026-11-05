@@ -143,3 +143,55 @@ describe("products, deposits and commission over the API", () => {
     expect((await Lead.findById(lead).lean())!.productIds).toHaveLength(0);
   });
 });
+
+describe("products by project over the API", () => {
+  it("offers a lead only its project's products, and only CRM managers change what a project sells", async () => {
+    const mgr = await staffAgent("crm_manager");
+    const pm = await staffAgent("project_manager");
+    const exec = await staffAgent("sales_executive");
+    const all = (await mgr.agent.get("/api/v1/crm/options").set(INTERNAL).expect(200)).body.products as { id: string; name: string }[];
+    const id = (name: string) => all.find((p) => p.name === name)!.id;
+    const project = (
+      await mgr.agent
+        .post("/api/v1/crm/projects")
+        .set(INTERNAL)
+        .send({ name: "Tamil team", managerIds: [pm.id], memberIds: [exec.id], productIds: [id("Inner Circle")] })
+        .expect(200)
+    ).body.id as string;
+
+    const lead = (
+      await exec.agent
+        .post("/api/v1/crm/leads")
+        .set(INTERNAL)
+        .send({ projectId: project, name: "Tamil Api Lead", phone: "+971501230999", source: "INSTAGRAM" })
+        .expect(200)
+    ).body.id as string;
+    const detail = (await exec.agent.get(`/api/v1/crm/leads/${lead}`).set(INTERNAL).expect(200)).body;
+    expect(detail.options.products.map((p: { name: string }) => p.name)).toEqual(["Inner Circle"]);
+    await exec.agent
+      .post(`/api/v1/crm/leads/${lead}/conversions`)
+      .set(INTERNAL)
+      .send({ productIds: [id("F1 Club")] })
+      .expect(400);
+
+    // A project manager edits their project but not what it sells.
+    await pm.agent
+      .post(`/api/v1/crm/projects/${project}`)
+      .set(INTERNAL)
+      .send({ productIds: [id("F1 Club")] })
+      .expect(422);
+    await pm.agent.post(`/api/v1/crm/projects/${project}`).set(INTERNAL).send({ description: "Tamil leads" }).expect(200);
+    await mgr.agent
+      .post(`/api/v1/crm/projects/${project}`)
+      .set(INTERNAL)
+      .send({ productIds: [id("Inner Circle"), id("F1 Club")] })
+      .expect(200);
+    const p = (await pm.agent.get(`/api/v1/crm/projects/${project}`).set(INTERNAL).expect(200)).body;
+    expect(p.project.products.map((x: { name: string }) => x.name)).toEqual(["Inner Circle", "F1 Club"]);
+    await exec.agent
+      .post(`/api/v1/crm/leads/${lead}/conversions`)
+      .set(INTERNAL)
+      .send({ productIds: [id("F1 Club")] })
+      .expect(200);
+  });
+});

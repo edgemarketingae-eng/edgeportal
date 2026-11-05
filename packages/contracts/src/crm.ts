@@ -169,6 +169,8 @@ export const ProjectInput = z.object({
   targetConversions: optInt,
   managerIds: z.array(z.string()).optional(),
   memberIds: z.array(z.string()).optional(),
+  /** Products this project sells (crm.manage only). The default project sells every product and ignores this. */
+  productIds: z.array(z.string()).max(200).optional(),
 });
 export type ProjectInput = z.input<typeof ProjectInput>;
 export const ProjectMemberInput = z.object({ userId: z.string().min(1), role: z.enum(["manager", "member"]) });
@@ -189,6 +191,8 @@ export const ProductInput = z.object({
   /** Becoming a student counts as converting to this product (only one product can be it). */
   isStudentCourse: z.boolean().optional(),
   sortOrder: optInt,
+  /** Projects that sell it, besides the default project (which sells every product). */
+  projectIds: z.array(z.string()).max(200).optional(),
 });
 export type ProductInput = z.input<typeof ProductInput>;
 
@@ -397,6 +401,8 @@ export const ProductDto = z.object({
   sortOrder: z.number(),
   conversionsMonth: z.number(),
   conversionsTotal: z.number(),
+  /** Projects that sell it, besides the default project (which sells every product). */
+  projects: z.array(ProjectRef.extend({ status: z.enum(PROJECT_STATUSES) })),
   createdAt: z.string(),
 });
 export type ProductDto = z.infer<typeof ProductDto>;
@@ -556,6 +562,8 @@ export const ProjectDto = z.object({
   isDefault: z.boolean(),
   managers: z.array(LeadOwnerRef),
   members: z.array(LeadOwnerRef),
+  /** Active products its leads can be converted to. Empty on the default project, which sells every product. */
+  products: z.array(ProductRef),
   stats: ProjectStats,
   /** The viewer may edit this project and its team (manager of it, or crm.projects.manage). */
   canManage: z.boolean(),
@@ -584,6 +592,10 @@ export const ProjectDetail = z.object({
     courses: z.array(z.object({ id: z.string(), title: z.string() })),
     batches: z.array(z.object({ id: z.string(), label: z.string(), courseId: z.string() })),
     staff: z.array(LeadOwnerRef),
+    /** Products the project form can tick: active ones plus archived ones it already sells. */
+    products: z.array(ProductRef.extend({ status: z.enum(PRODUCT_STATUSES) })),
+    /** Every product the project sells, archived ones included: the form's ticked boxes. */
+    productIds: z.array(z.string()),
   }),
 });
 export type ProjectDetail = z.infer<typeof ProjectDetail>;
@@ -598,7 +610,7 @@ export const CrmOptions = z.object({
   courses: z.array(z.object({ id: z.string(), title: z.string() })),
   batches: z.array(z.object({ id: z.string(), label: z.string(), courseId: z.string() })),
   lostReasons: z.array(z.string()),
-  /** Active products a lead can be converted to. */
+  /** Active products. On a lead's detail: only those the lead's project sells, i.e. what it can be converted to. */
   products: z.array(ProductRef),
 });
 export type CrmOptions = z.infer<typeof CrmOptions>;

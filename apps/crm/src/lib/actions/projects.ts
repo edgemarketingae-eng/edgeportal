@@ -35,6 +35,7 @@ function projectBody(form: FormData): ProjectBody {
     targetConversions: text(form, "targetConversions"),
     ...(form.has("managerIds") ? { managerIds: form.getAll("managerIds").map(String).filter(Boolean) } : {}),
     ...(form.has("memberIds") ? { memberIds: form.getAll("memberIds").map(String).filter(Boolean) } : {}),
+    ...(form.has("productIds") ? { productIds: form.getAll("productIds").map(String).filter(Boolean) } : {}),
   };
 }
 
@@ -49,6 +50,7 @@ export async function saveProjectAction(_prev: ActionState, form: FormData): Pro
       ...values(form, PROJECT_FIELDS),
       managerIds: form.getAll("managerIds").map(String).join(","),
       memberIds: form.getAll("memberIds").map(String).join(","),
+      productIds: form.getAll("productIds").map(String).filter(Boolean).join(","),
     });
     return s.error || !s.fieldErrors ? s : { ...s, error: "Please fix the highlighted fields." };
   }

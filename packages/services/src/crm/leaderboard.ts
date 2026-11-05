@@ -3,6 +3,7 @@ import { AuthUser, CrmProduct, Lead, LeadConversion, LeadDeposit, Role, StaffPro
 import { now } from "@edge/domain/clock";
 import type { LeaderboardPeriod } from "@edge/domain/crm/enums";
 import { between, optId, periodRange, userNames } from "./common";
+import { productIdsSoldIn } from "./products";
 import { has, type CrmScope } from "./scope";
 
 /** Active people holding the sales executive role (Off or not): they are always on the board, even at zero. */
@@ -54,6 +55,8 @@ export async function getLeaderboard(q: { period?: LeaderboardPeriod; project?: 
     salesExecutiveIds(),
     CrmProduct.find({}, { name: 1, status: 1 }).sort({ sortOrder: 1, name: 1 }).lean(),
   ]);
+  // One project: the products it sells (null = every product, the default project).
+  const sold = projectId ? await productIdsSoldIn(projectId) : null;
 
   const byPerson = new Map<string, { conversions: number; byProduct: Record<string, number> }>();
   for (const c of conversions) {
@@ -101,7 +104,9 @@ export async function getLeaderboard(q: { period?: LeaderboardPeriod; project?: 
   const myDeposits = depositsBy.get(scope.userId);
   return {
     period,
-    products: products.filter((p) => p.status === "ACTIVE" || used.has(String(p._id))).map((p) => ({ id: String(p._id), name: p.name })),
+    products: products
+      .filter((p) => (p.status === "ACTIVE" && (!sold || sold.some((x) => x.equals(p._id)))) || used.has(String(p._id)))
+      .map((p) => ({ id: String(p._id), name: p.name })),
     rows,
     showCommission,
     me: {

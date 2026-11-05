@@ -7,6 +7,7 @@ import {
   LeadConversion,
   LeadDeposit,
   PayrollMonth,
+  Project,
   TaskComment,
   type CrmProductDoc,
   type CrmTaskDoc,
@@ -157,6 +158,7 @@ export const productDeleter = deleter<CrmProductDoc>({
   },
   apply: async (pr, actor) => {
     await Lead.updateMany({ productIds: pr._id }, { $pull: { productIds: pr._id } });
+    await Project.updateMany({ productIds: pr._id }, { $pull: { productIds: pr._id } });
     await CrmProduct.deleteOne({ _id: pr._id });
     await auditDelete({ actor, action: "product.delete", entityType: "CrmProduct", entityId: String(pr._id), before: snapshot(pr) });
   },

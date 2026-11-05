@@ -991,6 +991,11 @@ export const crmDocs: DocModule[] = [
               A lead can convert to several products, each once. Every conversion counts for the person who <b>owns the lead</b> at that
               moment, even when someone else marks it, and shows on the <To href="/leaderboard">Leaderboard</To>.
             </P>
+            <P>
+              <b>Each project sells its own products.</b> A lead can only be marked converted to the products of its project, so a team sees
+              just what it sells. The <b>General</b> project sells every product. The premium course is still recorded automatically when a
+              lead becomes a student, whatever its project.
+            </P>
           </>
         ),
       },
@@ -1004,7 +1009,7 @@ export const crmDocs: DocModule[] = [
               <>
                 In the <Ui>Conversions</Ui> box, press <Ui>Conversion</Ui>.
               </>
-              <>Tick every product the lead has joined. Add a note if useful.</>
+              <>Tick every product the lead has joined (only the products of the lead&apos;s project are listed). Add a note if useful.</>
               <>
                 Press <Ui>Mark converted</Ui>.
               </>
@@ -1014,6 +1019,10 @@ export const crmDocs: DocModule[] = [
               Converted leads leave the default Open view of the leads list: use the <Ui>Converted</Ui> view or the <Ui>Converted to</Ui>{" "}
               filter to find them again (for example to log a later deposit).
             </P>
+            <Note kind="info">
+              A product is missing from the list? The lead&apos;s project doesn&apos;t sell it. Ask a CRM manager to tick it on the project,
+              or move the lead to the right project. Conversions already marked stay when a lead moves.
+            </Note>
             <Note kind="info">
               Converting a lead to a product doesn&apos;t create a student account. When they join the course, use{" "}
               <Ui>Convert to student</Ui> as usual; that records the premium course conversion for you.
@@ -1041,6 +1050,11 @@ export const crmDocs: DocModule[] = [
               <>
                 <Ui>Edit</Ui> renames it or changes its <Ui>Status</Ui>. Archived products disappear from the conversion dialog but keep
                 their history. Products are never deleted.
+              </>
+              <>
+                <Ui>Projects that sell it</Ui>: tick every project whose leads can convert to it. General always sells every product, so it
+                isn&apos;t listed. You can also tick a project&apos;s products on the project page (<Ui>Edit project</Ui> →{" "}
+                <Ui>Products</Ui>); both show the same thing.
               </>
               <>
                 <Ui>Student course</Ui>: tick it on the product that a lead becoming a student counts as (Premium course). Only one product
@@ -1580,6 +1594,10 @@ export const crmDocs: DocModule[] = [
                 work their own leads and the project&apos;s unassigned pool. Sales executives are also the people who receive the
                 project&apos;s round-robin leads.
               </>
+              <>
+                A project <b>sells</b> some of the academy&apos;s products, shown on the <Ui>Products</Ui> card of its page. Its leads can
+                only be marked converted to those. General sells every product.
+              </>
             </List>
             <P>
               The <To href="/projects">Projects</To> page shows each project with its open leads, conversions this month (against the
@@ -1608,7 +1626,11 @@ export const crmDocs: DocModule[] = [
               </>
               <>
                 Tick the <Ui>Project managers</Ui> and the <Ui>Sales executives (team members)</Ui>. Each person is shown with their roles,
-                with sales executives at the top. Press <Ui>Create project</Ui>.
+                with sales executives at the top.
+              </>
+              <>
+                Tick the <Ui>Products</Ui> the project sells. A new project sells nothing until you do, so its leads can&apos;t be marked
+                converted. Press <Ui>Create project</Ui>.
               </>
             </Steps>
             <Note kind="tip">
@@ -1642,9 +1664,9 @@ export const crmDocs: DocModule[] = [
             <List>
               <>
                 The <Ui>Edit project</Ui> form is at the bottom of the project page. Project managers can edit their own projects; only CRM
-                managers and admins can change the status or the project managers. The form also has the <Ui>Project managers</Ui> and{" "}
-                <Ui>Sales executives (team members)</Ui> lists, so you can tick and untick the whole team in one go. Press{" "}
-                <Ui>Save project</Ui>.
+                managers and admins can change the status, the project managers or the <Ui>Products</Ui> it sells. The form also has the{" "}
+                <Ui>Project managers</Ui> and <Ui>Sales executives (team members)</Ui> lists, so you can tick and untick the whole team in
+                one go. Press <Ui>Save project</Ui>.
               </>
               <>
                 To take someone off the team, press <Ui>Remove</Ui> next to their name. Project managers can remove sales executives from

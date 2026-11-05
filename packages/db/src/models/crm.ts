@@ -65,6 +65,11 @@ const projectSchema = new Schema(
     memberIds: { type: [ObjectId], default: [] },
     /** Who took the last round-robin turn here: the next lead goes to the person after them, in user id order. */
     roundRobinLastId: { type: ObjectId, default: null },
+    /**
+     * Products its leads can be converted to. The default project ignores it: it sells every product. Projects
+     * from before this field were given every product once (ensureDefaultProducts), so the field is always present.
+     */
+    productIds: { type: [ObjectId], default: [] },
     isDefault: { type: Boolean, default: false },
     createdById: { type: ObjectId, default: null },
   },
@@ -73,6 +78,7 @@ const projectSchema = new Schema(
 projectSchema.index({ code: 1 }, { unique: true });
 projectSchema.index({ managerIds: 1 });
 projectSchema.index({ memberIds: 1 });
+projectSchema.index({ productIds: 1 });
 projectSchema.index({ status: 1, name: 1 });
 projectSchema.index({ isDefault: 1 }, { unique: true, partialFilterExpression: { isDefault: true }, name: "one_default_project" });
 

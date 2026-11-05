@@ -2,16 +2,17 @@ import { crmRoutes } from "@edge/contracts";
 import { LEAD_STAGES } from "@edge/domain/crm/enums";
 import { LEAD_STAGE_LABELS, PROJECT_STATUS_LABELS } from "@edge/domain/crm/labels";
 import { formatDate } from "@edge/domain/dates";
-import { TableEmpty } from "@edge/ui/blocks/empty-state";
+import { EmptyState, TableEmpty } from "@edge/ui/blocks/empty-state";
 import { Alert, AlertDescription } from "@edge/ui/components/alert";
 import { StatCard } from "@edge/ui/blocks/stat-card";
+import { ProductBadge } from "@edge/ui/blocks/status-badges";
 import { Badge } from "@edge/ui/components/badge";
 import { Button } from "@edge/ui/components/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@edge/ui/components/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@edge/ui/components/table";
 import { PageHeader } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
-import { Plus } from "lucide-react";
+import { Package, Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { FollowUpDue } from "@/components/crm/due";
@@ -29,6 +30,7 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
   const [{ id }, sp] = await Promise.all([props.params, props.searchParams]);
   const { project: p, byStage, team, recentLeads, openTasks, options } = await load(() => api(crmRoutes.project, { params: { id } }));
   const canSetManagers = can(v, "crm.projects.manage");
+  const canSetProducts = can(v, "crm.manage");
   const max = Math.max(1, ...FUNNEL.map((s) => byStage[s] ?? 0));
   const notOnTeam = options.staff.filter((s) => !team.some((t) => t.id === s.id));
   const leadCount = Object.values(byStage).reduce((sum, n) => sum + n, 0);
@@ -203,6 +205,43 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
         </Card>
       </div>
 
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Products</CardTitle>
+          <CardDescription>
+            {p.isDefault
+              ? "General sells every product, so its leads can be marked converted to any of them."
+              : "What this project's leads can be marked converted to."}
+          </CardDescription>
+        </CardHeader>
+        {p.isDefault ? null : (
+          <CardContent>
+            {p.products.length ? (
+              <div className="flex flex-wrap gap-1.5">
+                {p.products.map((x) => (
+                  <ProductBadge key={x.id} name={x.name} />
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                icon={<Package />}
+                title="No products yet"
+                className="py-4"
+                action={
+                  p.canManage && canSetProducts ? (
+                    <Button asChild size="sm" variant="outline">
+                      <a href="#edit-project">Choose products</a>
+                    </Button>
+                  ) : null
+                }
+              >
+                Salespeople can&apos;t mark this project&apos;s leads converted until a CRM manager ticks the products it sells.
+              </EmptyState>
+            )}
+          </CardContent>
+        )}
+      </Card>
+
       <div className="mt-6">
         <h2 className="mb-2 text-sm font-semibold">Recent leads</h2>
         <LeadsTable rows={recentLeads} total={recentLeads.length} filters="" assignees={[]} />
@@ -237,7 +276,7 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
       </Card>
 
       {p.canManage ? (
-        <Card className="mt-6">
+        <Card id="edit-project" className="mt-6 scroll-mt-20">
           <CardHeader>
             <CardTitle>Edit project</CardTitle>
           </CardHeader>
@@ -257,11 +296,14 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
                 targetConversions: p.targetConversions?.toString() ?? "",
                 managerIds: p.managers.map((m) => m.id),
                 memberIds: p.members.map((m) => m.id),
+                productIds: options.productIds,
               }}
               staff={options.staff}
               courses={options.courses}
               batches={options.batches}
+              products={options.products}
               canSetManagers={canSetManagers}
+              canSetProducts={canSetProducts}
               isDefault={p.isDefault}
             />
           </CardContent>

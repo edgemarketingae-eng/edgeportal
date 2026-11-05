@@ -4,14 +4,16 @@ import {
   isDuplicateKey,
   Lead,
   LeadConversion,
+  Project,
   Types,
   withTx,
   type CrmProductDoc,
   type LeadConversionDoc,
   type LeadDoc,
+  type ProjectDoc,
 } from "@edge/db";
 import { now } from "@edge/domain/clock";
-import type { ConversionSource, LeadStage } from "@edge/domain/crm/enums";
+import type { ConversionSource, LeadStage, ProjectStatus } from "@edge/domain/crm/enums";
 import type { Actor } from "@edge/domain/enums";
 import { audit } from "../audit";
 import { BusinessError, NotFoundError, TransitionError, ValidationError } from "../errors";
@@ -19,7 +21,7 @@ import { oid } from "../ids";
 import { iso } from "../mappers";
 import { notifyUser } from "../notifications/in-app";
 import { actorId, escapeRegex, leadHref, loadLead, lockLead, productNames, recordActivity, startOfDubaiMonth, userNames } from "./common";
-import { has, type CrmScope } from "./scope";
+import { has, projectsFor, type CrmScope } from "./scope";
 
 /** What the academy sells, inserted once by the seed; CRM admins rename, add and archive them afterwards. */
 export const DEFAULT_PRODUCTS = [
@@ -72,18 +74,60 @@ export async function ensureDefaultProducts() {
     );
     if (r.upsertedCount && isStudentCourse) await backfillStudentConversions();
   }
+  // Projects from before products belonged to projects keep selling every product until a manager unticks some.
+  // Projects created since always have the field, so this runs once per project.
+  const all = await CrmProduct.distinct("_id");
+  await Project.collection.updateMany({ isDefault: { $ne: true }, productIds: { $exists: false } }, { $set: { productIds: all } });
+}
+
+/** Ids of the products a project sells, or null for "every product" (the default project). */
+export async function productIdsSoldIn(projectId: Types.ObjectId): Promise<Types.ObjectId[] | null> {
+  const p = await Project.findById(projectId, { isDefault: 1, productIds: 1 }).lean();
+  if (p?.isDefault) return null;
+  return p?.productIds ?? [];
+}
+
+/** Active products a project's leads can be converted to, in menu order. The default project sells every product. */
+export async function projectProducts(projectId: Types.ObjectId) {
+  const ids = await productIdsSoldIn(projectId);
+  const rows = await CrmProduct.find({ status: "ACTIVE", ...(ids ? { _id: { $in: ids } } : {}) }, { name: 1 })
+    .sort({ sortOrder: 1, name: 1 })
+    .lean();
+  return rows.map((p) => ({ id: String(p._id), name: p.name }));
+}
+
+/**
+ * The product form's Projects ticks: link the product to the chosen projects and unlink it from the other projects
+ * the viewer can see (never from ones they can't). The default project sells everything and is skipped. Call inside
+ * withTx with `visible` read beforehand. Returns the linked project ids before and after, for the audit.
+ */
+async function linkProjects(productId: Types.ObjectId, projectIds: string[], visible: ProjectDoc[]) {
+  const chosen = new Set(projectIds.filter(Boolean));
+  const known = new Set(visible.map((p) => String(p._id)));
+  if ([...chosen].some((id) => !known.has(id))) throw new ValidationError({ projectIds: "Choose projects you can see" });
+  const others = visible.filter((p) => !p.isDefault);
+  const add = others.filter((p) => chosen.has(String(p._id))).map((p) => p._id);
+  const drop = others.filter((p) => !chosen.has(String(p._id))).map((p) => p._id);
+  if (add.length) await Project.updateMany({ _id: { $in: add } }, { $addToSet: { productIds: productId } });
+  if (drop.length) await Project.updateMany({ _id: { $in: drop } }, { $pull: { productIds: productId } });
+  return {
+    before: others.filter((p) => (p.productIds ?? []).some((x) => x.equals(productId))).map((p) => String(p._id)),
+    after: add.map(String),
+  };
 }
 
 export async function listProducts(scope: CrmScope): Promise<ProductDto[]> {
   if (!has(scope, "crm.manage")) throw new NotFoundError("Product");
   const monthStart = startOfDubaiMonth(now());
-  const [rows, counts] = await Promise.all([
+  const [rows, counts, projects] = await Promise.all([
     CrmProduct.find({}).sort({ status: 1, sortOrder: 1, name: 1 }).lean(),
     LeadConversion.aggregate<{ _id: Types.ObjectId; total: number; month: number }>([
       { $group: { _id: "$productId", total: { $sum: 1 }, month: { $sum: { $cond: [{ $gte: ["$convertedAt", monthStart] }, 1, 0] } } } },
     ]),
+    projectsFor(scope),
   ]);
   const byId = new Map(counts.map((c) => [String(c._id), c]));
+  const sellers = projects.filter((x) => !x.isDefault);
   return rows.map((p) => ({
     id: String(p._id),
     name: p.name,
@@ -94,6 +138,9 @@ export async function listProducts(scope: CrmScope): Promise<ProductDto[]> {
     sortOrder: p.sortOrder ?? 0,
     conversionsMonth: byId.get(String(p._id))?.month ?? 0,
     conversionsTotal: byId.get(String(p._id))?.total ?? 0,
+    projects: sellers
+      .filter((x) => (x.productIds ?? []).some((id) => id.equals(p._id)))
+      .map((x) => ({ id: String(x._id), name: x.name, code: x.code, status: x.status as ProjectStatus })),
     createdAt: iso(p.createdAt)!,
   }));
 }
@@ -111,6 +158,7 @@ export async function createProduct(input: ProductInput, actor: Actor & { type: 
     throw new ValidationError({ name: "A product with this name already exists" });
   const code = await codeFor(name);
   const studentCourse = !!input.isStudentCourse;
+  const visible = input.projectIds?.length ? await projectsFor(scope) : [];
   const id = await withTx(async () => {
     if (studentCourse) await CrmProduct.updateMany({ isStudentCourse: true }, { $set: { isStudentCourse: false } });
     const [p] = await CrmProduct.create([
@@ -124,12 +172,13 @@ export async function createProduct(input: ProductInput, actor: Actor & { type: 
         createdById: actorId(actor),
       },
     ]);
+    const links = input.projectIds?.length ? await linkProjects(p!._id, input.projectIds, visible) : null;
     await audit({
       actor,
       action: "product.create",
       entityType: "CrmProduct",
       entityId: String(p!._id),
-      after: { name, code, isStudentCourse: studentCourse },
+      after: { name, code, isStudentCourse: studentCourse, projectIds: links?.after ?? [] },
     });
     return p!._id;
   });
@@ -147,19 +196,21 @@ export async function updateProduct(id: string, input: Partial<ProductInput>, ac
   if (input.status !== undefined) set.status = input.status;
   if (input.sortOrder !== undefined) set.sortOrder = toInt(input.sortOrder) ?? 0;
   if (input.isStudentCourse !== undefined) set.isStudentCourse = input.isStudentCourse;
-  if (!Object.keys(set).length) return;
+  if (!Object.keys(set).length && input.projectIds === undefined) return;
   const becomesStudentCourse = set.isStudentCourse === true && !p.isStudentCourse;
+  const visible = input.projectIds !== undefined ? await projectsFor(scope) : [];
   await withTx(async () => {
     if (becomesStudentCourse)
       await CrmProduct.updateMany({ _id: { $ne: p._id }, isStudentCourse: true }, { $set: { isStudentCourse: false } });
-    await CrmProduct.updateOne({ _id: p._id }, { $set: set });
+    if (Object.keys(set).length) await CrmProduct.updateOne({ _id: p._id }, { $set: set });
+    const links = input.projectIds !== undefined ? await linkProjects(p._id, input.projectIds, visible) : null;
     await audit({
       actor,
       action: "product.update",
       entityType: "CrmProduct",
       entityId: id,
-      before: { name: p.name, status: p.status, isStudentCourse: p.isStudentCourse },
-      after: set,
+      before: { name: p.name, status: p.status, isStudentCourse: p.isStudentCourse, ...(links ? { projectIds: links.before } : {}) },
+      after: { ...set, ...(links ? { projectIds: links.after } : {}) },
     });
   });
   if (becomesStudentCourse || (set.status === "ACTIVE" && p.status !== "ACTIVE" && p.isStudentCourse)) await backfillStudentConversions();
@@ -226,6 +277,10 @@ export async function markConversions(
   try {
     added = await withTx(async () => {
       const l = await lockLead(lead._id);
+      // On the fresh lead, in case it just moved: only what its project sells can be marked.
+      const sold = await productIdsSoldIn(l.projectId);
+      if (sold && products.some((p) => !sold.some((x) => x.equals(p._id))))
+        throw new ValidationError({ productIds: "Choose products this lead's project sells" });
       const have = new Set((l.productIds ?? []).map(String));
       const fresh = (products as CrmProductDoc[]).filter((p) => !have.has(String(p._id)));
       if (!fresh.length) return [];
