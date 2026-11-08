@@ -59,6 +59,8 @@ export const SETTINGS = {
    * CRM admins edit this list; PUBLIC_FORM_ORIGINS in the environment is always allowed on top of it.
    */
   "crm.formOrigins": { schema: z.array(z.string()), default: [] as string[] },
+  /** Whether CRM users may connect Claude (the MCP connector). Off pauses every connection without deleting it. */
+  "crm.claude": { schema: z.object({ enabled: z.boolean() }), default: { enabled: false } },
   /** Set by HR. `key` never changes once used, so old leave keeps pointing at its type after a rename. */
   "hr.leaveTypes": {
     schema: z

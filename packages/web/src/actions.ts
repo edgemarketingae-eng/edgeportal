@@ -17,10 +17,14 @@ export function confirmed(form: FormData) {
   return text(form, "confirm").toUpperCase() === "DELETE";
 }
 
+/** A same-site path (e.g. a ?next= value); anything else (absolute or protocol-relative URLs) is null. */
+export function safePath(v: unknown): string | null {
+  return typeof v === "string" && v.startsWith("/") && !v.startsWith("//") && !v.startsWith("/\\") && v.length <= 2000 ? v : null;
+}
+
 /** A same-site path to go to after an action; anything else (absolute or protocol-relative URLs) is dropped. */
 export function safeNext(form: FormData, key = "next") {
-  const v = text(form, key);
-  return v.startsWith("/") && !v.startsWith("//") && !v.startsWith("/\\") ? v : null;
+  return safePath(text(form, key));
 }
 
 export function values(form: FormData, keys: string[]) {

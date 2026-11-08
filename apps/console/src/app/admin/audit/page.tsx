@@ -2,6 +2,7 @@ import { adminRoutes } from "@edge/contracts";
 import { formatDateTime } from "@edge/domain/dates";
 import { TableEmpty } from "@edge/ui/blocks/empty-state";
 import { FilterBar, FilterResults, FilterScope } from "@edge/ui/blocks/filter-bar";
+import { Badge } from "@edge/ui/components/badge";
 import { Card } from "@edge/ui/components/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@edge/ui/components/table";
 import { Pagination } from "@edge/ui/blocks/pagination";
@@ -43,7 +44,14 @@ export default async function AuditPage(props: PageProps<"/admin/audit">) {
               {rows.map((r) => (
                 <TableRow key={r.id}>
                   <TableCell className="whitespace-nowrap">{formatDateTime(r.createdAt)}</TableCell>
-                  <TableCell>{r.actor}</TableCell>
+                  <TableCell>
+                    {r.actor}
+                    {r.via === "CLAUDE" ? (
+                      <Badge variant="outline" className="ml-1.5">
+                        via Claude
+                      </Badge>
+                    ) : null}
+                  </TableCell>
                   <TableCell className="font-mono text-xs">{r.action}</TableCell>
                   <TableCell className="hidden font-mono text-xs md:table-cell">
                     {r.entityType}:{r.entityId.slice(0, 10)}

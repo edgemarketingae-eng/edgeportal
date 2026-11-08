@@ -123,6 +123,8 @@ export const AuditRow = z.object({
   id: z.string(),
   createdAt: z.string(),
   actor: z.string(),
+  /** "CLAUDE" when the person made this change through Claude. */
+  via: z.string().nullable().optional(),
   action: z.string(),
   entityType: z.string(),
   entityId: z.string(),

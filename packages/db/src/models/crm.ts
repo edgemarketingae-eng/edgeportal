@@ -18,7 +18,7 @@ import {
   PROJECT_STATUSES,
   TASK_PRIORITIES,
 } from "@edge/domain/crm/enums";
-import { ACTOR_TYPES } from "@edge/domain/enums";
+import { ACTOR_TYPES, ACTOR_VIAS } from "@edge/domain/enums";
 import { Schema, model, type InferSchemaType, type Types } from "mongoose";
 import { money, ObjectId, partialUnique, timestamps } from "./shared";
 
@@ -160,6 +160,8 @@ const leadActivitySchema = new Schema(
     data: { type: Schema.Types.Mixed, default: {} },
     actorType: { type: String, enum: ACTOR_TYPES, required: true },
     actorId: { type: String, default: null },
+    /** Set when the person acted through Claude rather than the CRM itself. */
+    via: { type: String, enum: [...ACTOR_VIAS, null], default: null },
     callId: { type: ObjectId, default: null },
   },
   { timestamps: { createdAt: true, updatedAt: false }, versionKey: false, collection: "leadActivities" },

@@ -18,7 +18,7 @@ Setting up a server and deploying are described in [DEPLOYMENT.md](DEPLOYMENT.md
 | `portal.edgeacademy.ae` | student app |
 | `console.edgeacademy.ae` | staff portal and admin panel |
 | `crm.edgeacademy.ae` | sales CRM (leads, projects, task board; see [CRM.md](CRM.md)) |
-| `api.edgeacademy.ae` | only `/api/health`, `/api/webhooks/*` (payment providers) and `/api/media/*` (signed video URLs) |
+| `api.edgeacademy.ae` | only `/api/health`, `/api/webhooks/*` (payment providers), `/api/media/*` (signed video URLs), `/api/public/*` (website forms), the CRM phone app's paths, and the Claude connector (`/mcp` and its OAuth endpoints `/authorize`, `/token`, `/register`, `/revoke`, `/.well-known/oauth-*`) |
 
 Everything else in the API is reached through the apps. Auth, OTP, Meet join and checkout return go through
 each app's same-origin rewrite. The `/api/v1` data routes are called by the Next servers on 127.0.0.1 with
@@ -162,6 +162,10 @@ The API also throttles OTP sends per number and per IP. Step-by-step setup: [TWI
 - **Logs:** `pm2 logs edge-api --lines 200` (or `edge-worker`, `edge-student`, `edge-console`, `edge-crm`; files in
   `~/.pm2/logs`, rotated daily). API logs are JSON with a `requestId`, which matches the `x-request-id` response header.
 - **Uptime monitoring:** point a checker at `https://api.edgeacademy.ae/api/health`.
+- **Claude connector:** CRM Settings → Claude switches connections on or off for everyone and lists who is connected
+  (Disconnect ends one). Emergency off for the whole server: set `MCP_ENABLED=false` in `.env`, then `pm2 restart edge-api`.
+  Check it's up: `curl -i -X POST https://api.edgeacademy.ae/mcp` answers 401 with a `WWW-Authenticate` header, and
+  `curl https://api.edgeacademy.ae/.well-known/oauth-authorization-server` returns JSON. See [CRM.md](CRM.md#claude-connector-mcp).
 
 ## 5. Go-live checklist
 

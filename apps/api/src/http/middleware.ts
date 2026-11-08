@@ -1,6 +1,7 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { ApiError } from "@edge/contracts";
-import { env, findDeviceByToken, loadViewer, markDeviceSeen } from "@edge/services";
+import { isMcpAccessToken } from "@edge/domain/mcp";
+import { env, findDeviceByToken, loadViewer, markDeviceSeen, verifyMcpAccess } from "@edge/services";
 import { fromNodeHeaders } from "better-auth/node";
 import type { Request, RequestHandler } from "express";
 import { rateLimit } from "express-rate-limit";
@@ -22,17 +23,41 @@ function hasInternalToken(req: Request) {
 /** Paths a device token can even knock on. Hand-written routes such as /files skip `register`, so this has to come first. */
 const PHONE_PATHS = /^\/(crm|mobile|me|notifications)(\/|$)/;
 
+/** Paths Claude's tools may call for someone. Hand-written routes such as /files skip `register`, so this comes first. */
+const MCP_PATHS = /^\/crm(\/|$)/;
+
+function bearerToken(req: Request) {
+  const [scheme, token] = (req.header("authorization") ?? "").split(" ");
+  return scheme?.toLowerCase() === "bearer" && token ? token : null;
+}
+
 /**
- * /api/v1 (except /v1/auth) is for the Next.js servers on the private network, plus the CRM phone app with its device
- * token. A phone's identity comes only from that token, never from a cookie, and `register` keeps it to `deviceRoutes`.
+ * /api/v1 (except /v1/auth) is for the Next.js servers on the private network, the CRM phone app with its device token,
+ * and our own /mcp endpoint acting for someone with their Claude token. A phone's or Claude's identity comes only from
+ * its token, never from a cookie, and `register` keeps each to its list (`deviceRoutes`, `mcpRoutes`).
  */
-export function internalOrDevice(auth: Auth): RequestHandler {
+export function apiGate(auth: Auth): RequestHandler {
   const fromSession = loadViewerMiddleware(auth);
   return async (req, res, next) => {
+    const token = bearerToken(req);
+    // Before the cookie path: a Claude call is that person, whatever cookie came along. Only /mcp holds the internal
+    // token, so a Claude token on its own can't use /api/v1/crm (which is public for the phones).
+    if (token && isMcpAccessToken(token)) {
+      if (!hasInternalToken(req) || !MCP_PATHS.test(req.path)) return next(new ApiError(404, "NOT_FOUND", "Not found"));
+      try {
+        const access = await verifyMcpAccess(token);
+        if (access === "off") return next(new ApiError(401, "UNAUTHENTICATED", "Claude access to the CRM is turned off."));
+        const viewer = access ? await loadViewer(access.userId) : null;
+        if (!access || !viewer || viewer.user.disabledAt) return next(new ApiError(401, "UNAUTHENTICATED", "Reconnect Claude to the CRM."));
+        req.mcp = { grantId: access.grantId, clientId: access.clientId, readOnly: access.readOnly };
+        req.viewer = viewer;
+        return next();
+      } catch (e) {
+        return next(e);
+      }
+    }
     if (hasInternalToken(req)) return fromSession(req, res, next);
-    const [scheme, token] = (req.header("authorization") ?? "").split(" ");
-    if (scheme?.toLowerCase() !== "bearer" || !token || !PHONE_PATHS.test(req.path))
-      return next(new ApiError(404, "NOT_FOUND", "Not found"));
+    if (!token || !PHONE_PATHS.test(req.path)) return next(new ApiError(404, "NOT_FOUND", "Not found"));
     try {
       const device = await findDeviceByToken(token);
       const viewer = device ? await loadViewer(String(device.userId)) : null;
@@ -48,15 +73,15 @@ export function internalOrDevice(auth: Auth): RequestHandler {
   };
 }
 
-/** Stops one lost or misbehaving phone from hammering the API. The Next.js servers aren't limited here. */
-export function phoneRateLimit() {
+/** Stops one lost phone or runaway Claude conversation from hammering the API. The Next.js servers aren't limited here. */
+export function clientRateLimit() {
   return rateLimit({
     windowMs: 60_000,
     limit: 240,
     standardHeaders: "draft-8",
     legacyHeaders: false,
-    skip: (req) => !req.device,
-    keyGenerator: (req) => String(req.device?._id),
+    skip: (req) => !req.device && !req.mcp,
+    keyGenerator: (req) => (req.device ? `d:${String(req.device._id)}` : `m:${req.mcp?.grantId}`),
     message: { error: { code: "RATE_LIMITED", message: "Too many requests. Please wait a minute." } },
   });
 }

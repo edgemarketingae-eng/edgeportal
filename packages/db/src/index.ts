@@ -13,6 +13,7 @@ export * from "./models/ops";
 export * from "./models/crm";
 export * from "./models/hr";
 export * from "./models/files";
+export * from "./models/mcp";
 export { Types } from "mongoose";
 export type { Model, PipelineStage } from "mongoose";
 export type { ClientSession } from "mongoose";

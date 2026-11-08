@@ -17,6 +17,7 @@ import {
 } from "./models/crm";
 import { Enrollment, EnrollmentEvent } from "./models/enrollment";
 import { FileAsset } from "./models/files";
+import { McpAuthRequest, McpClient, McpGrant, McpToken } from "./models/mcp";
 import {
   AttendanceDay,
   Employee,
@@ -85,6 +86,10 @@ export const ALL_MODELS: Model<any>[] = [
   Payslip,
   WorkUpdate,
   FileAsset,
+  McpClient,
+  McpAuthRequest,
+  McpGrant,
+  McpToken,
 ];
 
 /**

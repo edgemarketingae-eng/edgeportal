@@ -1,4 +1,4 @@
-import { ApiError, deviceRoutes, type RouteDef } from "@edge/contracts";
+import { ApiError, deviceRoutes, mcpRoutes, type RouteDef } from "@edge/contracts";
 import type { NextFunction, Request, RequestHandler, Response, Router } from "express";
 import type { z } from "zod";
 
@@ -15,15 +15,21 @@ type Handler<D extends RouteDef> = (
 
 /**
  * Registers a contract route: validates params/query/body with the shared Zod schemas
- * (Express 5's req.query is read-only, so results live on req.valid) and sends JSON.
+ * (Express 5's req.query is read-only, so results live on req.valid) and sends JSON. A phone reaches only `deviceRoutes`
+ * and Claude only `mcpRoutes`; a read-only Claude connection only reads (every CRM write is a POST).
  */
 export function register<D extends RouteDef>(router: Router, def: D, ...handlers: [...RequestHandler[], Handler<D>]) {
   const handler = handlers.pop() as Handler<D>;
   const middleware = handlers as RequestHandler[];
   const method = def.method.toLowerCase() as "get" | "post" | "put" | "patch" | "delete";
-  const phoneAllowed: RequestHandler = (req, _res, next) =>
-    next(req.device && !deviceRoutes.has(def) ? new ApiError(404, "NOT_FOUND", "Not found") : undefined);
-  router[method](def.path, phoneAllowed, ...middleware, async (req: Request, res: Response, next: NextFunction) => {
+  const clientAllowed: RequestHandler = (req, _res, next) => {
+    if ((req.device && !deviceRoutes.has(def)) || (req.mcp && !mcpRoutes.has(def)))
+      return next(new ApiError(404, "NOT_FOUND", "Not found"));
+    if (req.mcp?.readOnly && def.method !== "GET")
+      return next(new ApiError(403, "FORBIDDEN", "This Claude connection is read-only. Reconnect Claude with changes allowed to do that."));
+    next();
+  };
+  router[method](def.path, clientAllowed, ...middleware, async (req: Request, res: Response, next: NextFunction) => {
     try {
       req.valid = {
         params: def.params ? def.params.parse(req.params) : undefined,

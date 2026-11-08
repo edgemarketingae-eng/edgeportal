@@ -32,6 +32,7 @@ import { normalizeLanguage } from "@edge/domain/crm/machine";
 import { dubaiDateString, fromDubaiLocal, startOfDubaiDay } from "@edge/domain/dates";
 import type { Actor } from "@edge/domain/enums";
 import { parsePhone } from "@edge/domain/phone";
+import { viaOf } from "../audit";
 import { env } from "../env";
 import { NotFoundError, ValidationError } from "../errors";
 import { iso } from "../mappers";
@@ -194,6 +195,7 @@ export async function recordActivity(
       data: opts.data ?? {},
       actorType: actor.type,
       actorId: actor.id ?? null,
+      via: viaOf(actor),
     },
   ]);
   return doc!;
@@ -382,6 +384,7 @@ export function toActivityDto(a: LeadActivityDoc, names: Map<string, string>): L
     data: (a.data ?? {}) as Record<string, unknown>,
     actorType: a.actorType,
     actorName: a.actorType === "USER" && a.actorId ? (names.get(a.actorId) ?? null) : null,
+    via: a.via ?? null,
     callId: a.callId ? String(a.callId) : null,
     createdAt: iso(a.createdAt)!,
   };

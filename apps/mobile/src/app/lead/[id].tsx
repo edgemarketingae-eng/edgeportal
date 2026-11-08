@@ -655,7 +655,9 @@ export default function Lead() {
                 <View style={styles.entryText}>
                   <Text variant="label">{title}</Text>
                   {a.body ? <Text>{a.body}</Text> : null}
-                  <Text variant="caption">{[timeAgo(a.createdAt), a.actorName, extra].filter(Boolean).join(" · ")}</Text>
+                  <Text variant="caption">
+                    {[timeAgo(a.createdAt), a.actorName, a.via === "CLAUDE" ? "via Claude" : null, extra].filter(Boolean).join(" · ")}
+                  </Text>
                 </View>
               </View>
             );

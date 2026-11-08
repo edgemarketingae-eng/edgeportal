@@ -1290,9 +1290,9 @@ const staff: DocModule = {
             </>
           </Steps>
           <P>
-            Their sign-in, sessions, phones and notifications go, and they come off any CRM project team. The audit log keeps a copy, and
-            old entries show them as &quot;Deleted user&quot;. You can&apos;t delete yourself, only a super admin can delete a super admin,
-            and the last super admin always stays.
+            Their sign-in, sessions, phones, Claude connections and notifications go, and they come off any CRM project team. The audit log
+            keeps a copy, and old entries show them as &quot;Deleted user&quot;. You can&apos;t delete yourself, only a super admin can
+            delete a super admin, and the last super admin always stays.
           </P>
         </>
       ),

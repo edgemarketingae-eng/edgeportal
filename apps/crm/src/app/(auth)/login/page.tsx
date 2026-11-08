@@ -1,4 +1,5 @@
 import { Alert, AlertDescription } from "@edge/ui/components/alert";
+import { safePath } from "@edge/web/actions";
 import { getViewer } from "@edge/web/server";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
@@ -32,7 +33,8 @@ export default function LoginPage(props: PageProps<"/login">) {
 async function Notices({ searchParams }: { searchParams: PageProps<"/login">["searchParams"] }) {
   const sp = await searchParams;
   const viewer = await getViewer();
-  if (viewer?.homes.crm && !sp.error) redirect(viewer.homes.crm);
+  const next = safePath(sp.next);
+  if (viewer?.homes.crm && !sp.error) redirect(next ? `/?next=${encodeURIComponent(next)}` : viewer.homes.crm);
   const notice = typeof sp.error === "string" ? NOTICES[sp.error] : undefined;
   return (
     <>

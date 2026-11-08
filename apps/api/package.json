@@ -15,31 +15,32 @@
     "move-general-leads": "tsx --env-file-if-exists=../../.env src/scripts/move-general-leads.ts"
   },
   "dependencies": {
-    "express": "^5.3.0",
-    "zod": "catalog:",
     "@edge/contracts": "workspace:*",
     "@edge/db": "workspace:*",
     "@edge/domain": "workspace:*",
     "@edge/integrations": "workspace:*",
     "@edge/jobs": "workspace:*",
     "@edge/services": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.32.1",
     "better-auth": "catalog:",
-    "helmet": "^8.3.0",
+    "express": "^5.3.0",
     "express-rate-limit": "^8.7.1",
+    "helmet": "^8.3.0",
     "pino": "^10.4.0",
-    "pino-http": "^11.0.0"
+    "pino-http": "^11.0.0",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@edge/config": "workspace:*",
     "@types/express": "^5.0.6",
     "@types/node": "catalog:",
+    "@types/supertest": "^7.2.0",
     "eslint": "catalog:",
+    "mongodb-memory-server": "catalog:",
+    "supertest": "^7.3.1",
     "tsdown": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:",
-    "supertest": "^7.3.1",
-    "@types/supertest": "^7.2.0",
-    "mongodb-memory-server": "catalog:"
+    "vitest": "catalog:"
   }
 }

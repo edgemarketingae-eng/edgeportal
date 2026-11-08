@@ -43,6 +43,7 @@ import {
 } from "@edge/db";
 import { invalidateRoleCache } from "../auth/viewer";
 import { NotFoundError } from "../errors";
+import { purgeMcpUser } from "../mcp/connections";
 import { oid } from "../ids";
 import { auditDelete, consoleUrl, crmUrl, deleter, gather, Plan, snapshot, type UserActor } from "../records/kit";
 import { assertPureCrmUser } from "./crm-team";
@@ -98,7 +99,7 @@ async function hrEntriesFor(id: Types.ObjectId): Promise<number> {
 
 /**
  * Only an account with nothing to its name can go: anything it owns or did stays attributed to it, so those block.
- * Sessions, phones, notifications and team places go with the account.
+ * Sessions, phones, Claude connections, notifications and team places go with the account.
  */
 async function staffPlan(s: StaffRecord, actor: UserActor, crm: boolean) {
   const id = s._id;
@@ -163,7 +164,7 @@ async function staffPlan(s: StaffRecord, actor: UserActor, crm: boolean) {
     .blockIf(files, "file", "files")
     .blockIf(updates, "work update", "work updates");
   p.remove(projects, "project team place", "project team places");
-  p.removes.push("Their sign-in, sessions, phones and notifications");
+  p.removes.push("Their sign-in, sessions, phones, Claude connections and notifications");
   if (s.hasStudent) p.warn("They also have a student account. It stays, and they can sign in to the student portal again.");
   return p;
 }
@@ -175,6 +176,7 @@ async function applyStaffDelete(s: StaffRecord, actor: UserActor) {
   await AuthTwoFactor.deleteMany({ userId: id });
   await AuthVerification.deleteMany({ value: String(id) });
   await CrmDevice.deleteMany({ userId: id });
+  await purgeMcpUser(id);
   await InAppNotification.deleteMany({ userId: id });
   await JoinLog.deleteMany({ userId: id });
   await RecordingView.deleteMany({ userId: id });

@@ -308,6 +308,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
                         <p className="text-muted-foreground text-xs">
                           <TimeAgo at={a.createdAt} /> ·{" "}
                           {a.actorType === "USER" ? (a.actorName ?? "Staff") : a.actorType === "WEBHOOK" ? "Website" : "System"}
+                          {a.via === "CLAUDE" ? " · via Claude" : null}
                         </p>
                       </li>
                     );

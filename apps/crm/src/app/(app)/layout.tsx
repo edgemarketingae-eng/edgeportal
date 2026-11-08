@@ -4,6 +4,7 @@ import { api } from "@edge/web/server";
 import {
   Banknote,
   Bell,
+  Bot,
   CheckSquare,
   FolderKanban,
   LayoutDashboard,
@@ -62,6 +63,7 @@ async function CrmShell({ children }: { children: React.ReactNode }) {
         { href: `${CONSOLE_URL()}/staff/updates`, label: "Work updates", icon: <ListChecks />, show: true },
         { href: `${CONSOLE_URL()}/staff`, label: "Leave & salary", icon: <Wallet />, show: true },
         { href: "/notifications", label: "Notifications", icon: <Bell />, show: true },
+        { href: "/claude", label: "Connect Claude", icon: <Bot />, show: true },
         { href: "/docs", label: "Help & docs", icon: <LifeBuoy />, show: true },
       ],
     ],

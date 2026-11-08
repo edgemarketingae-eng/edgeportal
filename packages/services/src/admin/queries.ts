@@ -29,6 +29,7 @@ interface AuditLogDoc {
   _id: Types.ObjectId;
   actorType: string;
   actorId?: string | null;
+  via?: string | null;
   action: string;
   entityType: string;
   entityId: string;
@@ -365,6 +366,7 @@ export async function listAudit(query: { q?: string } & PageInput = {}) {
       id: String(r._id),
       createdAt: iso((r as { createdAt?: Date }).createdAt)!,
       actor: r.actorType === "USER" ? (names.get(r.actorId ?? "") ?? r.actorId ?? "") : r.actorType.toLowerCase(),
+      via: r.via ?? null,
       action: r.action,
       entityType: r.entityType,
       entityId: r.entityId,

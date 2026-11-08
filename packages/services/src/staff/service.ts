@@ -11,7 +11,7 @@ import { oid } from "../ids";
 import { queueEmail } from "../notifications/email";
 import { notifyUser } from "../notifications/in-app";
 import { normalizePhone } from "../crm/common";
-import { revokeDevices } from "../crm/devices";
+import { revokeUserAccess } from "../auth/revoke";
 import { flushOutbox } from "../runtime";
 import { invalidateRoleCache } from "../auth/viewer";
 import { decryptTempPassword, encryptTempPassword } from "./temp-password";
@@ -227,7 +227,7 @@ export async function setStaffDisabled(userId: string, disabled: boolean, actor:
     await AuthUser.updateOne({ _id }, { $set: { disabledAt: disabled ? new Date() : null } });
     if (disabled) {
       await AuthSession.deleteMany({ userId: _id });
-      await revokeDevices(_id, "account_disabled");
+      await revokeUserAccess(_id, "account_disabled");
     }
     await audit({ actor, action: disabled ? "staff.disable" : "staff.enable", entityType: "User", entityId: userId });
   });
@@ -278,7 +278,7 @@ export async function resetStaffPassword(userId: string, actor: Actor & { type: 
     await AuthUser.updateOne({ _id }, { $set: { mustChangePassword: true } });
     await StaffProfile.updateOne({ _id }, { $set: { tempPasswordEnc } });
     await AuthSession.deleteMany({ userId: _id });
-    await revokeDevices(_id, "password_reset");
+    await revokeUserAccess(_id, "password_reset");
     await audit({ actor, action: "staff.resetPassword", entityType: "User", entityId: userId });
     await queueEmail({
       to: user.email,

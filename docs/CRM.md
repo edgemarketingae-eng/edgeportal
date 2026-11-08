@@ -286,6 +286,47 @@ Sent through Firebase Cloud Messaging: a lead assigned to you, a follow-up due n
 verified or rejected. Bulk assign and CSV import send one summary per person. A missed call from a lead and the prompt to add
 an outcome come from the phone itself. Until Firebase is set up (`PUSH_MODE=live`), alerts only go to the worker log.
 
+## Claude connector (MCP)
+
+Staff and admins can connect Claude (claude.ai, the Claude desktop and phone apps, Claude Code) to the CRM and work in it by
+chatting. Claude acts **as the person, with exactly their CRM permissions and projects**. The in-app guide is the docs
+module **Connect Claude** (`/docs/claude`); each person's page is **Connect Claude** (`/claude`) in the sidebar.
+
+- **Address:** `https://api.edgeacademy.ae/mcp` (Streamable HTTP, stateless, JSON responses). Everyone uses the same address.
+- **Switch:** CRM Settings → **Claude** → _Let CRM users connect Claude_ (setting `crm.claude`, off by default, `crm.manage`).
+  Off stops every connection at once without deleting it. `MCP_ENABLED=false` (then `pm2 restart edge-api`) takes `/mcp` and its
+  OAuth endpoints away entirely.
+- **Sign-in:** OAuth 2.1 with PKCE and dynamic client registration, served by the API with the MCP SDK's `mcpAuthRouter` and our
+  provider (`apps/api/src/mcp/provider.ts`, services in `packages/services/src/mcp/`). Better Auth is not involved.
+  `/authorize` sends the browser to the CRM's consent page `crm.edgeacademy.ae/connect?request=…`, where the person signs in as
+  usual (two-factor and password-change rules apply), sees what Claude may and may not do, can tick _Read only_, and chooses
+  **Allow** or **Deny**. Clients are public (no secret). Redirects must be in `MCP_ALLOWED_REDIRECTS` (Claude's own callbacks,
+  plus `loopback` for apps on the person's computer). A request lasts 10 minutes, a code 5 minutes and works once (a replayed
+  code revokes the connection it made), access tokens last `MCP_ACCESS_TOKEN_MINUTES` (60), refresh tokens
+  `MCP_REFRESH_TOKEN_DAYS` (30) and rotate (an old one reused after a minute revokes the connection). Only hashes are stored.
+- **Tools:** about 50 tools (`apps/api/src/mcp/tools/`, the `TOOLS` list), each a thin front for one or two CRM routes. A tool runs by
+  calling the real API route over loopback with the person's Claude token plus the internal token, so validation, permissions,
+  project scope and the audit trail are the web's. The API gate admits a Claude token only together with the internal token (so it's
+  useless straight against the public `/api/v1/crm`), only under `/crm`, and `register()` only to the routes in `mcpRoutes`
+  (`packages/contracts/src/claude.ts`); a read-only connection only to GETs. People see only the tools their permissions allow.
+  Never reachable: staff accounts and roles (their rows carry temporary passwords), password resets and email changes, CSV
+  import/export, the website-forms allowlist, and the Claude switch and connections themselves. A test keeps `TOOLS` and `mcpRoutes`
+  in step. Deletes, merges, bulk changes and commission rates are marked destructive, so Claude asks first; bulk delete takes ids
+  only (at most 100). Times are Dubai local time both ways and amounts USD.
+- **Attribution:** changes through Claude are the person's, with `via: "CLAUDE"` on `auditLogs` and `leadActivities` (shown as
+  "via Claude" on the lead timeline, the phone app and the console audit log). Approving and connecting are audited
+  (`claude.approve` with IP and browser, `claude.connect`, `claude.disconnect`, `crm.claude.update`).
+- **Ending a connection:** **Disconnect** on `/claude` (your own) or in Settings (anyone's, `crm.manage`); a password change or reset,
+  disabling the account or deleting it ends them all (`revokeUserAccess`, which also signs out phones).
+- **Limits:** 120 MCP requests a minute per connection, 240 API calls a minute per connection; OAuth endpoints per IP (Anthropic's
+  servers send everyone's sign-ins, so they're above the SDK defaults).
+- **Collections:** `mcpClients` (registered apps; unapproved ones expire after a day), `mcpAuthRequests` (consent requests and codes),
+  `mcpGrants` (connections), `mcpTokens` (token hashes, TTL).
+- **Testing locally:** `claude mcp add --transport http edge-crm http://localhost:4100/mcp` against the e2e stack (not `pnpm dev`,
+  whose `.env` points at production), then `/mcp` → Authenticate; or the MCP Inspector (`npx @modelcontextprotocol/inspector`,
+  Streamable HTTP, Quick OAuth Flow; its `localhost:6274` callback counts as loopback). To try claude.ai before production, tunnel
+  the API to an https address and set `API_PUBLIC_URL` to it.
+
 ## Website forms (public intake)
 
 Two ways in, both with the same field names. The in-app guide for web teams (URL, fields, HTML/fetch/curl/Node samples)
@@ -512,7 +553,7 @@ academy and HR side.
 commission rate and amount fixed at verification). Lead language used to be free text; `migrate` maps old values onto
 the dropdown codes. Every mutation is in the audit log (`lead.*` including
 `lead.conversion.*` and `lead.deposit.*`, `task.*`, `project.*`, `product.*`, `crm.settings.update`,
-`crm.commission.update`, `staff.*`, `role.*`, `device.*`). Leads keep no unique index on phone or email on purpose:
+`crm.commission.update`, `staff.*`, `role.*`, `device.*`, `claude.*`). Leads keep no unique index on phone or email on purpose:
 duplicates are a real state, flagged on entry and resolved with **Merge duplicate**.
 
 ## Rolling out the CRM host (production)

@@ -36,8 +36,9 @@ export function requireStaffUser(req: Request) {
   return v;
 }
 
-export function actorOf(v: Viewer) {
-  return { type: "USER" as const, id: v.userId };
+/** The person acting; changes Claude makes for them are marked "via Claude" in the audit log and lead timeline. */
+export function actorOf(v: Viewer, req?: Request) {
+  return { type: "USER" as const, id: v.userId, ...(req?.mcp ? { via: "CLAUDE" as const } : {}) };
 }
 
 /** At least one of `perms` (for areas shared by mentors and admins). */

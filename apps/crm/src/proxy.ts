@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 
 /** Signed-out visitors to the CRM go to /login before anything renders; the layouts do the real check. */
 export function proxy(req: NextRequest) {
-  return redirectSignedOut(req, "/login");
+  return redirectSignedOut(req, "/login", { next: true });
 }
 
 export const config = {
@@ -16,6 +16,8 @@ export const config = {
     "/team/:path*",
     "/import",
     "/settings",
+    "/claude",
+    "/connect",
     "/notifications",
     "/docs/:path*",
   ],

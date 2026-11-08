@@ -1,6 +1,6 @@
 import { AuthUser, StaffProfile, nativeDb } from "@edge/db";
 import { isValidE164 } from "@edge/domain/phone";
-import { env, flushOutbox, queueEmail, revokeDevices, runtime } from "@edge/services";
+import { env, flushOutbox, queueEmail, revokeUserAccess, runtime } from "@edge/services";
 import type { OtpChannel } from "@edge/integrations/twilio/verify";
 import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
@@ -67,7 +67,7 @@ export function createAuth() {
       // A self-service reset replaces the temporary password, so it must stop being shown.
       onPasswordReset: async ({ user }) => {
         await StaffProfile.updateOne({ _id: user.id }, { $set: { tempPasswordEnc: null } });
-        await revokeDevices(user.id, "password_reset");
+        await revokeUserAccess(user.id, "password_reset");
       },
     },
     databaseHooks: {
@@ -93,7 +93,7 @@ export function createAuth() {
           if (userId) {
             await AuthUser.updateOne({ _id: userId }, { $set: { mustChangePassword: false } });
             await StaffProfile.updateOne({ _id: userId }, { $set: { tempPasswordEnc: null } });
-            await revokeDevices(userId, "password_changed");
+            await revokeUserAccess(userId, "password_changed");
           }
         }
       }),

@@ -17,10 +17,13 @@ export const CACHE_STATES = ["NONE", "FILLING", "READY", "EVICTED", "ERROR"] as 
 export const CHANNELS = ["EMAIL", "SMS", "WHATSAPP", "IN_APP", "PUSH"] as const;
 export const DELIVERY_STATUSES = ["QUEUED", "SENT", "DELIVERED", "FAILED", "BOUNCED", "SKIPPED"] as const;
 export const ACTOR_TYPES = ["USER", "SYSTEM", "WEBHOOK"] as const;
+/** How a person made a change when it wasn't the CRM web or phone app (shown as "via Claude"). */
+export const ACTOR_VIAS = ["CLAUDE"] as const;
 
 export type Gateway = (typeof GATEWAYS)[number];
 export type PaymentKind = (typeof PAYMENT_KINDS)[number];
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 export type SyncStatus = (typeof SYNC_STATUSES)[number];
 export type ActorType = (typeof ACTOR_TYPES)[number];
-export type Actor = { type: "USER"; id: string } | { type: "SYSTEM"; id?: string } | { type: "WEBHOOK"; id?: string };
+export type ActorVia = (typeof ACTOR_VIAS)[number];
+export type Actor = { type: "USER"; id: string; via?: ActorVia } | { type: "SYSTEM"; id?: string } | { type: "WEBHOOK"; id?: string };

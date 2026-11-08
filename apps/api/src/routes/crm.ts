@@ -85,7 +85,7 @@ import { register } from "../http/route";
 export async function crm(req: Request, ...perms: Permission[]) {
   const v = requirePermission(req, "crm.access", ...perms);
   req.crmScope ??= await loadCrmScope(v);
-  return { v, actor: actorOf(v), scope: req.crmScope };
+  return { v, actor: actorOf(v, req), scope: req.crmScope };
 }
 
 const ok = (message: string) => ({ ok: true as const, message });

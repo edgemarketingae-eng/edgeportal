@@ -1,4 +1,4 @@
-import { ACTOR_TYPES, CHANNELS, DELIVERY_STATUSES } from "@edge/domain/enums";
+import { ACTOR_TYPES, ACTOR_VIAS, CHANNELS, DELIVERY_STATUSES } from "@edge/domain/enums";
 import { Schema, model, type InferSchemaType, type Types } from "mongoose";
 import { ObjectId, partialUnique } from "./shared";
 
@@ -26,7 +26,13 @@ notificationLogSchema.index({ userId: 1, createdAt: -1 });
 notificationLogSchema.index({ status: 1, createdAt: 1 });
 
 const inAppSchema = new Schema(
-  { userId: { type: ObjectId, required: true }, title: String, body: String, href: { type: String, default: null }, readAt: { type: Date, default: null } },
+  {
+    userId: { type: ObjectId, required: true },
+    title: String,
+    body: String,
+    href: { type: String, default: null },
+    readAt: { type: Date, default: null },
+  },
   { ...created, collection: "inAppNotifications" },
 );
 inAppSchema.index({ userId: 1, readAt: 1, createdAt: -1 });
@@ -35,6 +41,8 @@ const auditLogSchema = new Schema(
   {
     actorType: { type: String, enum: ACTOR_TYPES, required: true },
     actorId: { type: String, default: null },
+    /** Set when the person acted through Claude rather than the CRM itself. */
+    via: { type: String, enum: [...ACTOR_VIAS, null], default: null },
     action: { type: String, required: true },
     entityType: { type: String, required: true },
     entityId: { type: String, required: true },

@@ -3,7 +3,7 @@
 import { authRoutes } from "@edge/contracts";
 import { Button } from "@edge/ui/components/button";
 import { Field, FormError, type ActionState } from "@edge/ui/forms/field";
-import { toActionState } from "@edge/web/actions";
+import { safePath, toActionState } from "@edge/web/actions";
 import { hardNavigate, postAuth } from "@edge/web/auth-client";
 import Link from "next/link";
 import { useActionState } from "react";
@@ -17,7 +17,10 @@ export function LoginForm() {
         password: String(form.get("password") ?? ""),
         app: "crm",
       });
-      return hardNavigate(res.twoFactorRedirect ? "/two-factor" : (res.home ?? "/"));
+      // ?next= (e.g. the Claude consent page) survives the second step; "/" then sends them on, or to a required step.
+      const next = safePath(new URLSearchParams(window.location.search).get("next"));
+      const q = next ? `?next=${encodeURIComponent(next)}` : "";
+      return hardNavigate(res.twoFactorRedirect ? `/two-factor${q}` : next ? `/${q}` : (res.home ?? "/"));
     } catch (e) {
       return toActionState(e, values);
     }

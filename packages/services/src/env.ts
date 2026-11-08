@@ -86,6 +86,26 @@ const schema = z
     CLOUDINARY_API_SECRET: z.string().optional(),
     CLOUDINARY_ROOT_FOLDER: z.string().default("edge-academy"),
 
+    /** Claude connector (MCP). false = /mcp and its OAuth endpoints aren't mounted at all (an emergency off switch). */
+    MCP_ENABLED: z.stringbool().default(true),
+    /**
+     * Where Claude may send people back after they allow it (comma-separated, exact). `loopback` allows http://localhost,
+     * 127.0.0.1 and [::1] on any port and path: Claude Code and the MCP Inspector listen there.
+     */
+    MCP_ALLOWED_REDIRECTS: z
+      .string()
+      .default("https://claude.ai/api/mcp/auth_callback,https://claude.com/api/mcp/auth_callback,loopback")
+      .transform((s) =>
+        s
+          .split(",")
+          .map((o) => o.trim())
+          .filter(Boolean),
+      ),
+    MCP_ACCESS_TOKEN_MINUTES: z.coerce.number().int().min(5).max(1440).default(60),
+    MCP_REFRESH_TOKEN_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+    /** Where Claude's tool calls reach this API (default: the port the request came in on, on 127.0.0.1). */
+    MCP_API_URL: z.url().optional(),
+
     /** Shared secret for POST /api/webhooks/leads/:source (website lead forms). Unset = endpoint disabled. */
     LEAD_WEBHOOK_SECRET: z.string().min(16).optional(),
   })
@@ -99,6 +119,12 @@ const schema = z
     }
     if (e.EMAIL_MODE === "mailersend" && !e.MAILERSEND_API_KEY) {
       ctx.addIssue({ code: "custom", path: ["MAILERSEND_API_KEY"], message: "MAILERSEND_API_KEY is required for EMAIL_MODE=mailersend" });
+    }
+    if (e.NODE_ENV === "production") {
+      for (const r of e.MCP_ALLOWED_REDIRECTS) {
+        if (r !== "loopback" && !r.startsWith("https://"))
+          ctx.addIssue({ code: "custom", path: ["MCP_ALLOWED_REDIRECTS"], message: `${r} must start with https://` });
+      }
     }
     if (e.NODE_ENV !== "production" || e.ALLOW_MOCK_IN_PRODUCTION) return;
     for (const key of ["OTP_MODE", "PAYMENTS_MODE", "ODOO_MODE", "GOOGLE_MODE", "MAILERLITE_MODE", "STORAGE_MODE"] as const) {

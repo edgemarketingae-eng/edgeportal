@@ -1,13 +1,14 @@
 import "./http/context";
 import { pingDb } from "@edge/db";
-import { allowedFormOrigins } from "@edge/services";
+import { allowedFormOrigins, env } from "@edge/services";
 import { toNodeHandler } from "better-auth/node";
 import express from "express";
 import helmet from "helmet";
 import { pinoHttp } from "pino-http";
 import type { Auth } from "./auth";
 import { errorHandler } from "./http/errors";
-import { internalOrDevice, phoneRateLimit, publicCors, requestContext } from "./http/middleware";
+import { apiGate, clientRateLimit, publicCors, requestContext } from "./http/middleware";
+import { mcpRouter } from "./mcp/router";
 import { authRouter } from "./routes/auth";
 import { adminRouter } from "./routes/admin";
 import { devRouter } from "./routes/dev";
@@ -21,6 +22,7 @@ import { filesRouter } from "./routes/files";
 import { hrRouter } from "./routes/hr";
 import { mobileAuthRouter, mobileRouter } from "./routes/mobile";
 import { recordsRouter } from "./routes/records";
+import { claudeRouter } from "./routes/claude";
 
 export interface AppOptions {
   auth: Auth;
@@ -36,7 +38,15 @@ export function createApp({ auth, logger = true, extraRoutes }: AppOptions) {
   app.use(requestContext);
   if (logger)
     app.use(
-      pinoHttp({ genReqId: (req) => (req as express.Request).requestId, autoLogging: { ignore: (req) => req.url === "/api/health" } }),
+      pinoHttp({
+        genReqId: (req) => (req as express.Request).requestId,
+        autoLogging: { ignore: (req) => req.url === "/api/health" },
+        // Bearer tokens (phones, Claude), forwarded session cookies and the internal token never go to the logs.
+        redact: {
+          paths: ["req.headers.authorization", "req.headers.cookie", 'req.headers["x-internal-token"]', 'res.headers["set-cookie"]'],
+          censor: "[redacted]",
+        },
+      }),
     );
   app.use(helmet({ crossOriginResourcePolicy: false, contentSecurityPolicy: false }));
 
@@ -62,8 +72,11 @@ export function createApp({ auth, logger = true, extraRoutes }: AppOptions) {
   app.use("/api/public", publicCors(allowedFormOrigins));
   app.use(publicRouter());
   app.use(mobileAuthRouter(auth));
-  // Everything else under /api/v1 is internal (Next.js servers with the forwarded session cookie) or the CRM phone app.
-  app.use("/api/v1", internalOrDevice(auth), phoneRateLimit());
+  // The Claude connector: /mcp plus its OAuth endpoints at the root (MCP_ENABLED=false takes all of it away).
+  if (env.MCP_ENABLED) app.use(mcpRouter());
+  // Everything else under /api/v1 is internal (Next.js servers with the forwarded session cookie), the CRM phone app,
+  // or our own /mcp endpoint acting for someone.
+  app.use("/api/v1", apiGate(auth), clientRateLimit());
   app.use(meRouter());
   app.use(studentRouter());
   app.use(paymentsRouter());
@@ -73,6 +86,7 @@ export function createApp({ auth, logger = true, extraRoutes }: AppOptions) {
   app.use(mobileRouter());
   app.use(hrRouter());
   app.use(recordsRouter());
+  app.use(claudeRouter());
   app.use(filesRouter());
   app.use(devRouter());
 

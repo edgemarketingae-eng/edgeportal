@@ -1,4 +1,4 @@
-import { crmRoutes } from "@edge/contracts";
+import { claudeRoutes, crmRoutes } from "@edge/contracts";
 import { CopyButton } from "@edge/ui/blocks/copy-button";
 import { tone } from "@edge/ui/lib/tones";
 import { Badge } from "@edge/ui/components/badge";
@@ -7,6 +7,8 @@ import { PageHeader } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ClaudeAccessForm } from "@/components/crm/claude-access-form";
+import { ClaudeConnections } from "@/components/crm/claude-connections";
 import { CrmSettingsForm, FormOriginsForm } from "@/components/crm/crm-settings-form";
 import { CommissionSettingsForm } from "@/components/crm/deposit-actions";
 import { can, load, requireCrm } from "@/lib/load";
@@ -15,9 +17,10 @@ export const metadata: Metadata = { title: "Settings" };
 
 export default async function CrmSettingsPage() {
   const v = await requireCrm("crm.manage");
-  const [s, commission] = await Promise.all([
+  const [s, commission, claude] = await Promise.all([
     load(() => api(crmRoutes.settings)),
     can(v, "crm.commission.manage") ? load(() => api(crmRoutes.commissionSettings)) : null,
+    load(() => api(claudeRoutes.admin)),
   ]);
   return (
     <>
@@ -83,6 +86,28 @@ export default async function CrmSettingsPage() {
                 </ul>
               </div>
             ) : null}
+          </CardContent>
+        </Card>
+        <Card id="claude" className="scroll-mt-6">
+          <CardHeader>
+            <CardTitle>Claude</CardTitle>
+            <CardDescription>
+              CRM users can connect Claude to work in the CRM as themselves, with their own permissions (never staff accounts, passwords or
+              CSV files). What it changes is marked &ldquo;via Claude&rdquo; in the timeline and audit log.{" "}
+              <Link href="/claude" className="underline">
+                How to connect
+              </Link>
+              .
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-5 text-sm">
+            <ClaudeAccessForm enabled={claude.enabled} />
+            <div className="grid gap-2">
+              <p className="font-medium">Connected now</p>
+              <div className="rounded-lg border">
+                <ClaudeConnections rows={claude.connections} withUser />
+              </div>
+            </div>
           </CardContent>
         </Card>
         <Card>

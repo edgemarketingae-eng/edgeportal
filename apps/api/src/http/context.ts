@@ -13,6 +13,8 @@ declare global {
       sessionToken?: string | null;
       /** Set when the request came from the CRM phone app with a device token instead of a Next.js server. */
       device?: CrmDeviceDoc;
+      /** Set when Claude made this request for someone (our /mcp endpoint calling the API with their Claude token). */
+      mcp?: { grantId: string; clientId: string; readOnly: boolean };
       valid?: { params?: unknown; query?: unknown; body?: unknown };
     }
   }

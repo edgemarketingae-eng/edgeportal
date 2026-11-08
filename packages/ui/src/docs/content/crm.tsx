@@ -1,5 +1,6 @@
 import {
   Banknote,
+  Bot,
   CheckSquare,
   FolderKanban,
   Globe,
@@ -2405,6 +2406,158 @@ await fetch("${apiUrl}/api/webhooks/leads/website", {
               Without a code, or with a code that doesn&apos;t exist, the lead goes to General. If the project is archived, the lead goes to
               General and the admins are told to fix it.
             </P>
+          </>
+        ),
+      },
+    ],
+  },
+  // ---------------------------------------------------------------------------------------------
+  {
+    slug: "claude",
+    title: "Connect Claude",
+    summary: "Use the CRM from Claude: find leads, log notes and calls, plan follow-ups and check the numbers by chatting, as yourself.",
+    icon: Bot,
+    group: "Basics",
+    audience: ["crm.access"],
+    href: "/claude",
+    sections: [
+      {
+        id: "what",
+        title: "What it is",
+        body: (
+          <>
+            <P>
+              Claude (claude.ai, the Claude desktop and phone apps, or Claude Code) can work in the CRM for you. Ask it things like
+              &ldquo;Which of my leads haven&apos;t been contacted this week?&rdquo;, &ldquo;Log a call with Anil: interested, call back
+              Thursday at 6pm&rdquo; or &ldquo;How is the Malayalam team doing on the leaderboard this month?&rdquo;.
+            </P>
+            <List>
+              <>Claude works as you, with exactly your CRM permissions and projects. It can&apos;t see or do anything you can&apos;t.</>
+              <>
+                Everything it changes is recorded as you and marked <b>via Claude</b> on the lead&apos;s timeline and in the audit log.
+              </>
+              <>It asks you before deleting anything, merging leads or changing many leads at once.</>
+            </List>
+          </>
+        ),
+      },
+      {
+        id: "connect",
+        title: "Connect from claude.ai or the Claude app",
+        body: ({ apiUrl }) => (
+          <>
+            <Steps>
+              <>
+                Open <To href="/claude">Connect Claude</To> in the CRM and copy the connector address:{" "}
+                <code className="break-all">{apiUrl}/mcp</code>
+              </>
+              <>
+                In Claude, open <b>Settings</b> → <b>Connectors</b> → <b>Add custom connector</b>. Name it Edge CRM, paste the address and
+                leave the advanced settings empty.
+              </>
+              <>
+                Choose <b>Connect</b>. Claude opens the CRM: sign in if asked, check the page, and choose <Ui>Allow</Ui>.
+              </>
+              <>In a chat, make sure Edge CRM is switched on in the tools menu, then ask away.</>
+            </Steps>
+            <Note>
+              A connector you add on claude.ai also works in the Claude desktop and phone apps. On a Claude Team or Enterprise plan, an
+              owner of your Claude organization may need to add the connector before you can connect it.
+            </Note>
+          </>
+        ),
+      },
+      {
+        id: "claude-code",
+        title: "Connect from Claude Code",
+        body: ({ apiUrl }) => (
+          <>
+            <P>Run this in a terminal:</P>
+            <Code label="Terminal">{`claude mcp add --transport http edge-crm ${apiUrl}/mcp`}</Code>
+            <P>
+              Then type <code>/mcp</code> in Claude Code, pick edge-crm and choose Authenticate. Your browser opens the CRM; choose{" "}
+              <Ui>Allow</Ui>.
+            </P>
+          </>
+        ),
+      },
+      {
+        id: "allow",
+        title: "The Allow page",
+        body: (
+          <>
+            <P>
+              The page shows who you&apos;re signed in as, the name the app gave itself, where it goes back to (claude.ai, or an app on this
+              computer), and what Claude will and won&apos;t be able to do.
+            </P>
+            <List>
+              <>
+                Tick <Ui>Read only</Ui> if Claude should only look things up, never change anything.
+              </>
+              <>The page works for 10 minutes. If it has expired, start connecting again from Claude.</>
+              <>If you have to change your password or set up two-factor first, do that, then connect again from Claude.</>
+            </List>
+            <Note kind="warning" title="Only allow what you started">
+              Choose <Ui>Deny</Ui> if you didn&apos;t just start connecting Claude yourself, for example if someone sent you the link.
+              Allowing it would let their Claude work in the CRM as you.
+            </Note>
+          </>
+        ),
+      },
+      {
+        id: "limits",
+        title: "What Claude can and can't do",
+        body: (
+          <>
+            <Terms
+              head={["Claude can", "Claude can never"]}
+              rows={[
+                [
+                  "Search and read leads, tasks, projects, deposits and reports you can see",
+                  "Create, change or delete staff accounts or roles",
+                ],
+                ["Create and edit leads, log notes, calls and messages, move stages", "See or reset passwords"],
+                ["Create, update, complete and comment on tasks", "Import or export CSV files"],
+                [
+                  "Log deposits, record conversions, manage products and projects (if your role can)",
+                  "Change which websites may post leads",
+                ],
+                [
+                  "Delete, merge or bulk-assign leads (if your role can, after asking you)",
+                  "Connect itself or switch Claude access on or off",
+                ],
+              ]}
+            />
+            <P>
+              All times you give Claude and get back are Dubai time. Text on leads (website messages, notes) is treated as information,
+              never as instructions to Claude.
+            </P>
+          </>
+        ),
+      },
+      {
+        id: "disconnect",
+        title: "Disconnecting",
+        body: (
+          <>
+            <P>
+              <To href="/claude">Connect Claude</To> lists your connections and when each was last used. Choose <Ui>Disconnect</Ui> to end
+              one at once. Changing or resetting your password, or your account being disabled, disconnects all of them.
+            </P>
+          </>
+        ),
+      },
+      {
+        id: "admins",
+        title: "For CRM admins",
+        body: (
+          <>
+            <P>
+              In <To href="/settings#claude">Settings</To>, the <Ui>Claude</Ui> card has the switch <Ui>Let CRM users connect Claude</Ui>{" "}
+              and a list of everyone who is connected, each with <Ui>Disconnect</Ui>. Turning the switch off stops every connection at once
+              without deleting anything; people may need to reconnect after it is turned back on.
+            </P>
+            <P>Every Allow and every change made through Claude is in the audit log; changes show as the person, marked via Claude.</P>
           </>
         ),
       },

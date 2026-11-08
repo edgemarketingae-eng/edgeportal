@@ -27,7 +27,7 @@ import {
 import { startOfDubaiDay } from "@edge/domain/dates";
 import type { Actor } from "@edge/domain/enums";
 import { parsePhone } from "@edge/domain/phone";
-import { audit } from "../audit";
+import { audit, viaOf } from "../audit";
 import { NotFoundError, ValidationError } from "../errors";
 import {
   between,
@@ -163,6 +163,7 @@ async function saveCall(c: CallFacts, actor: UserActor, scope: CrmScope, sheet?:
             callId,
             actorType: actor.type,
             actorId: actor.id,
+            via: viaOf(actor),
             createdAt: startedAt,
           },
         ]);

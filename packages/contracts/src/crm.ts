@@ -151,7 +151,13 @@ export const TaskInput = z.object({
   assigneeId: z.string().optional(),
 });
 export type TaskInput = z.input<typeof TaskInput>;
-export const TaskUpdateInput = TaskInput.omit({ projectId: true, leadId: true }).partial();
+/**
+ * Update schemas re-declare fields that have a create default: zod 4 keeps `.default()` inside `.partial()`, so an
+ * omitted field would otherwise be reset (a task's priority to MEDIUM, a paused project to ACTIVE).
+ */
+export const TaskUpdateInput = TaskInput.omit({ projectId: true, leadId: true })
+  .partial()
+  .extend({ type: z.enum(FOLLOWUP_TYPES).optional(), priority: z.enum(TASK_PRIORITIES).optional() });
 export type TaskUpdateInput = z.input<typeof TaskUpdateInput>;
 export const MoveTaskInput = z.object({ status: z.enum(CRM_TASK_STATUSES), orderedIds: z.array(z.string()).max(600).default([]) });
 export const TaskCommentInput = z.object({ body: z.string().trim().min(1, "Write a comment").max(5000) });
@@ -173,6 +179,7 @@ export const ProjectInput = z.object({
   productIds: z.array(z.string()).max(200).optional(),
 });
 export type ProjectInput = z.input<typeof ProjectInput>;
+export const ProjectUpdateInput = ProjectInput.partial().extend({ status: z.enum(PROJECT_STATUSES).optional() });
 export const ProjectMemberInput = z.object({ userId: z.string().min(1), role: z.enum(["manager", "member"]) });
 
 export const CrmSettingsInput = z.object({
@@ -195,6 +202,7 @@ export const ProductInput = z.object({
   projectIds: z.array(z.string()).max(200).optional(),
 });
 export type ProductInput = z.input<typeof ProductInput>;
+export const ProductUpdateInput = ProductInput.partial().extend({ status: z.enum(PRODUCT_STATUSES).optional() });
 
 export const ConversionInput = z.object({
   productIds: z.array(z.string().min(1)).min(1, "Choose at least one product").max(20),
@@ -363,6 +371,8 @@ export const LeadActivityDto = z.object({
   data: z.record(z.string(), z.unknown()),
   actorType: z.string(),
   actorName: nullable,
+  /** "CLAUDE" when the person made this change through Claude. Optional so older phone apps still parse it. */
+  via: nullable.optional(),
   /** Set on entries the call tracker wrote; those are deleted through their call. */
   callId: nullable.optional(),
   createdAt: z.string(),
@@ -839,7 +849,7 @@ export const crmRoutes = {
 
   products: route({ method: "GET", path: `${base}/products`, response: z.array(ProductDto) }),
   createProduct: route({ method: "POST", path: `${base}/products`, body: ProductInput, response: z.object({ id: z.string() }) }),
-  updateProduct: route({ method: "POST", path: `${base}/products/:id`, params: idParam, body: ProductInput.partial(), response: zOk }),
+  updateProduct: route({ method: "POST", path: `${base}/products/:id`, params: idParam, body: ProductUpdateInput, response: zOk }),
 
   board: route({ method: "GET", path: `${base}/board`, query: taskFilters, response: BoardDto }),
   tasks: route({
@@ -881,7 +891,7 @@ export const crmRoutes = {
   }),
   createProject: route({ method: "POST", path: `${base}/projects`, body: ProjectInput, response: z.object({ id: z.string() }) }),
   project: route({ method: "GET", path: `${base}/projects/:id`, params: idParam, response: ProjectDetail }),
-  updateProject: route({ method: "POST", path: `${base}/projects/:id`, params: idParam, body: ProjectInput.partial(), response: zOk }),
+  updateProject: route({ method: "POST", path: `${base}/projects/:id`, params: idParam, body: ProjectUpdateInput, response: zOk }),
   deleteProject: route({ method: "POST", path: `${base}/projects/:id/delete`, params: idParam, response: zOk }),
   projectMember: route({ method: "POST", path: `${base}/projects/:id/members`, params: idParam, body: ProjectMemberInput, response: zOk }),
   removeProjectMember: route({

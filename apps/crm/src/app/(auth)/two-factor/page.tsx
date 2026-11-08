@@ -4,6 +4,7 @@ import { OtpInput } from "@edge/ui/blocks/otp-input";
 import { Button } from "@edge/ui/components/button";
 import { Checkbox } from "@edge/ui/components/checkbox";
 import { Field, FormError, type ActionState } from "@edge/ui/forms/field";
+import { safePath } from "@edge/web/actions";
 import { authClient, authErrorMessage, hardNavigate } from "@edge/web/auth-client";
 import Link from "next/link";
 import { useActionState, useState } from "react";
@@ -19,7 +20,8 @@ export default function TwoFactorPage() {
         ? await authClient.twoFactor.verifyTotp({ code, trustDevice })
         : await authClient.twoFactor.verifyBackupCode({ code, trustDevice });
     if (error) return { error: authErrorMessage(error, "That code did not work. Try again.") };
-    return hardNavigate("/");
+    const next = safePath(new URLSearchParams(window.location.search).get("next"));
+    return hardNavigate(next ? `/?next=${encodeURIComponent(next)}` : "/");
   }, {});
   return (
     <div className="grid gap-6">

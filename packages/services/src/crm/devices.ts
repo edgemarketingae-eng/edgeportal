@@ -1,12 +1,10 @@
-import { createHash, randomBytes } from "node:crypto";
 import { CrmDevice, Types, withTx, type CrmDeviceDoc } from "@edge/db";
 import { now } from "@edge/domain/clock";
 import type { Actor } from "@edge/domain/enums";
 import { audit } from "../audit";
 import { NotFoundError } from "../errors";
 import { oid } from "../ids";
-
-const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
+import { hashToken, newToken } from "../tokens";
 
 export interface DeviceInfo {
   model?: string;
@@ -23,7 +21,7 @@ const SEEN_EVERY_MS = 5 * 60_000;
  * worse than a long-lived token that can be revoked.
  */
 export async function registerDevice(userId: string, info: DeviceInfo): Promise<string> {
-  const token = randomBytes(32).toString("base64url");
+  const token = newToken();
   const _id = new Types.ObjectId();
   const at = now();
   await withTx(async () => {
