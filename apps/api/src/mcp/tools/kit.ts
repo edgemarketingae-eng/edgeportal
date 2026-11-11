@@ -70,6 +70,19 @@ export const zDay = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
   .describe("Date, YYYY-MM-DD");
+/** A date filter: Dubai calendar days, both inclusive (give both for a range, the same day twice for one day). */
+export const zDays = {
+  from: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+    .optional()
+    .describe("First day, YYYY-MM-DD (Dubai). With `to`, filters by date; wins over any period preset"),
+  to: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+    .optional()
+    .describe("Last day, YYYY-MM-DD, inclusive"),
+};
 export const zPageNo = z.number().int().min(1).max(10_000).optional().describe("Page number, from 1");
 export const zPageSize = z.number().int().min(1).max(50).optional().describe("Results per page (default 25, at most 50)");
 

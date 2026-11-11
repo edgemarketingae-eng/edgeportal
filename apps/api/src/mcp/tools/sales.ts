@@ -1,7 +1,7 @@
 import { crmRoutes } from "@edge/contracts";
 import { DEPOSIT_SEQUENCES, DEPOSIT_STATUSES, LEADERBOARD_PERIODS, PRODUCT_STATUSES } from "@edge/domain/crm/enums";
 import { z } from "zod";
-import { defined, defineTool, ref, zDay, zId, zPageNo, zPageSize } from "./kit";
+import { defined, defineTool, ref, zDay, zDays, zId, zPageNo, zPageSize } from "./kit";
 
 export const markConversions = defineTool({
   name: "mark_conversions",
@@ -71,15 +71,18 @@ export const listDeposits = defineTool({
   input: {
     status: z.enum(DEPOSIT_STATUSES).optional(),
     staffId: zId("Staff user").optional(),
-    period: z.enum(LEADERBOARD_PERIODS).optional(),
+    period: z.enum(LEADERBOARD_PERIODS).optional().describe("By deposit date; default all time"),
+    ...zDays,
     page: zPageNo,
     pageSize: zPageSize,
   },
   routes: [crmRoutes.deposits],
   perms: ["crm.read"],
   kind: "read",
-  async run({ status, staffId, period, page, pageSize }, { call }) {
-    const r = await call(crmRoutes.deposits, { query: { status, staff: staffId, period, page: page ?? 1, pageSize: pageSize ?? 25 } });
+  async run({ status, staffId, period, from, to, page, pageSize }, { call }) {
+    const r = await call(crmRoutes.deposits, {
+      query: { status, staff: staffId, period, from, to, page: page ?? 1, pageSize: pageSize ?? 25 },
+    });
     return {
       total: r.total,
       page: r.page,

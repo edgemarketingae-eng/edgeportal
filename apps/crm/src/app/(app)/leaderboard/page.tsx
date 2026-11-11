@@ -1,7 +1,6 @@
 import { crmRoutes } from "@edge/contracts";
-import { LEADERBOARD_PERIODS } from "@edge/domain/crm/enums";
-import { LEADERBOARD_PERIOD_LABELS } from "@edge/domain/crm/labels";
 import { formatMoney } from "@edge/domain/money";
+import { DateRangeFilter } from "@edge/ui/blocks/date-range-filter";
 import { FilterBar, FilterResults, FilterScope, FilterSelect } from "@edge/ui/blocks/filter-bar";
 import { StatCard } from "@edge/ui/blocks/stat-card";
 import { Card } from "@edge/ui/components/card";
@@ -9,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PageHeader } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
 import type { Metadata } from "next";
+import { pageRange } from "@/lib/date-range";
 import { can, load, requireCrm } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Leaderboard" };
@@ -23,10 +23,12 @@ const MEDAL: Record<number, string> = {
 export default async function LeaderboardPage(props: PageProps<"/leaderboard">) {
   const v = await requireCrm("crm.read");
   const sp = await props.searchParams;
-  const period = LEADERBOARD_PERIODS.find((p) => p === sp.period) ?? "month";
+  // Today unless a range is picked; older `period=` links map onto a range.
+  const dr = pageRange(sp, { legacy: { param: "period", map: { month: "month", lastMonth: "lastMonth", year: "year", all: "all" } } });
   const project = typeof sp.project === "string" && sp.project ? sp.project : undefined;
+  const range = dr.all ? { period: "all" as const } : { from: dr.from, to: dr.to };
   const [b, options] = await Promise.all([
-    load(() => api(crmRoutes.leaderboard, { query: { period, project } })),
+    load(() => api(crmRoutes.leaderboard, { query: { ...range, project } })),
     load(() => api(crmRoutes.options)),
   ]);
   const seller = can(v, "crm.write");
@@ -36,16 +38,10 @@ export default async function LeaderboardPage(props: PageProps<"/leaderboard">) 
       <PageHeader
         help="/docs/leaderboard"
         title="Leaderboard"
-        description={`${LEADERBOARD_PERIOD_LABELS[period]} · ranked by conversions, then verified deposits`}
+        description={`${dr.filter.label} · ranked by conversions, then verified deposits`}
         actions={
           <FilterBar search={false} className="mb-0">
-            <FilterSelect
-              name="period"
-              label="Period"
-              allLabel={LEADERBOARD_PERIOD_LABELS.month}
-              value={period === "month" ? undefined : period}
-              options={LEADERBOARD_PERIODS.filter((p) => p !== "month").map((p) => [p, LEADERBOARD_PERIOD_LABELS[p]])}
-            />
+            <DateRangeFilter {...dr.filter} prefix="Period" />
             <FilterSelect
               name="project"
               label="Project"
@@ -59,14 +55,14 @@ export default async function LeaderboardPage(props: PageProps<"/leaderboard">) 
       <FilterResults>
         {seller ? (
           <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard label="My conversions" value={b.me.conversions} hint={LEADERBOARD_PERIOD_LABELS[period]} />
+            <StatCard label="My conversions" value={b.me.conversions} hint={dr.filter.label} />
             <StatCard label="My verified deposits" value={usd(b.me.depositsMinor)} />
             <StatCard label="My commission" value={usd(b.me.commissionMinor)} hint="on verified deposits" href="/deposits" />
             <StatCard
               label="Waiting for verification"
               value={b.me.pendingCount}
               hint={b.me.pendingCount ? usd(b.me.pendingMinor) : "nothing pending"}
-              href="/deposits?status=PENDING"
+              href="/deposits?range=all&status=PENDING"
               tone={b.me.pendingCount ? "warn" : undefined}
             />
           </div>

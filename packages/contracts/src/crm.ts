@@ -22,11 +22,32 @@ import {
   TASK_PRIORITIES,
 } from "@edge/domain/crm/enums";
 import { ENROLLMENT_STATUSES, PAYMENT_STATES } from "@edge/domain/enums";
-import { paged, zCountry, zEmail, zOk, zPage } from "./common";
+import { paged, zCountry, zDateOnly, zEmail, zOk, zPage } from "./common";
 import { route } from "./route";
 import { RoleDto, StaffCreateInput, StaffEmailInput, StaffRow, StaffUpdateInput } from "./staff";
 
 const idParam = z.object({ id: z.string() });
+
+/** Lead list sort keys: one per column of the leads table, plus two older names the phone app and jobs send. */
+export const LEAD_SORTS = [
+  "recent",
+  "created",
+  "oldest",
+  "followUp",
+  "name",
+  "phone",
+  "stage",
+  "project",
+  "owner",
+  "source",
+  "activity",
+] as const;
+export type LeadSort = (typeof LEAD_SORTS)[number];
+/** Which lead date a date filter applies to. */
+export const LEAD_DATE_FIELDS = ["created", "activity", "followUp"] as const;
+export type LeadDateField = (typeof LEAD_DATE_FIELDS)[number];
+/** Date filters on reports: Dubai calendar days, both inclusive. They win over a `period` preset. */
+const dayBounds = { from: zDateOnly.optional(), to: zDateOnly.optional() };
 const nullable = z.string().nullable();
 
 /** "YYYY-MM-DDTHH:mm" from a datetime-local input, read as Dubai wall-clock time. */
@@ -55,10 +76,18 @@ export const LeadFilters = z.object({
   /** Leads converted to this product id. */
   product: z.string().optional(),
   due: z.enum(["overdue", "today", "week", "none"]).optional(),
+  /** Older preset; `from`/`to` win when given. */
   created: z.enum(["today", "week", "month"]).optional(),
+  /** Dubai calendar days, both inclusive, on the date `dateOn` names (default: when the lead was added). */
+  from: zDateOnly.optional(),
+  to: zDateOnly.optional(),
+  dateOn: z.enum(LEAD_DATE_FIELDS).optional(),
   /** Default "open" hides CONVERTED and LOST unless a stage filter is given. */
   view: z.enum(["open", "all"]).optional(),
-  sort: z.enum(["recent", "created", "oldest", "followUp", "name"]).optional(),
+  /** A column; `recent` (= activity, newest first) and `oldest` (= created, oldest first) are older names. */
+  sort: z.enum(LEAD_SORTS).optional(),
+  /** Each sort has its natural direction (names A-Z, dates newest first, follow-ups soonest first); this overrides it. */
+  dir: z.enum(["asc", "desc"]).optional(),
   ...zPage.shape,
 });
 export type LeadFilters = z.input<typeof LeadFilters>;
@@ -66,7 +95,7 @@ export type LeadFilters = z.input<typeof LeadFilters>;
 /** The leads a bulk action applies to: the ticked ids, or every lead matching a filter ("select all matching"). */
 const bulkTargetShape = {
   ids: z.array(z.string()).max(1000).optional(),
-  filters: LeadFilters.omit({ page: true, pageSize: true, sort: true }).optional(),
+  filters: LeadFilters.omit({ page: true, pageSize: true, sort: true, dir: true }).optional(),
 };
 const hasTarget = (b: { ids?: string[]; filters?: unknown }) => (b.ids?.length ?? 0) > 0 || !!b.filters;
 export const BulkTarget = z.object(bulkTargetShape).refine(hasTarget, { message: "Select at least one lead", path: ["ids"] });
@@ -235,6 +264,7 @@ export const DepositFilters = z.object({
   /** Credited staff user id (commission managers only). */
   staff: z.string().optional(),
   period: z.enum(LEADERBOARD_PERIODS).optional(),
+  ...dayBounds,
   ...zPage.shape,
 });
 export type DepositFilters = z.input<typeof DepositFilters>;
@@ -257,7 +287,7 @@ export const CommissionSettingsInput = z.object({
     .refine((s) => new Set(s.map((x) => x.from)).size === s.length, "Each slab needs its own starting amount"),
 });
 
-export const CallsQuery = z.object({ period: z.enum(CALL_REPORT_PERIODS).optional(), project: z.string().optional() });
+export const CallsQuery = z.object({ period: z.enum(CALL_REPORT_PERIODS).optional(), project: z.string().optional(), ...dayBounds });
 
 export const CallReportRow = z.object({
   userId: z.string(),
@@ -290,6 +320,7 @@ export type CallReportDto = z.infer<typeof CallReportDto>;
 export const LeaderboardQuery = z.object({
   period: z.enum(LEADERBOARD_PERIODS).default("month"),
   project: z.string().optional(),
+  ...dayBounds,
 });
 
 export const CrmStaffCreateInput = StaffCreateInput.extend({ projectIds: z.array(z.string()).optional() });
@@ -672,19 +703,39 @@ export const CrmDashboardDto = z.object({
   winRate90d: z.number().nullable(),
   medianResponseHours: z.number().nullable(),
   bySource: z.array(z.object({ source: z.string(), leads: z.number(), contacted: z.number(), converted: z.number(), paid: z.number() })),
+  /** The chosen period (YYYY-MM-DD, null = open end): leads added, converted and lost in it. */
+  period: z.object({
+    from: nullable,
+    to: nullable,
+    newLeads: z.number(),
+    converted: z.number(),
+    lost: z.number(),
+    winRate: z.number().nullable(),
+  }),
   projects: z.array(
     z.object({
       id: z.string(),
       name: z.string(),
       open: z.number(),
       convertedMonth: z.number(),
+      /** Converted in the chosen period. */
+      converted: z.number(),
       overdue: z.number(),
       targetConversions: z.number().nullable(),
     }),
   ),
-  owners: z.array(z.object({ id: z.string(), name: z.string(), open: z.number(), overdue: z.number(), convertedMonth: z.number() })),
-  /** Product conversions this month (Dubai), per active product. */
-  byProduct: z.array(z.object({ id: z.string(), name: z.string(), month: z.number() })),
+  owners: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      open: z.number(),
+      overdue: z.number(),
+      convertedMonth: z.number(),
+      converted: z.number(),
+    }),
+  ),
+  /** Product conversions per active product: this month (Dubai) and in the chosen period. */
+  byProduct: z.array(z.object({ id: z.string(), name: z.string(), month: z.number(), count: z.number() })),
   myTasks: z.array(TaskDto),
 });
 export type CrmDashboardDto = z.infer<typeof CrmDashboardDto>;
@@ -748,7 +799,11 @@ export const crmRoutes = {
   dashboard: route({
     method: "GET",
     path: `${base}/dashboard`,
-    query: z.object({ project: z.string().optional() }),
+    /**
+     * The period figures cover from/to, or `period` (all = all time). With neither they cover this month and by-source
+     * covers all time, which is what the phone app shows.
+     */
+    query: z.object({ project: z.string().optional(), ...dayBounds, period: z.enum(["month", "all"]).optional() }),
     response: CrmDashboardDto,
   }),
   options: route({ method: "GET", path: `${base}/options`, response: CrmOptions }),

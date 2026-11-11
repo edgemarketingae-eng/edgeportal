@@ -70,7 +70,7 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
               </Button>
             ) : null}
             <Button asChild size="sm" variant="outline">
-              <Link href={`/leads?project=${p.id}`}>All leads</Link>
+              <Link href={`/leads?project=${p.id}&range=all`}>All leads</Link>
             </Button>
             <Button asChild size="sm" variant="outline">
               <Link href={`/tasks?project=${p.id}`}>Board</Link>
@@ -87,14 +87,14 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
         <StatCard
           label="Open leads"
           value={p.stats.openLeads}
-          href={`/leads?project=${p.id}`}
+          href={`/leads?project=${p.id}&range=all`}
           hint={p.targetLeads ? `target ${p.targetLeads}` : undefined}
         />
         <StatCard
           label="Converted this month"
           value={p.stats.convertedMonth}
           hint={p.targetConversions ? `target ${p.targetConversions}` : undefined}
-          href={`/leads?project=${p.id}&stage=CONVERTED`}
+          href={`/leads?project=${p.id}&stage=CONVERTED&range=all`}
         />
         <StatCard
           label="Overdue tasks"
@@ -124,7 +124,7 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
               return (
                 <Link
                   key={s}
-                  href={`/leads?project=${p.id}&stage=${s}`}
+                  href={`/leads?project=${p.id}&stage=${s}&range=all`}
                   className="group grid grid-cols-[110px_1fr_40px] items-center gap-3 text-sm"
                 >
                   <span className="text-muted-foreground group-hover:text-foreground">{LEAD_STAGE_LABELS[s]}</span>
@@ -174,7 +174,7 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
                   team.map((m) => (
                     <TableRow key={m.id}>
                       <TableCell>
-                        <Link href={`/leads?project=${p.id}&owner=${m.id}`} className="font-semibold hover:underline">
+                        <Link href={`/leads?project=${p.id}&owner=${m.id}&range=all`} className="font-semibold hover:underline">
                           {m.name}
                         </Link>
                         <div className="text-muted-foreground flex flex-wrap gap-1 text-xs">

@@ -179,10 +179,13 @@ export function FilterBar({
     navigate(qs ? `${pathname}?${qs}` : pathname, { replace });
   }
 
-  /** Back to the unfiltered list, keeping only what the page fixes with hidden fields (e.g. the current view). */
+  /**
+   * Back to the unfiltered list, keeping only what the page fixes with hidden fields (e.g. the current view or sort).
+   * Hidden fields that are themselves filters (`data-filter`, e.g. a date range) go, so the page's default returns.
+   */
   function clear() {
     const params = new URLSearchParams();
-    for (const el of form.current?.querySelectorAll<HTMLInputElement>('input[type="hidden"]') ?? [])
+    for (const el of form.current?.querySelectorAll<HTMLInputElement>('input[type="hidden"]:not([data-filter])') ?? [])
       if (el.name && el.value) params.append(el.name, el.value);
     const qs = params.toString();
     navigate(qs ? `${pathname}?${qs}` : pathname);

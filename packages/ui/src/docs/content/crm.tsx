@@ -295,6 +295,10 @@ export const crmDocs: DocModule[] = [
               <>
                 Use the <Ui>Project</Ui> filter at the top to look at one project. <Ui>All my projects</Ui> shows everything you can see.
               </>
+              <>
+                The <Ui>Period</Ui> filter (Today by default) sets the days for new, converted and lost leads, sources, products and the
+                team&apos;s conversions. Open leads, the funnel and tasks always show how things stand right now.
+              </>
               <>Most numbers are links. Click one to open the matching list of leads or tasks.</>
               <>
                 <Ui>New lead</Ui> opens the full lead form.
@@ -312,7 +316,7 @@ export const crmDocs: DocModule[] = [
               head={["Card", "What it counts"]}
               rows={[
                 [<Ui key="a">Open leads</Ui>, "Leads still in progress (New, Contacted, Qualified, Consultation or Negotiation)."],
-                [<Ui key="b">New this week</Ui>, "Leads created in the last 7 days. The small line shows how many came in today."],
+                [<Ui key="b">New leads</Ui>, "Leads added in the chosen period (today unless you pick another)."],
                 [
                   <Ui key="c">{"Untouched > 24h"}</Ui>,
                   "New leads that nobody has contacted within the first-response time (24 hours unless your CRM admin changed it). Turns amber when there are any. Contact these first.",
@@ -321,16 +325,13 @@ export const crmDocs: DocModule[] = [
                   <Ui key="d">Overdue tasks</Ui>,
                   "Open tasks whose due date has passed. Turns red when there are any. The small line shows how many are due today.",
                 ],
-                [
-                  <Ui key="e">Converted this month</Ui>,
-                  "Leads that became students since the 1st of this month. The small line shows how many were lost.",
-                ],
+                [<Ui key="e">Converted</Ui>, "Leads that converted in the chosen period. The small line shows how many were lost."],
                 [<Ui key="f">Win rate (90 days)</Ui>, "Converted ÷ (converted + lost) over the last 90 days."],
                 [
                   <Ui key="g">First response</Ui>,
                   "The typical (median) time between a lead arriving and the first contact, for leads first contacted in the last 30 days.",
                 ],
-                [<Ui key="h">Lost this month</Ui>, "Leads marked Lost since the 1st of this month."],
+                [<Ui key="h">Lost</Ui>, "Leads marked Lost in the chosen period."],
               ]}
             />
             <Note kind="info">
@@ -356,15 +357,15 @@ export const crmDocs: DocModule[] = [
               ],
               [
                 <Ui key="c">Projects</Ui>,
-                "Each active project: open leads, conversions this month (against the target, if set) and overdue tasks.",
+                "Each active project: open leads, conversions in the period (against the target, if set) and overdue tasks.",
               ],
               [
                 <Ui key="d">By source</Ui>,
-                "Where leads come from and how far they get: total leads, how many were contacted, converted, and paid (the student has made a payment).",
+                "Where the leads added in the period came from and how far they got: leads, contacted, converted, and paid (the student has made a payment).",
               ],
               [
                 <Ui key="e">Team</Ui>,
-                "Per person: open leads, overdue tasks and conversions this month. Shown when there are owned leads in your view.",
+                "Per person: open leads, overdue tasks and conversions in the period. Shown when there are owned leads in your view.",
               ],
             ]}
           />
@@ -393,8 +394,9 @@ export const crmDocs: DocModule[] = [
               owner (the salesperson working it) and moves through stages until it becomes a student or is lost.
             </P>
             <P>
-              The <To href="/leads">Leads</To> page lists the leads you can see. By default it shows <b>open</b> leads only, with the most
-              recently active first. Converted and lost leads are hidden until you pick them.
+              The <To href="/leads">Leads</To> page lists the leads you can see. By default it shows <b>open</b> leads <b>added today</b>,
+              with the most recently active first. Converted and lost leads are hidden until you pick them, and the date filter widens the
+              days (see below).
             </P>
           </>
         ),
@@ -407,23 +409,36 @@ export const crmDocs: DocModule[] = [
             <P>The row of buttons at the top are ready-made views:</P>
             <Terms
               rows={[
-                [<Ui key="a">Open</Ui>, "All open leads (the default)."],
-                [<Ui key="b">Mine</Ui>, "Leads you own."],
-                [<Ui key="c">Unassigned</Ui>, "Leads with no owner yet. Claim them or assign them."],
-                [<Ui key="d">Overdue</Ui>, "Leads whose next follow-up is in the past."],
-                [<Ui key="e">Hot</Ui>, "Leads marked Hot."],
-                [<Ui key="f">New today</Ui>, "Leads created today."],
+                [<Ui key="a">Open</Ui>, "Open leads added today (the default)."],
+                [<Ui key="b">Mine</Ui>, "Leads you own, any date."],
+                [<Ui key="c">Unassigned</Ui>, "Leads with no owner yet, any date. Claim them or assign them."],
+                [<Ui key="d">Overdue</Ui>, "Leads whose next follow-up is in the past, any date."],
+                [<Ui key="e">Hot</Ui>, "Leads marked Hot, any date."],
+                [<Ui key="f">New today</Ui>, "Every lead added today, whatever its stage."],
                 [<Ui key="g">Converted</Ui>, "Leads that became students."],
                 [<Ui key="h">Lost</Ui>, "Leads marked Lost."],
-                [<Ui key="i">All</Ui>, "Every lead, open or closed."],
+                [<Ui key="i">All</Ui>, "Every lead, open or closed, any date."],
               ]}
             />
             <P>
-              For anything else, use the search box and the filters: <Ui>Project</Ui>, <Ui>Stage</Ui>, <Ui>Source</Ui>, <Ui>Owner</Ui>,{" "}
-              <Ui>Temperature</Ui>, <Ui>Batch</Ui>, <Ui>Follow-up</Ui> (overdue, due today, due this week, no follow-up), <Ui>Created</Ui>{" "}
-              and <Ui>Sort</Ui>.
+              For anything else, use the search box and the filters: the date filter, <Ui>Project</Ui>, <Ui>Stage</Ui>, <Ui>Source</Ui>,{" "}
+              <Ui>Owner</Ui>, <Ui>Temperature</Ui>, <Ui>Batch</Ui> and <Ui>Follow-up</Ui> (overdue, due today, due this week, no follow-up).
             </P>
             <List>
+              <>
+                <b>Date filter</b> (the first button, e.g. <Ui>Added: Today</Ui>): pick Today, Yesterday, Last 7 days, Last 30 days, This
+                month, Last month, This year or All time, or choose a start and end day on the calendar and press <Ui>Apply range</Ui>.
+                Under <Ui>Date of</Ui> choose which date it means: <Ui>Added</Ui> (when the lead came in), <Ui>Last activity</Ui> or{" "}
+                <Ui>Next follow-up</Ui>. Days are Dubai days.
+              </>
+              <>
+                While you <b>search</b>, the list looks across all dates unless you picked a range yourself, so you can always find someone.{" "}
+                <Ui>Clear filters</Ui> goes back to today.
+              </>
+              <>
+                <b>Sorting:</b> click any column heading to sort by it (names A to Z, dates newest first, follow-ups soonest first); click
+                it again to reverse. The arrow shows the column and direction. Filters keep the sort.
+              </>
               <>
                 Search finds a lead in <b>any stage</b>, converted and lost ones too, unless you pick a <Ui>Stage</Ui>. You only see leads
                 you have access to.
@@ -1147,7 +1162,8 @@ export const crmDocs: DocModule[] = [
           <>
             <Steps>
               <>
-                Open <To href="/deposits">Deposits</To> and press <Ui>Waiting for verification</Ui> (or filter <Ui>Status</Ui> to Pending).
+                Open <To href="/deposits">Deposits</To> and press <Ui>Pending review</Ui> (or the <Ui>Waiting for verification</Ui> card).
+                It lists every pending deposit, whatever its date.
               </>
               <>Compare each one with the JetaFX report: client ID, amount and date.</>
               <>
@@ -1163,6 +1179,10 @@ export const crmDocs: DocModule[] = [
             <P>
               Each person&apos;s total commission is on their page under <To href="/team">Team</To>. Use the <Ui>Credited to</Ui> filter on
               Deposits to see one person&apos;s deposits.
+            </P>
+            <P>
+              Deposits opens on the deposits made <b>today</b> (by deposit date), and the totals at the top follow the list. Use the{" "}
+              <Ui>Deposited</Ui> date filter, or the <Ui>This month</Ui> and <Ui>All</Ui> buttons, to see other days.
             </P>
           </>
         ),
@@ -1187,7 +1207,8 @@ export const crmDocs: DocModule[] = [
           <>
             <P>
               <To href="/leaderboard">Leaderboard</To> ranks everyone with the Sales executive role (and anyone else with conversions) for
-              the chosen <Ui>Period</Ui>, across all projects or one <Ui>Project</Ui>.
+              the chosen <Ui>Period</Ui>, across all projects or one <Ui>Project</Ui>. The period opens on Today; pick This month, Last
+              month, any other preset or your own days.
             </P>
             <Terms
               head={["Column", "What it counts"]}
@@ -1268,7 +1289,7 @@ export const crmDocs: DocModule[] = [
             <P>
               <To href="/calls">Calls</To> shows calls, connected calls, talk time and leads called per person. Project managers see their
               own projects. A call counts as connected if the executive chose Answered or Asked to call back, otherwise at 5 seconds or
-              longer, so a voicemail pickup can count.
+              longer, so a voicemail pickup can count. It shows today unless you pick another <Ui>Period</Ui> or your own days.
             </P>
             <Terms
               head={["Phone status", "What it means"]}

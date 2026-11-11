@@ -179,6 +179,22 @@ rejected.
   their Team page.
 - Leads with deposits can't be deleted (commission history). Merging moves deposits and conversions to the survivor.
 
+## Date filters and sorting (lists)
+
+Leads, Deposits, Leaderboard, Calls and the Dashboard open on **today** (Dubai days). The date filter offers presets (Today,
+Yesterday, Last 7 days, Last 30 days, This month, Last month, This year, All time) or a custom range, and lives in the URL as
+`range` (+ `from`/`to` for custom; leads also `on` = created | activity | followUp). Pages resolve it to `from`/`to`
+(YYYY-MM-DD, inclusive) for the API (`packages/domain/src/date-ranges.ts`, `apps/crm/src/lib/date-range.ts`). Exceptions:
+searching leads looks across all dates unless a range was picked, and the quick views (Mine, Unassigned, Overdue, Hot,
+Converted, Lost, All; Pending review on Deposits) set `range=all`. Lead CSV export and "select all matching" use the resolved
+dates, so they cover exactly what's listed. **API defaults are unchanged** (no date filter on leads and deposits, this month on
+the leaderboard and the dashboard's period figures, today on calls), so the phone app and older links behave as before; `from`/`to`
+win over a `period` preset, and `period=all` (calls, dashboard) means all time.
+
+Every column of the leads table sorts (`sort` = name, phone, stage, project, owner, source, followUp, activity, created; `dir` =
+asc | desc). Stage sorts in pipeline order, source and project/owner by their names, and empty values (no owner, no follow-up, no
+activity) come last either way. `recent` and `oldest` remain as older names.
+
 ## Leaderboard
 
 `/leaderboard` (everyone with `crm.read`) ranks every active sales executive, plus anyone else credited with a

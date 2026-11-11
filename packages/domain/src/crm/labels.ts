@@ -73,6 +73,7 @@ export const CALL_REPORT_PERIOD_LABELS: Record<CallReportPeriod, string> = {
   week: "Last 7 days",
   month: "This month",
   lastMonth: "Last month",
+  all: "All time",
 };
 
 export const LEADERBOARD_PERIOD_LABELS: Record<LeaderboardPeriod, string> = {

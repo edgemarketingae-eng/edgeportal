@@ -1,10 +1,11 @@
 import { crmRoutes } from "@edge/contracts";
 import { fractionToPercent } from "@edge/domain/crm/commission";
-import { DEPOSIT_STATUSES, LEADERBOARD_PERIODS } from "@edge/domain/crm/enums";
-import { DEPOSIT_SEQUENCE_LABELS, DEPOSIT_STATUS_LABELS, LEADERBOARD_PERIOD_LABELS } from "@edge/domain/crm/labels";
+import { DEPOSIT_STATUSES } from "@edge/domain/crm/enums";
+import { DEPOSIT_SEQUENCE_LABELS, DEPOSIT_STATUS_LABELS } from "@edge/domain/crm/labels";
 import { formatDate } from "@edge/domain/dates";
 import { formatMoney } from "@edge/domain/money";
-import { FilterBar, FilterResults, FilterScope, FilterSelect } from "@edge/ui/blocks/filter-bar";
+import { DateRangeFilter } from "@edge/ui/blocks/date-range-filter";
+import { FilterBar, FilterLink, FilterResults, FilterScope, FilterSelect } from "@edge/ui/blocks/filter-bar";
 import { Pagination } from "@edge/ui/blocks/pagination";
 import { TableEmpty } from "@edge/ui/blocks/empty-state";
 import { StatCard } from "@edge/ui/blocks/stat-card";
@@ -18,6 +19,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { DeleteDepositButton, RejectDepositDialog, VerifyDepositDialog } from "@/components/crm/deposit-actions";
 import { DeleteButton } from "@/components/delete-button";
+import { pageRange } from "@/lib/date-range";
 import { can, load, requireCrm } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Deposits" };
@@ -29,15 +31,31 @@ export default async function DepositsPage(props: PageProps<"/deposits">) {
   const canPurge = can(v, "records.delete");
   const sp = await props.searchParams;
   const one = (k: string) => (typeof sp[k] === "string" && sp[k] ? sp[k] : undefined);
+  // Today by deposit date unless a range is picked; older `period=` links map onto a range.
+  const dr = pageRange(sp, { legacy: { param: "period", map: { month: "month", lastMonth: "lastMonth", year: "year", all: "all" } } });
   const f = {
     status: DEPOSIT_STATUSES.find((s) => s === one("status")),
-    period: LEADERBOARD_PERIODS.find((p) => p === one("period")),
     staff: one("staff"),
     page: Number(one("page")) || 1,
     pageSize: Number(one("pageSize")) || 50,
   };
-  const d = await load(() => api(crmRoutes.deposits, { query: f }));
+  const d = await load(() =>
+    api(crmRoutes.deposits, { query: { ...f, ...(dr.all ? { period: "all" as const } : { from: dr.from, to: dr.to }) } }),
+  );
   const s = d.summary;
+  const current = new URLSearchParams(
+    Object.entries(sp).filter(([k, x]) => !["page", "pageSize"].includes(k) && typeof x === "string" && x) as [string, string][],
+  );
+  const views = [
+    { label: "Today", query: "" },
+    { label: "Pending review", query: "range=all&status=PENDING" },
+    { label: "This month", query: "range=month" },
+    { label: "All", query: "range=all" },
+  ];
+  const now = [...current.entries()]
+    .sort()
+    .map(([k, x]) => `${k}=${x}`)
+    .join("&");
 
   return (
     <FilterScope>
@@ -50,15 +68,24 @@ export default async function DepositsPage(props: PageProps<"/deposits">) {
             : "Deposits on your leads and the commission they earned."
         }
       />
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        {views.map((x) => {
+          const active = x.query === now;
+          return (
+            <FilterLink
+              key={x.label}
+              href={`/deposits${x.query ? `?${x.query}` : ""}`}
+              aria-current={active ? "page" : undefined}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold ${active ? "border-edge-emerald bg-edge-mint/40 text-edge-emerald" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              {x.label}
+            </FilterLink>
+          );
+        })}
+      </div>
       <FilterBar search={false}>
+        <DateRangeFilter {...dr.filter} prefix="Deposited" />
         <FilterSelect name="status" label="Status" value={f.status} options={DEPOSIT_STATUSES.map((x) => [x, DEPOSIT_STATUS_LABELS[x]])} />
-        <FilterSelect
-          name="period"
-          label="Period"
-          allLabel="All time"
-          value={f.period}
-          options={LEADERBOARD_PERIODS.filter((p) => p !== "all").map((p) => [p, LEADERBOARD_PERIOD_LABELS[p]])}
-        />
         {d.manage ? (
           <FilterSelect name="staff" label="Credited to" allLabel="Everyone" value={f.staff} options={d.staff.map((u) => [u.id, u.name])} />
         ) : null}
@@ -68,8 +95,14 @@ export default async function DepositsPage(props: PageProps<"/deposits">) {
           <StatCard
             label="Waiting for verification"
             value={s.pendingCount}
-            hint={s.pendingCount ? usd(s.pendingMinor) : "nothing pending"}
-            href="/deposits?status=PENDING"
+            hint={
+              dr.all
+                ? s.pendingCount
+                  ? usd(s.pendingMinor)
+                  : "nothing pending"
+                : `${s.pendingCount ? usd(s.pendingMinor) : "none"} · ${dr.filter.label.toLowerCase()} · open for all dates`
+            }
+            href="/deposits?range=all&status=PENDING"
             tone={s.pendingCount ? "warn" : undefined}
           />
           <StatCard

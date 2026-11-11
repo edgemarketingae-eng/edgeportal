@@ -72,7 +72,7 @@ export const DEPOSIT_STATUSES = ["PENDING", "VERIFIED", "REJECTED"] as const;
 /** Broker deposits are in US dollars. */
 export const DEPOSIT_CURRENCY = "USD";
 export const LEADERBOARD_PERIODS = ["month", "lastMonth", "quarter", "year", "all"] as const;
-export const CALL_REPORT_PERIODS = ["today", "week", "month", "lastMonth"] as const;
+export const CALL_REPORT_PERIODS = ["today", "week", "month", "lastMonth", "all"] as const;
 /** Public ingest endpoints: POST /api/webhooks/leads/:source */
 export const INBOUND_SOURCES = ["website"] as const;
 /** What a visitor asks about on the student app's contact page (/support). */

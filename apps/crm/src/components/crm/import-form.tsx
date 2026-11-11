@@ -37,7 +37,7 @@ export function ImportForm({ options, meId }: { options: CrmOptions; meId: strin
             invalid
           </p>
           <Button asChild className="w-fit" size="sm">
-            <Link href="/leads?created=today&view=all">Open the new leads</Link>
+            <Link href="/leads?range=today&view=all">Open the new leads</Link>
           </Button>
         </CardContent>
       </Card>

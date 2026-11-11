@@ -21,7 +21,7 @@ import { now } from "@edge/domain/clock";
 import { ACADEMY_TZ, toDubaiLocal } from "@edge/domain/dates";
 import { claudeCanDo } from "@edge/services";
 import { z } from "zod";
-import { defineTool, zId } from "./kit";
+import { defineTool, zDays, zId } from "./kit";
 
 const weekday = (d: Date) => new Intl.DateTimeFormat("en-US", { weekday: "long", timeZone: ACADEMY_TZ }).format(d);
 
@@ -92,12 +92,18 @@ export const getDashboard = defineTool({
     "The CRM dashboard for the leads this person can see: open leads by stage, new today and this week, leads not contacted " +
     "within the follow-up SLA, overdue and due-today tasks, conversions and losses this month, 90-day win rate, results by " +
     "source, project and owner, and their own open tasks.",
-  input: { projectId: zId("Project").optional().describe("Limit to one project") },
+  input: {
+    projectId: zId("Project").optional().describe("Limit to one project"),
+    ...zDays,
+    allTime: z.boolean().optional().describe("Period figures over all time (without from/to they cover this month)"),
+  },
   routes: [crmRoutes.dashboard],
   perms: ["crm.read"],
   kind: "read",
-  async run({ projectId }, { call }) {
-    const d = await call(crmRoutes.dashboard, { query: { project: projectId } });
+  async run({ projectId, from, to, allTime }, { call }) {
+    const d = await call(crmRoutes.dashboard, {
+      query: { project: projectId, from, to, ...(allTime && !from && !to ? { period: "all" as const } : {}) },
+    });
     return { ...d, myTasks: d.myTasks.slice(0, 20).map((t) => ({ id: t.id, title: t.title, dueAt: t.dueAt, lead: t.leadName })) };
   },
 });
@@ -111,12 +117,13 @@ export const getLeaderboard = defineTool({
   input: {
     period: z.enum(LEADERBOARD_PERIODS).optional().describe("Default month (this calendar month in Dubai)"),
     projectId: zId("Project").optional(),
+    ...zDays,
   },
   routes: [crmRoutes.leaderboard],
   perms: ["crm.read"],
   kind: "read",
-  async run({ period, projectId }, { call }) {
-    return call(crmRoutes.leaderboard, { query: { period, project: projectId } });
+  async run({ period, projectId, from, to }, { call }) {
+    return call(crmRoutes.leaderboard, { query: { period, project: projectId, from, to } });
   },
 });
 
@@ -126,11 +133,11 @@ export const getCallReport = defineTool({
   description:
     "Calls tracked by the CRM phone app per person: calls, connected calls, talk time (seconds) and leads called. People who " +
     "manage phones also see each person's phone (its id is what remove_phone takes) and whether tracking is on.",
-  input: { period: z.enum(CALL_REPORT_PERIODS).optional().describe("Default today"), projectId: zId("Project").optional() },
+  input: { period: z.enum(CALL_REPORT_PERIODS).optional().describe("Default today"), projectId: zId("Project").optional(), ...zDays },
   routes: [crmRoutes.callReport],
   perms: ["crm.calls.read"],
   kind: "read",
-  async run({ period, projectId }, { call }) {
-    return call(crmRoutes.callReport, { query: { period, project: projectId } });
+  async run({ period, projectId, from, to }, { call }) {
+    return call(crmRoutes.callReport, { query: { period, project: projectId, from, to } });
   },
 });

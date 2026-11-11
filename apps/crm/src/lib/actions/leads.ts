@@ -148,7 +148,7 @@ export async function moveProjectAction(_prev: ActionState, form: FormData): Pro
 function bulkTarget(form: FormData): { ids?: string[]; filters?: LeadFiltersBody } | null {
   if (text(form, "scope") === "filter") {
     const q = new URLSearchParams(text(form, "filters"));
-    for (const k of ["page", "pageSize", "sort", "deleted"]) q.delete(k);
+    for (const k of ["page", "pageSize", "sort", "dir", "deleted"]) q.delete(k);
     return { filters: Object.fromEntries(q) as LeadFiltersBody };
   }
   const ids = form.getAll("ids").map(String).filter(Boolean);

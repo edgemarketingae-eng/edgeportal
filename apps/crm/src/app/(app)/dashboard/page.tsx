@@ -4,6 +4,7 @@ import { LEAD_SOURCE_LABELS, LEAD_STAGE_LABELS } from "@edge/domain/crm/labels";
 import { TableEmpty } from "@edge/ui/blocks/empty-state";
 import { InstallAppHint } from "@edge/ui/blocks/install-app";
 import { Alert, AlertDescription } from "@edge/ui/components/alert";
+import { DateRangeFilter } from "@edge/ui/blocks/date-range-filter";
 import { FilterBar, FilterResults, FilterScope, FilterSelect } from "@edge/ui/blocks/filter-bar";
 import { StatCard } from "@edge/ui/blocks/stat-card";
 import { Button } from "@edge/ui/components/button";
@@ -15,6 +16,7 @@ import { Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { FollowUpDue } from "@/components/crm/due";
+import { pageRange } from "@/lib/date-range";
 import { can, load, requireCrm } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -25,13 +27,20 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
   const v = await requireCrm("crm.read");
   const sp = await props.searchParams;
   const project = typeof sp.project === "string" && sp.project ? sp.project : undefined;
+  // New, converted and lost leads, sources, products and people follow the period (today by default); open leads,
+  // the funnel and tasks are how things stand now.
+  const dr = pageRange(sp);
   const [d, options] = await Promise.all([
-    load(() => api(crmRoutes.dashboard, { query: { project } })),
+    load(() => api(crmRoutes.dashboard, { query: { project, ...(dr.all ? { period: "all" as const } : { from: dr.from, to: dr.to }) } })),
     load(() => api(crmRoutes.options)),
   ]);
   const max = Math.max(1, ...FUNNEL.map((s) => d.byStage[s] ?? 0));
   const pct = (source: { leads: number }, n: number) => (source.leads ? `${Math.round((n / source.leads) * 100)}%` : "–");
   const q = project ? `&project=${project}` : "";
+  /** The same period on the leads list (added in it); `all` for how things stand now. */
+  const inPeriod = `&range=${dr.filter.range ?? "today"}${dr.filter.range === "custom" ? `&from=${dr.filter.from}&to=${dr.filter.to}` : ""}`;
+  const now = "&range=all";
+  const period = dr.filter.label.toLowerCase();
 
   return (
     <FilterScope>
@@ -42,6 +51,7 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
         actions={
           <>
             <FilterBar search={false} className="mb-0">
+              <DateRangeFilter {...dr.filter} prefix="Period" />
               <FilterSelect
                 name="project"
                 label="Project"
@@ -68,14 +78,14 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
       <InstallAppHint appName="Edge CRM" className="mb-4" />
       <FilterResults>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Open leads" value={d.openLeads} href={`/leads?${q.slice(1)}`} />
-          <StatCard label="New this week" value={d.newWeek} hint={`${d.newToday} today`} href={`/leads?created=week&view=all${q}`} />
+          <StatCard label="Open leads" value={d.openLeads} hint="right now" href={`/leads?${(now + q).slice(1)}`} />
+          <StatCard label="New leads" value={d.period.newLeads} hint={dr.filter.label} href={`/leads?view=all${inPeriod}${q}`} />
           <StatCard
             label={`Untouched > ${d.slaHours}h`}
             value={d.uncontactedOverSla}
             tone={d.uncontactedOverSla ? "warn" : undefined}
             hint="New leads nobody has contacted"
-            href={`/leads?stage=NEW&sort=created${q}`}
+            href={`/leads?stage=NEW&sort=created&dir=desc${now}${q}`}
           />
           <StatCard
             label="Overdue tasks"
@@ -85,10 +95,10 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
             href="/tasks?view=list"
           />
           <StatCard
-            label="Converted this month"
-            value={d.convertedMonth}
-            hint={`${d.lostMonth} lost`}
-            href={`/leads?stage=CONVERTED${q}`}
+            label="Converted"
+            value={d.period.converted}
+            hint={`${dr.filter.label} · ${d.period.lost} lost`}
+            href={`/leads?stage=CONVERTED${now}${q}`}
           />
           <StatCard
             label="Win rate (90 days)"
@@ -100,7 +110,7 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
             value={d.medianResponseHours == null ? "–" : `${d.medianResponseHours}h`}
             hint="median, last 30 days"
           />
-          <StatCard label="Lost this month" value={d.lostMonth} href={`/leads?stage=LOST${q}`} />
+          <StatCard label="Lost" value={d.period.lost} hint={dr.filter.label} href={`/leads?stage=LOST${now}${q}`} />
         </div>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
@@ -113,7 +123,11 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
               {FUNNEL.map((s) => {
                 const n = d.byStage[s] ?? 0;
                 return (
-                  <Link key={s} href={`/leads?stage=${s}${q}`} className="group grid grid-cols-[110px_1fr_40px] items-center gap-3 text-sm">
+                  <Link
+                    key={s}
+                    href={`/leads?stage=${s}${now}${q}`}
+                    className="group grid grid-cols-[110px_1fr_40px] items-center gap-3 text-sm"
+                  >
                     <span className="text-muted-foreground group-hover:text-foreground">{LEAD_STAGE_LABELS[s]}</span>
                     <span className="bg-muted h-5 overflow-hidden rounded">
                       <span
@@ -163,7 +177,7 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
           <Card className="p-0">
             <CardHeader className="px-6 pt-6">
               <CardTitle>Projects</CardTitle>
-              <CardDescription>Open leads, conversions this month against target, overdue tasks</CardDescription>
+              <CardDescription>Open leads, conversions ({period}) against target, overdue tasks</CardDescription>
             </CardHeader>
             <Table>
               <TableHeader>
@@ -187,7 +201,7 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{p.open}</TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {p.convertedMonth}
+                        {p.converted}
                         {p.targetConversions ? <span className="text-muted-foreground text-xs"> / {p.targetConversions}</span> : null}
                       </TableCell>
                       <TableCell className={`text-right tabular-nums ${p.overdue ? "text-destructive font-semibold" : ""}`}>
@@ -203,7 +217,7 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
           <Card className="p-0">
             <CardHeader className="px-6 pt-6">
               <CardTitle>By source</CardTitle>
-              <CardDescription>Where leads come from and how far they get</CardDescription>
+              <CardDescription>Leads added ({period}): where they came from and how far they got</CardDescription>
             </CardHeader>
             <Table>
               <TableHeader>
@@ -222,7 +236,7 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
                   d.bySource.map((s) => (
                     <TableRow key={s.source}>
                       <TableCell>
-                        <Link href={`/leads?source=${s.source}&view=all${q}`} className="hover:underline">
+                        <Link href={`/leads?source=${s.source}&view=all${inPeriod}${q}`} className="hover:underline">
                           {(LEAD_SOURCE_LABELS as Record<string, string>)[s.source] ?? s.source}
                         </Link>
                       </TableCell>
@@ -245,16 +259,23 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
             <Card>
               <CardHeader>
                 <CardTitle>Conversions by product</CardTitle>
-                <CardDescription>This month: Inner Circle, the premium course, the clubs</CardDescription>
+                <CardDescription>Conversions ({period}): Inner Circle, the premium course, the clubs</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-2 text-sm">
                 {d.byProduct.map((p) => (
-                  <Link key={p.id} href={`/leads?product=${p.id}${q}`} className="flex items-center justify-between gap-3 hover:underline">
+                  <Link
+                    key={p.id}
+                    href={`/leads?product=${p.id}${now}${q}`}
+                    className="flex items-center justify-between gap-3 hover:underline"
+                  >
                     <span>{p.name}</span>
-                    <span className="font-semibold tabular-nums">{p.month}</span>
+                    <span className="font-semibold tabular-nums">{p.count}</span>
                   </Link>
                 ))}
-                <Link href="/leaderboard" className="text-edge-emerald mt-2 inline-block text-sm font-semibold hover:underline">
+                <Link
+                  href={`/leaderboard?${inPeriod.slice(1)}`}
+                  className="text-edge-emerald mt-2 inline-block text-sm font-semibold hover:underline"
+                >
                   Open the leaderboard
                 </Link>
               </CardContent>
@@ -265,7 +286,7 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
             <Card className="p-0 lg:col-span-2">
               <CardHeader className="px-6 pt-6">
                 <CardTitle>Team</CardTitle>
-                <CardDescription>Open leads, overdue tasks and conversions this month per person</CardDescription>
+                <CardDescription>Open leads, overdue tasks and conversions ({period}) per person</CardDescription>
               </CardHeader>
               <Table>
                 <TableHeader>
@@ -280,7 +301,7 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
                   {d.owners.map((o) => (
                     <TableRow key={o.id}>
                       <TableCell>
-                        <Link href={`/leads?owner=${o.id}${q}`} className="hover:underline">
+                        <Link href={`/leads?owner=${o.id}${now}${q}`} className="hover:underline">
                           {o.name}
                         </Link>
                       </TableCell>
@@ -288,7 +309,7 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
                       <TableCell className={`text-right tabular-nums ${o.overdue ? "text-destructive font-semibold" : ""}`}>
                         {o.overdue}
                       </TableCell>
-                      <TableCell className="text-right font-semibold tabular-nums">{o.convertedMonth}</TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">{o.converted}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

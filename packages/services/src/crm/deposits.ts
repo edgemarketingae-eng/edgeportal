@@ -17,7 +17,7 @@ import { queuePush } from "../notifications/push";
 import { flushOutbox } from "../runtime";
 import { pageOf } from "../paging";
 import { getSetting } from "../settings";
-import { actorId, between, leadHref, loadLead, lockLead, optId, periodRange, recordActivity, userNames } from "./common";
+import { actorId, between, dayRange, hasDays, leadHref, loadLead, lockLead, optId, periodRange, recordActivity, userNames } from "./common";
 import { has, listCrmUsers, type CrmScope } from "./scope";
 
 const depositsHref = () => `${env.CRM_APP_URL}/deposits`;
@@ -454,7 +454,7 @@ async function monthProgress(creditedToId: Types.ObjectId): Promise<DepositSumma
 export async function listDeposits(filters: DepositFilters, scope: CrmScope): Promise<DepositList> {
   const manage = canManage(scope);
   const base: Record<string, unknown> = {};
-  const range = periodRange(filters.period ?? "all", now());
+  const range = hasDays(filters) ? dayRange(filters.from, filters.to) : periodRange(filters.period ?? "all", now());
   const dates = between(range.fromDay, range.toDay);
   if (dates) base.depositedAt = dates;
   const staff = optId(filters.staff);

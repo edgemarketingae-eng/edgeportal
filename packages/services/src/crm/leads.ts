@@ -1,4 +1,14 @@
-import type { CrmOptions, LeadDetail, LeadFilters, LeadInput, LeadListItem, LeadUpdateInput, Paged } from "@edge/contracts";
+import type {
+  CrmOptions,
+  LeadDateField,
+  LeadDetail,
+  LeadFilters,
+  LeadInput,
+  LeadListItem,
+  LeadSort,
+  LeadUpdateInput,
+  Paged,
+} from "@edge/contracts";
 import {
   AuthUser,
   Batch,
@@ -12,15 +22,17 @@ import {
   LeadDeposit,
   LeadInboundEvent,
   Project,
+  StaffProfile,
   TaskComment,
   Types,
   withTx,
   type LeadActivityDoc,
+  type PipelineStage,
   type LeadDoc,
   type ProjectDoc,
 } from "@edge/db";
 import { now } from "@edge/domain/clock";
-import { OPEN_LEAD_STAGES, OPEN_TASK_STATUSES, ROUND_ROBIN, type LeadStage } from "@edge/domain/crm/enums";
+import { LEAD_SOURCES, LEAD_STAGES, OPEN_LEAD_STAGES, OPEN_TASK_STATUSES, ROUND_ROBIN, type LeadStage } from "@edge/domain/crm/enums";
 import {
   LANGUAGE_LABELS,
   LEAD_SOURCE_LABELS,
@@ -48,11 +60,14 @@ import { flushOutbox } from "../runtime";
 import { getSetting } from "../settings";
 import {
   actorId,
+  between,
   channelToTaskType,
+  dayRange,
   createTaskInTx,
   escapeRegex,
   findAccountByContact,
   findDuplicateLeads,
+  hasDays,
   leadHref,
   loadLead,
   localDate,
@@ -737,30 +752,88 @@ export function leadMatch(filters: LeadFilters, scope: CrmScope): Record<string,
   else if (filters.due === "today") and.push({ nextFollowUpAt: { $lt: startOfDubaiDay(at, 1) } });
   else if (filters.due === "week") and.push({ nextFollowUpAt: { $lt: startOfDubaiDay(at, 7) } });
   else if (filters.due === "none") and.push({ nextFollowUpAt: null });
-  if (filters.created === "today") and.push({ createdAt: { $gte: todayStart } });
+  if (hasDays(filters)) {
+    const r = dayRange(filters.from, filters.to);
+    and.push({ [LEAD_DATE_COLUMNS[filters.dateOn ?? "created"]]: between(r.from, r.to) });
+  } else if (filters.created === "today") and.push({ createdAt: { $gte: todayStart } });
   else if (filters.created === "week") and.push({ createdAt: { $gte: new Date(at.getTime() - 7 * 86_400_000) } });
   else if (filters.created === "month") and.push({ createdAt: { $gte: startOfDubaiMonth(at) } });
   return and;
 }
 
+const LEAD_DATE_COLUMNS: Record<LeadDateField, string> = { created: "createdAt", activity: "lastActivityAt", followUp: "nextFollowUpAt" };
+
+/** Natural direction of each column: names and pipeline order A-Z, dates newest first, follow-ups soonest first. */
+const SORT_DIRECTION: Record<Exclude<LeadSort, "recent" | "oldest">, "asc" | "desc"> = {
+  name: "asc",
+  phone: "asc",
+  stage: "asc",
+  project: "asc",
+  owner: "asc",
+  source: "asc",
+  followUp: "asc",
+  activity: "desc",
+  created: "desc",
+};
+
+/** Sources in the order of their labels (the table shows labels, so that's the A-Z a person expects). */
+const SOURCES_BY_LABEL = [...LEAD_SOURCES].sort((a, b) => LEAD_SOURCE_LABELS[a].localeCompare(LEAD_SOURCE_LABELS[b]));
+const LAST = 1e9;
+
+/**
+ * The `$addFields` and `$sort` for a leads sort. Columns shown as names (project, owner) sort by their place in a
+ * name-sorted list of ids, so the whole match set sorts without a lookup; empty values (no owner, no follow-up, no
+ * activity) come last whichever way the column is sorted.
+ */
+async function leadSort(filters: LeadFilters): Promise<{ stages: PipelineStage[]; sort: Record<string, 1 | -1> }> {
+  const raw = filters.sort ?? "recent";
+  const key = raw === "recent" ? "activity" : raw === "oldest" ? "created" : raw;
+  const dir = filters.dir ?? (raw === "oldest" ? "asc" : SORT_DIRECTION[key]);
+  const d: 1 | -1 = dir === "asc" ? 1 : -1;
+  const ranked = (expr: unknown): { stages: PipelineStage[]; sort: Record<string, 1 | -1> } => ({
+    stages: [{ $addFields: { _sortKey: expr } } as PipelineStage],
+    sort: { _sortKey: d, createdAt: -1 },
+  });
+  /** Empty values last: a big rank ascending, -1 descending. */
+  const emptyLast = d === 1 ? LAST : -1;
+  switch (key) {
+    case "name":
+      return ranked({ $toLower: { $ifNull: ["$name", ""] } });
+    case "phone":
+      return ranked({ $ifNull: ["$phone", d === 1 ? "\uffff" : ""] });
+    case "stage":
+      return ranked({ $indexOfArray: [[...LEAD_STAGES], "$stage"] });
+    case "source":
+      return ranked({ $indexOfArray: [SOURCES_BY_LABEL, "$source"] });
+    case "project": {
+      const ids = (await Project.find({}, { _id: 1 }).collation({ locale: "en", strength: 2 }).sort({ name: 1 }).lean()).map((p) => p._id);
+      return ranked({ $indexOfArray: [ids, "$projectId"] });
+    }
+    case "owner": {
+      const staff = await StaffProfile.find({}, { _id: 1 }).lean();
+      const ids = (
+        await AuthUser.find({ _id: { $in: staff.map((x) => x._id) } }, { _id: 1 })
+          .collation({ locale: "en", strength: 2 })
+          .sort({ name: 1 })
+          .lean()
+      ).map((u) => u._id);
+      return ranked({ $cond: [{ $eq: [{ $ifNull: ["$ownerId", null] }, null] }, emptyLast, { $indexOfArray: [ids, "$ownerId"] }] });
+    }
+    case "followUp":
+      return ranked({ $ifNull: ["$nextFollowUpAt", new Date(d === 1 ? 8.64e15 : -8.64e15)] });
+    case "activity":
+      return ranked({ $ifNull: ["$lastActivityAt", new Date(d === 1 ? 8.64e15 : -8.64e15)] });
+    case "created":
+      return { stages: [], sort: { createdAt: d } };
+  }
+}
+
 /** One page of leads; `max` lets the CSV export read more than a screen. */
 export async function listLeads(filters: LeadFilters, scope: CrmScope, opts?: { max?: number }): Promise<Paged<LeadListItem>> {
-  const sort: Record<string, 1 | -1> =
-    filters.sort === "created"
-      ? { createdAt: -1 }
-      : filters.sort === "oldest"
-        ? { createdAt: 1 }
-        : filters.sort === "name"
-          ? { name: 1 }
-          : filters.sort === "followUp"
-            ? { followUpSort: 1, createdAt: -1 }
-            : { lastActivityAt: -1, createdAt: -1 };
+  const { stages, sort } = await leadSort(filters);
   const out = await facetPage<ListRow>(
     Lead,
-    [
-      { $match: { $and: leadMatch(filters, scope) } },
-      ...(filters.sort === "followUp" ? [{ $addFields: { followUpSort: { $ifNull: ["$nextFollowUpAt", new Date(8.64e15)] } } }] : []),
-    ],
+    [{ $match: { $and: leadMatch(filters, scope) } }, ...stages],
     sort,
     filters,
     [

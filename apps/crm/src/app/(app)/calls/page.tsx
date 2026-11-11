@@ -1,9 +1,8 @@
 import { crmRoutes, type CallReportRow } from "@edge/contracts";
-import { CALL_REPORT_PERIODS } from "@edge/domain/crm/enums";
-import { CALL_REPORT_PERIOD_LABELS } from "@edge/domain/crm/labels";
 import { talkTime } from "@edge/domain/crm/machine";
 import { formatDateTime } from "@edge/domain/dates";
 import { ActionDialog } from "@edge/ui/blocks/action-dialog";
+import { DateRangeFilter } from "@edge/ui/blocks/date-range-filter";
 import { FilterBar, FilterResults, FilterScope, FilterSelect } from "@edge/ui/blocks/filter-bar";
 import { StatCard } from "@edge/ui/blocks/stat-card";
 import { Badge } from "@edge/ui/components/badge";
@@ -14,6 +13,7 @@ import { PageHeader } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
 import type { Metadata } from "next";
 import { removeDeviceAction } from "@/lib/actions/calls";
+import { pageRange } from "@/lib/date-range";
 import { load, requireCrm } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Calls" };
@@ -28,10 +28,12 @@ function PhoneStatus({ device }: { device: CallReportRow["device"] }) {
 export default async function CallsPage(props: PageProps<"/calls">) {
   await requireCrm("crm.calls.read");
   const sp = await props.searchParams;
-  const period = CALL_REPORT_PERIODS.find((p) => p === sp.period) ?? "today";
+  // Today unless a range is picked; older `period=` links map onto a range.
+  const dr = pageRange(sp, { legacy: { param: "period", map: { today: "today", week: "7d", month: "month", lastMonth: "lastMonth" } } });
   const project = typeof sp.project === "string" && sp.project ? sp.project : undefined;
+  const range = dr.all ? { period: "all" as const } : { from: dr.from, to: dr.to };
   const [report, options] = await Promise.all([
-    load(() => api(crmRoutes.callReport, { query: { period, project } })),
+    load(() => api(crmRoutes.callReport, { query: { ...range, project } })),
     load(() => api(crmRoutes.options)),
   ]);
   const { rows, totals, canManageDevices } = report;
@@ -41,16 +43,10 @@ export default async function CallsPage(props: PageProps<"/calls">) {
       <PageHeader
         help="/docs/calls"
         title="Calls"
-        description={`${CALL_REPORT_PERIOD_LABELS[period]} · SIM calls with leads, from the phone app`}
+        description={`${dr.filter.label} · SIM calls with leads, from the phone app`}
         actions={
           <FilterBar search={false} className="mb-0">
-            <FilterSelect
-              name="period"
-              label="Period"
-              allLabel={CALL_REPORT_PERIOD_LABELS.today}
-              value={period === "today" ? undefined : period}
-              options={CALL_REPORT_PERIODS.filter((p) => p !== "today").map((p) => [p, CALL_REPORT_PERIOD_LABELS[p]])}
-            />
+            <DateRangeFilter {...dr.filter} prefix="Period" />
             <FilterSelect
               name="project"
               label="Project"

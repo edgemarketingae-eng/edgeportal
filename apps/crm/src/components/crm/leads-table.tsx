@@ -3,8 +3,10 @@
 import type { LeadListItem } from "@edge/contracts";
 import { ROUND_ROBIN } from "@edge/domain/crm/enums";
 import { LEAD_SOURCE_LABELS } from "@edge/domain/crm/labels";
+import { formatDate, formatTime } from "@edge/domain/dates";
 import { whatsappDigits } from "@edge/domain/crm/machine";
 import { TableEmpty } from "@edge/ui/blocks/empty-state";
+import { SortableHead, type SortState } from "@edge/ui/blocks/sortable-head";
 import { LeadStageBadge, TemperatureBadge } from "@edge/ui/blocks/status-badges";
 import { Button } from "@edge/ui/components/button";
 import { Card } from "@edge/ui/components/card";
@@ -136,6 +138,19 @@ function BulkAssign({
   );
 }
 
+/** The table's columns: each sorts by its own key (see listLeads), in its natural direction first. */
+const COLUMNS: { key: string; label: string; dir: "asc" | "desc"; className?: string }[] = [
+  { key: "name", label: "Lead", dir: "asc" },
+  { key: "phone", label: "Mobile", dir: "asc", className: "hidden md:table-cell" },
+  { key: "stage", label: "Stage", dir: "asc" },
+  { key: "project", label: "Project", dir: "asc", className: "hidden lg:table-cell" },
+  { key: "owner", label: "Owner", dir: "asc", className: "hidden lg:table-cell" },
+  { key: "source", label: "Source", dir: "asc", className: "hidden xl:table-cell" },
+  { key: "followUp", label: "Next follow-up", dir: "asc", className: "hidden md:table-cell" },
+  { key: "activity", label: "Last activity", dir: "desc", className: "hidden xl:table-cell" },
+  { key: "created", label: "Added", dir: "desc", className: "hidden xl:table-cell" },
+];
+
 /**
  * Leads with selection for bulk actions. The header box ticks the page; then "select all matching" extends the
  * action to every lead the filters match, across pages. `assignees` is who the viewer may hand leads to (empty =
@@ -145,6 +160,7 @@ export function LeadsTable({
   rows,
   total,
   filters,
+  sort,
   assignees,
   canDelete = false,
   empty,
@@ -152,6 +168,8 @@ export function LeadsTable({
   rows: LeadListItem[];
   total: number;
   filters: string;
+  /** Makes the headers sort the list: the current sort and the page's query string (the leads page only). */
+  sort?: { current: SortState; query: string };
   assignees: { id: string; name: string; available?: boolean }[];
   canDelete?: boolean;
   /** What an empty list says; "no leads match these filters" by default. */
@@ -237,20 +255,30 @@ export function LeadsTable({
                   />
                 </TableHead>
               ) : null}
-              <TableHead>Lead</TableHead>
-              <TableHead className="hidden md:table-cell">Mobile</TableHead>
-              <TableHead>Stage</TableHead>
-              <TableHead className="hidden lg:table-cell">Project</TableHead>
-              <TableHead className="hidden lg:table-cell">Owner</TableHead>
-              <TableHead className="hidden xl:table-cell">Source</TableHead>
-              <TableHead className="hidden md:table-cell">Next follow-up</TableHead>
-              <TableHead className="hidden xl:table-cell">Last activity</TableHead>
+              {COLUMNS.map((c) =>
+                sort ? (
+                  <SortableHead
+                    key={c.key}
+                    column={c.key}
+                    current={sort.current}
+                    query={sort.query}
+                    defaultDir={c.dir}
+                    className={c.className}
+                  >
+                    {c.label}
+                  </SortableHead>
+                ) : (
+                  <TableHead key={c.key} className={c.className}>
+                    {c.label}
+                  </TableHead>
+                ),
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.length === 0 ? (
               <TableEmpty
-                colSpan={selectable ? 9 : 8}
+                colSpan={COLUMNS.length + (selectable ? 1 : 0)}
                 {...(empty ?? {
                   icon: <SearchX />,
                   title: "No leads match these filters.",
@@ -330,6 +358,10 @@ export function LeadsTable({
                   </TableCell>
                   <TableCell className="hidden xl:table-cell">
                     {l.lastActivityAt ? <TimeAgo at={l.lastActivityAt} className="text-muted-foreground text-xs" /> : null}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground hidden text-xs whitespace-nowrap xl:table-cell" title={l.createdAt}>
+                    {formatDate(l.createdAt)}
+                    <div>{formatTime(l.createdAt)}</div>
                   </TableCell>
                 </TableRow>
               ))

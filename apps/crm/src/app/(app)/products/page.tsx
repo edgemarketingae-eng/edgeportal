@@ -46,7 +46,7 @@ export default async function ProductsPage() {
               products.map((p) => (
                 <TableRow key={p.id} className={p.status === "ARCHIVED" ? "opacity-60" : undefined}>
                   <TableCell>
-                    <Link href={`/leads?product=${p.id}`} className="text-edge-emerald font-semibold hover:underline">
+                    <Link href={`/leads?product=${p.id}&range=all`} className="text-edge-emerald font-semibold hover:underline">
                       {p.name}
                     </Link>
                     <span className="mt-1 flex flex-wrap gap-1">

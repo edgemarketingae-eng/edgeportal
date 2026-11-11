@@ -1,4 +1,4 @@
-import { crmRoutes } from "@edge/contracts";
+import { crmRoutes, LEAD_DATE_FIELDS, LEAD_SORTS } from "@edge/contracts";
 import {
   CALL_OUTCOMES,
   EXPERIENCE_LEVELS,
@@ -12,7 +12,7 @@ import {
   ROUND_ROBIN,
 } from "@edge/domain/crm/enums";
 import { z } from "zod";
-import { clear, clip, defined, defineTool, ref, zId, zPageNo, zPageSize, zWhen } from "./kit";
+import { clear, clip, defined, defineTool, ref, zDays, zId, zPageNo, zPageSize, zWhen } from "./kit";
 import { leadRow, taskRow } from "./shapes";
 
 const leadFilterInput = {
@@ -30,7 +30,12 @@ const leadFilterInput = {
     .enum(["overdue", "today", "week", "none"])
     .optional()
     .describe("Next follow-up overdue, due today, due this week, or none set"),
-  created: z.enum(["today", "week", "month"]).optional(),
+  created: z.enum(["today", "week", "month"]).optional().describe("Preset for when the lead was added; from/to are more precise"),
+  ...zDays,
+  dateOn: z
+    .enum(LEAD_DATE_FIELDS)
+    .optional()
+    .describe("Which date from/to apply to: created (added, the default), activity (last activity) or followUp (next follow-up)"),
   includeClosed: z
     .boolean()
     .optional()
@@ -52,6 +57,9 @@ const toFilters = (a: LeadFilterArgs) =>
     product: a.productId,
     due: a.followUp,
     created: a.created,
+    from: a.from,
+    to: a.to,
+    dateOn: a.dateOn,
     view: a.includeClosed ? ("all" as const) : undefined,
   });
 
@@ -65,7 +73,11 @@ export const searchLeads = defineTool({
     "or includeClosed is true. Returns a page of compact rows plus the total; use get_lead for one lead's full record.",
   input: {
     ...leadFilterInput,
-    sort: z.enum(["recent", "created", "oldest", "followUp", "name"]).optional().describe("Default recent (latest activity)"),
+    sort: z
+      .enum(LEAD_SORTS)
+      .optional()
+      .describe("A column: name, phone, stage, project, owner, source, followUp, activity or created. Default: latest activity"),
+    dir: z.enum(["asc", "desc"]).optional().describe("Default: A-Z for names, newest first for dates, soonest first for follow-ups"),
     page: zPageNo,
     pageSize: zPageSize,
   },
@@ -73,7 +85,9 @@ export const searchLeads = defineTool({
   perms: ["crm.read"],
   kind: "read",
   async run(a, { call }) {
-    const r = await call(crmRoutes.leads, { query: { ...toFilters(a), sort: a.sort, page: a.page ?? 1, pageSize: a.pageSize ?? 25 } });
+    const r = await call(crmRoutes.leads, {
+      query: { ...toFilters(a), sort: a.sort, dir: a.dir, page: a.page ?? 1, pageSize: a.pageSize ?? 25 },
+    });
     return { total: r.total, page: r.page, pageSize: r.pageSize, leads: r.rows.map(leadRow) };
   },
 });

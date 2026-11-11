@@ -67,6 +67,27 @@ export function between(from: Date | null, to: Date | null) {
   return { ...(from ? { $gte: from } : {}), ...(to ? { $lt: to } : {}) };
 }
 
+/**
+ * A date filter's Dubai days `from`..`to` (YYYY-MM-DD, both inclusive) in the shape `periodRange` returns: instants
+ * for timestamps (`from`/`to`, end exclusive) and UTC-midnight values for date-only fields (`fromDay`/`toDay`, end
+ * exclusive). A missing end is open.
+ */
+export function dayRange(from?: string | null, to?: string | null) {
+  const fromDay = from ? new Date(`${from}T00:00:00.000Z`) : null;
+  const toDay = to ? new Date(Date.parse(`${to}T00:00:00.000Z`) + 86_400_000) : null;
+  return { from: fromDay ? startOfDubaiDay(fromDay) : null, to: toDay ? startOfDubaiDay(toDay) : null, fromDay, toDay };
+}
+
+/** Whether a query carries a from/to date filter (which then wins over its `period` preset). */
+export const hasDays = (q: { from?: string; to?: string }) => !!(q.from || q.to);
+
+/** An aggregation expression: `field` holds a date within [from, to) (and isn't null). */
+export function inRangeExpr(field: string, from: Date | null, to: Date | null) {
+  return {
+    $and: [{ $ne: [{ $ifNull: [field, null] }, null] }, ...(from ? [{ $gte: [field, from] }] : []), ...(to ? [{ $lt: [field, to] }] : [])],
+  };
+}
+
 /** Empty -> null; otherwise a valid E.164 number or a field error. */
 export function normalizePhone(input: string | null | undefined, country?: string | null, field = "phone"): string | null {
   const v = (input ?? "").trim();

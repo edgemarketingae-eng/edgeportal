@@ -169,7 +169,7 @@ test("3. filters and view links update the lists in place, without reloading the
 
     // A view link replaces the query, and the filter controls follow the URL.
     await page.getByRole("link", { name: "Mine", exact: true }).click();
-    await expect(page).toHaveURL(/\/leads\?owner=me$/);
+    await expect(page).toHaveURL(/\/leads\?owner=me&range=all$/); // views look across all dates
     await expect(page.getByLabel("Owner", { exact: true })).toHaveText("Owner: Me");
     await expect(page.getByLabel("Stage", { exact: true })).toHaveText("Stage: all");
     await expect(search).toHaveValue("");

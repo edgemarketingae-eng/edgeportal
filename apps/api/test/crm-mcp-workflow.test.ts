@@ -1,4 +1,5 @@
 import { CrmProduct, LeadDeposit, Project } from "@edge/db";
+import { dubaiDateString } from "@edge/domain/dates";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app";
 import { closeTestDb, resetDb, startApi } from "./helpers";
@@ -58,6 +59,10 @@ describe("Claude connector: a day's work through the tools", () => {
     await ok(t, "update_lead", { leadId, notes: null, qualification: { purpose: null } });
     const found = await ok(t, "search_leads", { query: "anil", projectId });
     expect(found.total).toBe(1);
+    // Dates (Dubai days) and any column sort.
+    const today = dubaiDateString(new Date());
+    expect((await ok(t, "search_leads", { projectId, from: today, to: today, sort: "owner", dir: "desc" })).total).toBe(1);
+    expect((await ok(t, "search_leads", { projectId, from: "2020-01-01", to: "2020-01-31" })).total).toBe(0);
     expect(found.leads[0]).toMatchObject({ id: leadId, temperature: "HOT", tags: ["hot-lead"] });
     await ok(t, "assign_lead", { leadId, ownerId: exec.id });
     await ok(t, "assign_lead", { leadId, ownerId: null });

@@ -1,6 +1,7 @@
-import { crmRoutes } from "@edge/contracts";
+import { crmRoutes, LEAD_DATE_FIELDS, LEAD_SORTS } from "@edge/contracts";
 import { LEAD_SOURCES, LEAD_STAGES, LEAD_TEMPERATURES } from "@edge/domain/crm/enums";
 import { LEAD_SOURCE_LABELS, LEAD_STAGE_LABELS, LEAD_TEMPERATURE_LABELS } from "@edge/domain/crm/labels";
+import { DateRangeFilter } from "@edge/ui/blocks/date-range-filter";
 import { FilterBar, FilterLink, FilterResults, FilterScope, FilterSelect } from "@edge/ui/blocks/filter-bar";
 import { Alert, AlertDescription } from "@edge/ui/components/alert";
 import { Button } from "@edge/ui/components/button";
@@ -12,6 +13,7 @@ import Link from "next/link";
 import { Pagination } from "@edge/ui/blocks/pagination";
 import { LeadsTable } from "@/components/crm/leads-table";
 import { QuickAddLead } from "@/components/crm/quick-add-dialog";
+import { pageRange } from "@/lib/date-range";
 import { can, load, requireCrm } from "@/lib/load";
 
 export const metadata: Metadata = { title: "Leads" };
@@ -22,16 +24,14 @@ const DUE_OPTIONS: [string, string][] = [
   ["week", "Due this week"],
   ["none", "No follow-up"],
 ];
-const CREATED_OPTIONS: [string, string][] = [
-  ["today", "Today"],
-  ["week", "Last 7 days"],
-  ["month", "This month"],
-];
-const SORT_OPTIONS: [string, string][] = [
-  ["created", "Newest"],
+/** Which date the date filter applies to (`on` in the URL; "created" when unset). */
+const DATE_FIELD_OPTIONS: [string, string][] = [
+  ["created", "Added"],
+  ["activity", "Last activity"],
   ["followUp", "Next follow-up"],
-  ["name", "Name"],
 ];
+/** Sort keys the older Sort select used, and the column each now means. */
+const SORT_ALIASES: Record<string, string> = { recent: "activity", oldest: "created" };
 
 export default async function LeadsPage(props: PageProps<"/leads">) {
   const v = await requireCrm("crm.read");
@@ -49,14 +49,18 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
     batch: one("batch"),
     product: one("product"),
     due: pick("due", ["overdue", "today", "week", "none"] as const),
-    created: pick("created", ["today", "week", "month"] as const),
     view: pick("view", ["open", "all"] as const),
-    sort: pick("sort", ["recent", "created", "followUp", "name"] as const),
+    sort: pick("sort", LEAD_SORTS),
+    dir: pick("dir", ["asc", "desc"] as const),
     page: Number(one("page")) || 1,
     pageSize: Number(one("pageSize")) || 50,
   };
+  // Today unless a range is picked or someone is searching (see pageRange); `created=` links still work.
+  const dateOn = pick("on", LEAD_DATE_FIELDS) ?? "created";
+  const dr = pageRange(sp, { searching: !!f.q, legacy: { param: "created", map: { today: "today", week: "7d", month: "month" } } });
+  const query = { ...f, from: dr.from, to: dr.to, dateOn: dr.all ? undefined : dateOn };
   const [{ rows, total, page, pageSize }, options] = await Promise.all([
-    load(() => api(crmRoutes.leads, { query: f })),
+    load(() => api(crmRoutes.leads, { query })),
     load(() => api(crmRoutes.options)),
   ]);
   const canWrite = can(v, "crm.write");
@@ -69,25 +73,34 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
       ? uniq(options.projects.filter((p) => p.canAssign).flatMap((p) => options.teams[p.id] ?? []))
       : [];
   const owners = uniq(Object.values(options.teams).flat());
-  // The filters alone, without paging or flash params (view chips, export, "select all matching").
+  // The URL's filters, without paging or flash params: what the sort headers keep and the view chips compare against.
   const qs = new URLSearchParams(
     Object.entries(sp).filter(([k, x]) => !["deleted", "page", "pageSize"].includes(k) && typeof x === "string" && x) as [string, string][],
   );
+  // What the list actually shows, with the date range resolved (Today by default): export and "select all matching"
+  // must cover exactly these leads.
+  const shown = new URLSearchParams(
+    Object.entries(query).filter(([k, x]) => !["page", "pageSize"].includes(k) && x != null && x !== "") as [string, string][],
+  );
   const current = [...qs.entries()]
+    .filter(([k]) => k !== "sort" && k !== "dir")
     .sort()
     .map(([k, x]) => `${k}=${x}`)
     .join("&");
+  // The views are for working the pipeline, so they look across all dates (narrow them with the date filter).
   const views: { label: string; query: string; show?: boolean }[] = [
     { label: "Open", query: "" },
-    { label: "Mine", query: "owner=me" },
-    { label: "Unassigned", query: "owner=unassigned" },
-    { label: "Overdue", query: "due=overdue" },
-    { label: "Hot", query: "temperature=HOT" },
-    { label: "New today", query: "created=today&view=all" },
-    { label: "Converted", query: "stage=CONVERTED" },
-    { label: "Lost", query: "stage=LOST" },
-    { label: "All", query: "view=all" },
+    { label: "Mine", query: "owner=me&range=all" },
+    { label: "Unassigned", query: "owner=unassigned&range=all" },
+    { label: "Overdue", query: "due=overdue&range=all" },
+    { label: "Hot", query: "temperature=HOT&range=all" },
+    { label: "New today", query: "range=today&view=all" },
+    { label: "Converted", query: "stage=CONVERTED&range=all" },
+    { label: "Lost", query: "stage=LOST&range=all" },
+    { label: "All", query: "view=all&range=all" },
   ];
+  const sortKey = f.sort ? (SORT_ALIASES[f.sort] ?? f.sort) : "activity";
+  const sortDir = f.dir ?? (f.sort === "oldest" ? "asc" : ["activity", "created"].includes(sortKey) ? "desc" : "asc");
 
   return (
     <FilterScope>
@@ -104,7 +117,7 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
               </Button>
             ) : null}
             <Button asChild variant="outline" size="sm">
-              <a href={`/leads/export?${qs.toString()}`} download>
+              <a href={`/leads/export?${shown.toString()}`} download>
                 <Download /> Export CSV
               </a>
             </Button>
@@ -134,6 +147,10 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
       </div>
       <FilterBar q={f.q} placeholder="Search name, mobile, email, JetaFX ID, notes…">
         {f.view ? <input type="hidden" name="view" value={f.view} /> : null}
+        {/* The column headers set the sort; filters keep it. */}
+        {f.sort ? <input type="hidden" name="sort" value={f.sort} /> : null}
+        {f.dir ? <input type="hidden" name="dir" value={f.dir} /> : null}
+        <DateRangeFilter {...dr.filter} field={{ name: "on", value: dateOn, defaultValue: "created", options: DATE_FIELD_OPTIONS }} />
         <FilterSelect name="project" label="Project" value={f.project} options={options.projects.map((p) => [p.id, p.name])} />
         <FilterSelect name="stage" label="Stage" value={f.stage} options={LEAD_STAGES.map((s) => [s, LEAD_STAGE_LABELS[s]])} />
         <FilterSelect name="source" label="Source" value={f.source} options={LEAD_SOURCES.map((s) => [s, LEAD_SOURCE_LABELS[s]])} />
@@ -160,25 +177,26 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
         />
         <FilterSelect name="batch" label="Batch" value={f.batch} options={options.batches.map((b) => [b.id, b.label])} />
         <FilterSelect name="due" label="Follow-up" value={f.due} options={DUE_OPTIONS} />
-        <FilterSelect name="created" label="Created" value={f.created} options={CREATED_OPTIONS} />
-        <FilterSelect name="sort" label="Sort" allLabel="Sort: recent activity" value={f.sort} options={SORT_OPTIONS} />
       </FilterBar>
       <FilterResults>
         <LeadsTable
           rows={rows}
           total={total}
-          filters={qs.toString()}
+          filters={shown.toString()}
+          sort={{ current: { sort: sortKey, dir: sortDir }, query: qs.toString() }}
           assignees={assignable}
           canDelete={can(v, "crm.leads.delete")}
           empty={
-            qs.toString()
+            qs.toString() || !dr.all
               ? {
                   icon: <SearchX />,
                   title: "No leads match these filters.",
-                  children: "Try another view, or clear the filters.",
+                  children: dr.all
+                    ? "Try another view, or clear the filters."
+                    : `Nothing for ${dr.filter.label.toLowerCase()}. Try a wider date range.`,
                   action: (
                     <Button asChild size="sm" variant="outline">
-                      <Link href="/leads">Clear filters</Link>
+                      <Link href={`/leads?${new URLSearchParams({ ...Object.fromEntries(qs), range: "all" })}`}>All dates</Link>
                     </Button>
                   ),
                 }
@@ -194,7 +212,7 @@ export default async function LeadsPage(props: PageProps<"/leads">) {
                         </Button>
                       ) : null}
                       <Button asChild size="sm" variant="outline">
-                        <Link href="/leads?view=all">See all leads</Link>
+                        <Link href="/leads?view=all&range=all">See all leads</Link>
                       </Button>
                     </>
                   ),

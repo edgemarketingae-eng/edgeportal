@@ -2,7 +2,7 @@ import type { LeaderboardDto, LeaderboardRow } from "@edge/contracts";
 import { AuthUser, CrmProduct, Lead, LeadConversion, LeadDeposit, Role, StaffProfile, Types } from "@edge/db";
 import { now } from "@edge/domain/clock";
 import type { LeaderboardPeriod } from "@edge/domain/crm/enums";
-import { between, optId, periodRange, userNames } from "./common";
+import { between, dayRange, hasDays, optId, periodRange, userNames } from "./common";
 import { productIdsSoldIn } from "./products";
 import { has, type CrmScope } from "./scope";
 
@@ -20,9 +20,12 @@ export async function salesExecutiveIds() {
  * conversions credited to the person, then verified deposit volume. Commission is only included for commission managers;
  * everyone sees their own in `me`.
  */
-export async function getLeaderboard(q: { period?: LeaderboardPeriod; project?: string }, scope: CrmScope): Promise<LeaderboardDto> {
+export async function getLeaderboard(
+  q: { period?: LeaderboardPeriod; project?: string; from?: string; to?: string },
+  scope: CrmScope,
+): Promise<LeaderboardDto> {
   const period = q.period ?? "month";
-  const range = periodRange(period, now());
+  const range = hasDays(q) ? dayRange(q.from, q.to) : periodRange(period, now());
   const projectId = optId(q.project);
   const inProject = projectId ? { projectId } : {};
   const convertedAt = between(range.from, range.to);

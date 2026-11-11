@@ -33,6 +33,8 @@ import {
   between,
   callTouchPatch,
   createTaskInTx,
+  dayRange,
+  hasDays,
   loadLead,
   localDate,
   lockLead,
@@ -354,12 +356,16 @@ function reportRange(period: CallReportPeriod, at: Date) {
  * Calls per person for a period (Dubai calendar). Everyone who should be calling is listed, so someone at zero stands out.
  * Project managers see calls on their projects; phone status is only for people who can act on it.
  */
-export async function getCallReport(q: { period?: CallReportPeriod; project?: string }, scope: CrmScope): Promise<CallReportDto> {
+export async function getCallReport(
+  q: { period?: CallReportPeriod; project?: string; from?: string; to?: string },
+  scope: CrmScope,
+): Promise<CallReportDto> {
   const projectId = optId(q.project);
   if (projectId && !managesProject(scope, projectId)) throw new NotFoundError("Project");
-  const { from, to } = reportRange(q.period ?? "today", now());
+  const { from, to } = hasDays(q) ? dayRange(q.from, q.to) : reportRange(q.period ?? "today", now());
   const projects = projectId ? [projectId] : scope.all ? null : scope.managed;
-  const match = { ...(projects ? { projectId: { $in: projects } } : {}), startedAt: between(from, to) };
+  const startedAt = between(from, to);
+  const match = { ...(projects ? { projectId: { $in: projects } } : {}), ...(startedAt ? { startedAt } : {}) };
   const rows = await LeadCall.aggregate<{
     _id: Types.ObjectId;
     calls: number;
