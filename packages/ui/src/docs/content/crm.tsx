@@ -1604,7 +1604,7 @@ export const crmDocs: DocModule[] = [
               </>
               <>
                 The <b>Free Course support</b> project (code <i>FREE-COURSE-SUPPORT</i>) receives new enquiries from the Forex Growth Hub
-                forms and from the contact page (the student app&apos;s <i>/support</i> page: help and support, broker account opening,
+                forms and from the contact page (the student app&apos;s <i>/get-help</i> page: help and support, broker account opening,
                 course joining, Inner Circle access, free live classes). Each new enquiry goes round-robin to one of its sales executives,
                 and the visitor is sent to that person&apos;s WhatsApp or Telegram. While its team is empty, enquiries wait there unassigned
                 and visitors go to the academy&apos;s support WhatsApp. A paused project still receives enquiries; only if a page&apos;s

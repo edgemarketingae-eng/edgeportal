@@ -75,7 +75,7 @@ export const LEADERBOARD_PERIODS = ["month", "lastMonth", "quarter", "year", "al
 export const CALL_REPORT_PERIODS = ["today", "week", "month", "lastMonth", "all"] as const;
 /** Public ingest endpoints: POST /api/webhooks/leads/:source */
 export const INBOUND_SOURCES = ["website"] as const;
-/** What a visitor asks about on the student app's contact page (/support). */
+/** What a visitor asks about on the student app's contact page (/get-help). */
 export const SUPPORT_TOPICS = ["SUPPORT", "BROKER_ACCOUNT", "COURSE", "INNER_CIRCLE", "FREE_CLASS"] as const;
 
 export type LeadStage = (typeof LEAD_STAGES)[number];

@@ -31,7 +31,7 @@ const STEPS = [
  * Public contact page. `?topic=broker-account` (or inner-circle, course, free-class, support) preselects a topic, for
  * links from posts and other pages.
  */
-export default function SupportPage(props: PageProps<"/support">) {
+export default function SupportPage(props: PageProps<"/get-help">) {
   return (
     <div className="relative isolate overflow-x-clip">
       <CrossingLines />
@@ -87,7 +87,7 @@ export default function SupportPage(props: PageProps<"/support">) {
   );
 }
 
-async function TopicForm({ searchParams }: { searchParams: PageProps<"/support">["searchParams"] }) {
+async function TopicForm({ searchParams }: { searchParams: PageProps<"/get-help">["searchParams"] }) {
   const sp = await searchParams;
   const want = typeof sp.topic === "string" ? sp.topic.toUpperCase().replace(/-/g, "_") : "";
   return <SupportForm topic={SUPPORT_TOPICS.find((t) => t === want) ?? "SUPPORT"} />;

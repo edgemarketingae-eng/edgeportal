@@ -13,7 +13,7 @@ import { reachableExec } from "./round-robin";
 
 /**
  * Public lead pages that send the visitor straight to a sales executive's chat (WhatsApp or Telegram, whichever the
- * executive uses): the free live class landing page (student app home), the contact page (student app /support) and
+ * executive uses): the free live class landing page (student app home), the contact page (student app /get-help) and
  * the Forex Growth Hub forms (growthhub.edgeverse.ae, a separate static site).
  */
 
@@ -185,7 +185,7 @@ const SUPPORT_ASK: Record<SupportTopic, (clientId?: string) => string> = {
 };
 
 /**
- * Contact page (/support): new leads go to the Free Course support project, like Growth Hub's, tagged with the topic. The topic and the visitor's note
+ * Contact page (/get-help): new leads go to the Free Course support project, like Growth Hub's, tagged with the topic. The topic and the visitor's note
  * go in the lead's notes (or on the timeline of a known lead) and the note is added to their first chat message.
  */
 export async function captureSupportLead(input: {

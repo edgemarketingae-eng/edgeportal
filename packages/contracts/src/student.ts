@@ -70,7 +70,7 @@ export const GrowthHubLeadInput = FreeClassLeadInput.omit({ phone: true }).exten
   page: z.string().trim().max(500).optional(),
 });
 
-/** The contact page (/support): what the visitor needs, and optionally a note and their JetaFX client ID. */
+/** The contact page (/get-help): what the visitor needs, and optionally a note and their JetaFX client ID. */
 export const SupportLeadInput = FreeClassLeadInput.extend({
   topic: z.enum(SUPPORT_TOPICS, { message: "Choose what you need help with" }),
   message: z.string().trim().max(1000, "Keep it under 1,000 characters").optional(),

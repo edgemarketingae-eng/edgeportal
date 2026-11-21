@@ -80,7 +80,12 @@ test("3. a visitor asks for broker account help on the contact page, and the lea
       chat = route.request().url();
       await route.fulfill({ contentType: "text/html", body: `<h1>${app}</h1>` });
     });
-  await page.goto(`${E2E.student}/support?topic=broker-account&utm_source=e2e-support`);
+  // The contact page moved from /support to /get-help; the old URL is gone and must 404, not redirect.
+  const old = await page.goto(`${E2E.student}/support`);
+  expect(old?.status()).toBe(404);
+  await expect(page.getByRole("heading", { name: "How Can We Help?" })).toHaveCount(0);
+
+  await page.goto(`${E2E.student}/get-help?topic=broker-account&utm_source=e2e-support`);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("How Can We Help?");
   await expect(page.getByRole("radio", { name: /Broker account opening/ })).toBeChecked(); // preselected by the link
   await expect(page.getByLabel("JetaFX client ID (optional)")).toHaveCount(0);

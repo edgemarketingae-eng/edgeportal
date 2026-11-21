@@ -24,7 +24,7 @@ export function SiteFooter({ stickyBar }: { stickyBar?: boolean }) {
         <div className="grid gap-2">
           <Image src="/brand/edge-logo-primary.svg" alt="Edge Trading Academy" width={128} height={32} unoptimized />
           <p className="text-edge-ink/60 text-xs">edgeacademy.ae · Dubai, UAE</p>
-          <Link href="/support" className="text-edge-emerald w-fit text-sm font-semibold hover:underline">
+          <Link href="/get-help" className="text-edge-emerald w-fit text-sm font-semibold hover:underline">
             Contact us
           </Link>
         </div>
