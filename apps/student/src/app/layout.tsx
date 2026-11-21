@@ -1,10 +1,11 @@
 import { Toaster } from "@edge/ui/components/sonner";
 import { TooltipProvider } from "@edge/ui/components/tooltip";
 import type { Metadata } from "next";
-import { Manrope } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] });
+// Self-hosted (Manrope variable font, latin, weights 200-800): fetching from Google Fonts at build time broke server builds.
+const manrope = localFont({ src: "./fonts/manrope-latin.woff2", variable: "--font-manrope", weight: "200 800", display: "swap" });
 
 export const metadata: Metadata = {
   title: { default: "Edge Trading Academy", template: "%s · Edge Trading Academy" },
