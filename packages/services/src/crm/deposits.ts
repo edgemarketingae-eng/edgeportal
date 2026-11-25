@@ -1,12 +1,13 @@
 import type { DepositFilters, DepositInput, DepositList, DepositSummary, LeadDepositDto, StaffCommissionDto } from "@edge/contracts";
 import { Lead, LeadConversion, LeadDeposit, StaffProfile, Types, withTx, type LeadDepositDoc } from "@edge/db";
 import { now } from "@edge/domain/clock";
-import { commissionFor, depositMonthRange, nextSlab, rateFor, type CommissionRates } from "@edge/domain/crm/commission";
+import { commissionFor, depositMonthRange, fractionToPercent, nextSlab, rateFor, type CommissionRates } from "@edge/domain/crm/commission";
 import { DEPOSIT_CURRENCY, type DepositSequence } from "@edge/domain/crm/enums";
-import { DEPOSIT_SEQUENCE_LABELS } from "@edge/domain/crm/labels";
-import { dubaiDateOnly } from "@edge/domain/dates";
+import { DEPOSIT_SEQUENCE_LABELS, DEPOSIT_STATUS_LABELS } from "@edge/domain/crm/labels";
+import { toCsv } from "@edge/domain/csv";
+import { dubaiDateOnly, formatDateTime } from "@edge/domain/dates";
 import type { Actor } from "@edge/domain/enums";
-import { formatMoney, toMinor } from "@edge/domain/money";
+import { formatMoney, toMajor, toMinor } from "@edge/domain/money";
 import { audit } from "../audit";
 import { env } from "../env";
 import { BusinessError, NotFoundError, TransitionError, ValidationError } from "../errors";
@@ -15,9 +16,22 @@ import { day, iso } from "../mappers";
 import { notifyPermissionHolders, notifyUser } from "../notifications/in-app";
 import { queuePush } from "../notifications/push";
 import { flushOutbox } from "../runtime";
-import { pageOf } from "../paging";
+import { EXPORT_CAP, pageOf } from "../paging";
 import { getSetting } from "../settings";
-import { actorId, between, dayRange, hasDays, leadHref, loadLead, lockLead, optId, periodRange, recordActivity, userNames } from "./common";
+import {
+  actorId,
+  between,
+  dayRange,
+  escapeRegex,
+  hasDays,
+  leadHref,
+  loadLead,
+  lockLead,
+  optId,
+  periodRange,
+  recordActivity,
+  userNames,
+} from "./common";
 import { has, listCrmUsers, type CrmScope } from "./scope";
 
 const depositsHref = () => `${env.CRM_APP_URL}/deposits`;
@@ -28,6 +42,29 @@ const ONCE: DepositSequence[] = ["FIRST"];
 const canManage = (scope: CrmScope) => has(scope, "crm.commission.manage");
 const pctText = (fraction: string) => `${Number((Number(fraction) * 100).toFixed(4))}%`;
 const monthName = (from: Date) => from.toLocaleString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+
+/** What a deposit counts as for commission and totals: the net amount a commission manager set, else the logged amount. */
+export const countedMinor = (d: { amountMinor: number; netAmountMinor?: number | null }) => d.netAmountMinor ?? d.amountMinor;
+/** `countedMinor` inside an aggregation. */
+export const COUNTED_MINOR = { $ifNull: ["$netAmountMinor", "$amountMinor"] };
+
+/** A net amount typed by a commission manager, in minor units; null when it is the logged amount (nothing adjusted). */
+function parseNet(netAmount: string, amountMinor: number) {
+  let minor: number;
+  try {
+    minor = toMinor(netAmount);
+  } catch {
+    throw new ValidationError({ netAmount: "Enter an amount like 500 or 1250.50" });
+  }
+  if (minor <= 0) throw new ValidationError({ netAmount: "Enter a net amount above zero (reject the deposit if nothing is left)" });
+  return minor === amountMinor ? null : minor;
+}
+
+/** "$200.00", or "$100.00 net (logged $200.00)" once adjusted. */
+const amountText = (d: { amountMinor: number; netAmountMinor?: number | null }) =>
+  d.netAmountMinor != null && d.netAmountMinor !== d.amountMinor
+    ? `${usd(d.netAmountMinor)} net (logged ${usd(d.amountMinor)})`
+    : usd(d.amountMinor);
 
 /** One person's later deposits for one month after a re-rate. `beforeMinor` / `afterMinor` are their summed commission. */
 export interface MonthRerate {
@@ -58,15 +95,15 @@ export async function rerateLaterMonth(
   const { from, to } = depositMonthRange(depositedAt);
   const rows = await LeadDeposit.find(
     { creditedToId, sequence: "LATER", status: "VERIFIED", depositedAt: { $gte: from, $lt: to } },
-    { amountMinor: 1, commissionPct: 1, commissionMinor: 1, slabBaseMinor: 1 },
+    { amountMinor: 1, netAmountMinor: 1, commissionPct: 1, commissionMinor: 1, slabBaseMinor: 1 },
   ).lean();
-  const totalMinor = rows.reduce((sum, d) => sum + d.amountMinor, 0);
+  const totalMinor = rows.reduce((sum, d) => sum + countedMinor(d), 0);
   const pct = rateFor(rates, "LATER", totalMinor);
   let beforeMinor = 0;
   let afterMinor = 0;
   const ops = [];
   for (const d of rows) {
-    const commissionMinor = commissionFor(d.amountMinor, pct);
+    const commissionMinor = commissionFor(countedMinor(d), pct);
     beforeMinor += d.commissionMinor ?? 0;
     afterMinor += commissionMinor;
     if (d.commissionPct !== pct || d.commissionMinor !== commissionMinor || d.slabBaseMinor !== totalMinor)
@@ -229,29 +266,33 @@ async function loadDeposit(id: string) {
 }
 
 /**
- * Verify (commission managers). A first deposit's commission is fixed with today's first-deposit rate. A later deposit
- * joins the credited person's month (by deposit date), and the whole month is re-rated by its new later-deposit total.
+ * Verify (commission managers). Commission is on the net amount: `netAmount` when given (typed in the deposits table),
+ * else the stored one. A first deposit's commission is fixed with today's first-deposit rate. A later deposit joins the
+ * credited person's month (by deposit date), and the whole month is re-rated by its new later-deposit total.
  */
-export async function verifyDeposit(id: string, actor: Actor & { type: "USER" }, scope: CrmScope) {
+export async function verifyDeposit(id: string, actor: Actor & { type: "USER" }, scope: CrmScope, netAmount?: string) {
   if (!canManage(scope)) throw new NotFoundError("Deposit");
   const d = await loadDeposit(id);
   if (d.status !== "PENDING") throw new TransitionError("Only pending deposits can be verified");
+  const netAmountMinor = netAmount?.trim() ? parseNet(netAmount, d.amountMinor) : (d.netAmountMinor ?? null);
+  const amount = countedMinor({ amountMinor: d.amountMinor, netAmountMinor });
   const rates = await getSetting("crm.commission");
   const first = d.sequence === "FIRST";
-  const fixed = first ? { commissionPct: rates.firstPct, commissionMinor: commissionFor(d.amountMinor, rates.firstPct) } : {};
+  const fixed = first ? { commissionPct: rates.firstPct, commissionMinor: commissionFor(amount, rates.firstPct) } : {};
   const at = now();
   const { lead, commissionMinor, month } = await withTx(async () => {
     const r = await LeadDeposit.updateOne(
       { _id: d._id, status: "PENDING" },
-      { $set: { status: "VERIFIED", reviewedById: actorId(actor), reviewedAt: at, rejectReason: null, ...fixed } },
+      { $set: { status: "VERIFIED", reviewedById: actorId(actor), reviewedAt: at, rejectReason: null, netAmountMinor, ...fixed } },
     );
     if (r.modifiedCount !== 1) throw new TransitionError("Only pending deposits can be verified");
     const month = first ? null : await rerateLaterMonth(d.creditedToId, d.depositedAt, rates);
     const pct = month?.pct ?? rates.firstPct;
-    const commissionMinor = commissionFor(d.amountMinor, pct);
+    const commissionMinor = commissionFor(amount, pct);
     const l = await Lead.findById(d.leadId, { name: 1 }).lean();
     await recordActivity(d.leadId, "DEPOSIT_VERIFIED", actor, {
-      data: { depositId: id, sequence: d.sequence, amountMinor: d.amountMinor, currency: d.currency },
+      body: netAmountMinor != null ? `Counts as ${amountText({ amountMinor: d.amountMinor, netAmountMinor })}` : null,
+      data: { depositId: id, sequence: d.sequence, amountMinor: d.amountMinor, netAmountMinor: amount, currency: d.currency },
     });
     await audit({
       actor,
@@ -259,6 +300,8 @@ export async function verifyDeposit(id: string, actor: Actor & { type: "USER" },
       entityType: "LeadDeposit",
       entityId: id,
       after: {
+        amountMinor: d.amountMinor,
+        netAmountMinor: amount,
         commissionPct: pct,
         commissionMinor,
         ...(month ? { month: month.month, monthTotalMinor: month.totalMinor, monthCommissionMinor: month.afterMinor } : {}),
@@ -270,16 +313,83 @@ export async function verifyDeposit(id: string, actor: Actor & { type: "USER" },
   await notifyUser(String(d.creditedToId), {
     title: "Deposit verified",
     body:
-      `${lead?.name ?? "A lead"}: ${usd(d.amountMinor)} (${DEPOSIT_SEQUENCE_LABELS[d.sequence]}). Your commission: ${usd(commissionMinor)}.` +
+      `${lead?.name ?? "A lead"}: ${amountText({ amountMinor: d.amountMinor, netAmountMinor })} (${DEPOSIT_SEQUENCE_LABELS[d.sequence]}). Your commission: ${usd(commissionMinor)}.` +
       (month ? ` ${monthLine(month)}${raised ? " Your earlier ones this month went up too." : ""}` : ""),
     href: leadHref(d.leadId),
   });
   await queuePush(d.creditedToId, {
     title: "Deposit verified",
-    body: `${lead?.name ?? "A lead"}: ${usd(d.amountMinor)}. Your commission: ${usd(commissionMinor)}.`,
+    body: `${lead?.name ?? "A lead"}: ${amountText({ amountMinor: d.amountMinor, netAmountMinor })}. Your commission: ${usd(commissionMinor)}.`,
     leadId: d.leadId,
   });
   await flushOutbox();
+}
+
+/**
+ * Set the net amount of a pending or verified deposit (commission managers), e.g. the lead withdrew part of it right
+ * away. Pending: it is what verifying will count. Verified: a first deposit's commission is recalculated at the rate it
+ * was verified with; a later deposit's whole month is re-rated by the new total. Returns the message to show.
+ */
+export async function setDepositNet(id: string, netAmount: string, actor: Actor & { type: "USER" }, scope: CrmScope): Promise<string> {
+  if (!canManage(scope)) throw new NotFoundError("Deposit");
+  const d = await loadDeposit(id);
+  if (d.status === "REJECTED") throw new TransitionError("A rejected deposit counts for nothing; its net amount can't be changed");
+  const netAmountMinor = parseNet(netAmount, d.amountMinor);
+  const before = countedMinor(d);
+  const after = countedMinor({ amountMinor: d.amountMinor, netAmountMinor });
+  if (after === before) return "The net amount is unchanged.";
+  const verified = d.status === "VERIFIED";
+  const rates = verified ? await getSetting("crm.commission") : null;
+  const firstPct = verified && d.sequence === "FIRST" ? (d.commissionPct ?? rates!.firstPct) : null;
+  const { lead, commissionMinor, month } = await withTx(async () => {
+    const r = await LeadDeposit.updateOne(
+      { _id: d._id, status: d.status, netAmountMinor: d.netAmountMinor ?? null },
+      {
+        $set: {
+          netAmountMinor,
+          ...(firstPct != null ? { commissionPct: firstPct, commissionMinor: commissionFor(after, firstPct) } : {}),
+        },
+      },
+    );
+    if (r.modifiedCount !== 1) throw new TransitionError("The deposit changed meanwhile; reload and try again");
+    // A verified later deposit's new amount changes its month's total, so the rate of every later deposit that month.
+    const month = verified && d.sequence === "LATER" ? await rerateLaterMonth(d.creditedToId, d.depositedAt, rates!) : null;
+    const commissionMinor = !verified ? null : commissionFor(after, month?.pct ?? firstPct!);
+    const l = await Lead.findById(d.leadId, { name: 1 }).lean();
+    await recordActivity(d.leadId, "SYSTEM", actor, {
+      body: `Net amount of the ${verified ? "verified" : "pending"} ${DEPOSIT_SEQUENCE_LABELS[d.sequence].toLowerCase()} of ${usd(d.amountMinor)} set to ${usd(after)}`,
+      data: { depositId: id, amountMinor: d.amountMinor, netAmountMinor: after },
+    });
+    await audit({
+      actor,
+      action: "lead.deposit.net",
+      entityType: "LeadDeposit",
+      entityId: id,
+      before: { netAmountMinor: before, commissionMinor: d.commissionMinor ?? null },
+      after: {
+        netAmountMinor: after,
+        commissionMinor,
+        ...(month ? { month: month.month, monthTotalMinor: month.totalMinor, monthCommissionMinor: month.afterMinor } : {}),
+      },
+    });
+    return { lead: l, commissionMinor, month };
+  });
+  if (commissionMinor == null) return "Net amount saved. Commission is worked out on it when the deposit is verified.";
+  await notifyUser(String(d.creditedToId), {
+    title: "Deposit amount changed",
+    body:
+      `${lead?.name ?? "A lead"}: your verified ${DEPOSIT_SEQUENCE_LABELS[d.sequence].toLowerCase()} now counts as ` +
+      `${amountText({ amountMinor: d.amountMinor, netAmountMinor })}. Your commission: ${usd(commissionMinor)}.` +
+      (month ? ` ${monthLine(month)}` : ""),
+    href: leadHref(d.leadId),
+  });
+  await queuePush(d.creditedToId, {
+    title: "Deposit amount changed",
+    body: `${lead?.name ?? "A lead"}: now ${usd(after)} net. Your commission: ${usd(commissionMinor)}.`,
+    leadId: d.leadId,
+  });
+  await flushOutbox();
+  return `Net amount saved. Commission recalculated: ${usd(commissionMinor)}.`;
 }
 
 /** Reject a pending deposit, or a verified one that the broker reversed. It earns no commission. */
@@ -329,7 +439,7 @@ export async function rejectDeposit(id: string, reason: string, actor: Actor & {
   await notifyUser(String(d.creditedToId), {
     title: "Deposit rejected",
     body:
-      `${lead?.name ?? "A lead"}: ${usd(d.amountMinor)} (${DEPOSIT_SEQUENCE_LABELS[d.sequence]}). ${why}` +
+      `${lead?.name ?? "A lead"}: ${amountText(d)} (${DEPOSIT_SEQUENCE_LABELS[d.sequence]}). ${why}` +
       (month?.count ? ` ${monthLine(month)}` : ""),
     href: leadHref(d.leadId),
   });
@@ -387,6 +497,7 @@ export async function toDepositDtos(rows: LeadDepositDoc[], scope: CrmScope): Pr
       loggedBy: ref(d.loggedById),
       sequence: d.sequence,
       amountMinor: d.amountMinor,
+      netAmountMinor: countedMinor(d),
       currency: d.currency,
       depositedAt: day(d.depositedAt)!,
       jetaFxClientId: d.jetaFxClientId ?? null,
@@ -417,7 +528,7 @@ async function summarize(match: Record<string, unknown>): Promise<Omit<DepositSu
       $group: {
         _id: "$status",
         n: { $sum: 1 },
-        amount: { $sum: "$amountMinor" },
+        amount: { $sum: COUNTED_MINOR },
         commission: { $sum: { $ifNull: ["$commissionMinor", 0] } },
       },
     },
@@ -439,7 +550,7 @@ async function monthProgress(creditedToId: Types.ObjectId): Promise<DepositSumma
     getSetting("crm.commission"),
     LeadDeposit.aggregate<{ v: number }>([
       { $match: { creditedToId, sequence: "LATER", status: "VERIFIED", depositedAt: { $gte: from, $lt: to } } },
-      { $group: { _id: null, v: { $sum: "$amountMinor" } } },
+      { $group: { _id: null, v: { $sum: COUNTED_MINOR } } },
     ]),
   ]);
   const laterMinor = r?.v ?? 0;
@@ -447,20 +558,53 @@ async function monthProgress(creditedToId: Types.ObjectId): Promise<DepositSumma
   return { laterMinor, pct: rateFor(rates, "LATER", laterMinor), next: next ? { fromMinor: next.fromMinor, pct: next.pct } : null };
 }
 
+type Match = Record<string, unknown>;
+const allOf = (xs: Match[]): Match => {
+  const c = xs.filter((x) => Object.keys(x).length);
+  return c.length ? { $and: c } : {};
+};
+
 /**
- * The deposits page: commission managers see everyone's (newest first, filter by person); everyone else sees the
- * deposits credited to them or logged by them. The summary only counts deposits credited to the viewer unless they manage.
+ * Search: every word in the lead's name (any order), or the text in the JetaFX client ID or broker reference. Only the
+ * leads of deposits in `within` are looked at, so a common name doesn't pull in the whole leads collection.
  */
-export async function listDeposits(filters: DepositFilters, scope: CrmScope): Promise<DepositList> {
+async function depositSearch(q: string, within: Match): Promise<Match> {
+  const rx = new RegExp(escapeRegex(q), "i");
+  const words = q.split(/\s+/).filter(Boolean).slice(0, 8);
+  const leadIds = await LeadDeposit.distinct("leadId", within);
+  const hits = leadIds.length
+    ? await Lead.find({ _id: { $in: leadIds }, $and: words.map((w) => ({ name: new RegExp(escapeRegex(w), "i") })) }, { _id: 1 }).lean()
+    : [];
+  return { $or: [{ leadId: { $in: hits.map((l) => l._id) } }, { jetaFxClientId: rx }, { reference: rx }] };
+}
+
+/**
+ * The deposits a filter selects (shared by the list and the CSV). Commission managers see everyone's (filter by
+ * person); everyone else the deposits credited to them or logged by them. `summary` is what the totals count: the same
+ * minus the status filter, and only deposits credited to the viewer unless they manage.
+ */
+async function depositMatch(filters: DepositFilters, scope: CrmScope) {
   const manage = canManage(scope);
-  const base: Record<string, unknown> = {};
+  const base: Match[] = [];
   const range = hasDays(filters) ? dayRange(filters.from, filters.to) : periodRange(filters.period ?? "all", now());
   const dates = between(range.fromDay, range.toDay);
-  if (dates) base.depositedAt = dates;
+  if (dates) base.push({ depositedAt: dates });
   const staff = optId(filters.staff);
-  if (manage && staff) base.creditedToId = staff;
-  const match = manage ? base : { ...base, $or: [{ creditedToId: scope.me }, { loggedById: scope.me }] };
-  const list = { ...match, ...(filters.status ? { status: filters.status } : {}) };
+  if (manage && staff) base.push({ creditedToId: staff });
+  const visible: Match = manage ? {} : { $or: [{ creditedToId: scope.me }, { loggedById: scope.me }] };
+  const q = filters.q?.trim();
+  if (q) base.push(await depositSearch(q, allOf([...base, visible])));
+  return {
+    manage,
+    staff,
+    list: allOf([...base, visible, filters.status ? { status: filters.status } : {}]),
+    summary: allOf([...base, manage ? {} : { creditedToId: scope.me }]),
+  };
+}
+
+/** The deposits page: newest first, one page, with the summary cards (see `depositMatch`). */
+export async function listDeposits(filters: DepositFilters, scope: CrmScope): Promise<DepositList> {
+  const { manage, staff, list, summary: counted } = await depositMatch(filters, scope);
   const { page, pageSize } = pageOf(filters, { def: 50 });
   const total = await LeadDeposit.countDocuments(list);
   const last = Math.max(1, Math.ceil(total / pageSize));
@@ -472,7 +616,7 @@ export async function listDeposits(filters: DepositFilters, scope: CrmScope): Pr
       .skip((p - 1) * pageSize)
       .limit(pageSize)
       .lean(),
-    summarize(manage ? base : { ...base, creditedToId: scope.me }),
+    summarize(counted),
     manage ? listCrmUsers() : Promise.resolve([]),
     monthOf ? monthProgress(monthOf) : Promise.resolve(null),
   ]);
@@ -485,6 +629,67 @@ export async function listDeposits(filters: DepositFilters, scope: CrmScope): Pr
     manage,
     staff: people.map((u) => ({ id: u.id, name: u.name, available: u.available })),
   };
+}
+
+/**
+ * Every deposit the list's filters select, as the list shows them (newest first, all pages, at most `limit`), and how
+ * many match in all. For the CSV and PDF exports.
+ */
+export async function depositExportRows(filters: DepositFilters, scope: CrmScope, limit = EXPORT_CAP) {
+  const { list } = await depositMatch(filters, scope);
+  const [rows, total] = await Promise.all([
+    LeadDeposit.find(list).sort({ depositedAt: -1, createdAt: -1, _id: -1 }).limit(limit).lean(),
+    LeadDeposit.countDocuments(list),
+  ]);
+  return { rows: await toDepositDtos(rows as LeadDepositDoc[], scope), total };
+}
+
+/** Every deposit the list's filters select (all pages, up to `EXPORT_CAP`) as CSV. Amounts are plain USD numbers. */
+export async function depositsCsv(filters: DepositFilters, scope: CrmScope) {
+  const { rows: dtos } = await depositExportRows(filters, scope);
+  const major = (minor: number | null) => (minor == null ? null : toMajor(minor).toFixed(2));
+  return toCsv(
+    [
+      "Deposit date",
+      "Lead",
+      "JetaFX client ID",
+      "Broker reference",
+      "Deposit",
+      "Amount logged (USD)",
+      "Net amount (USD)",
+      "Status",
+      "Counts for",
+      "Logged by",
+      "Reviewed by",
+      "Reviewed at",
+      "Reject reason",
+      "Commission %",
+      "Commission (USD)",
+      "Month later-deposit total (USD)",
+      "Note",
+      "Logged at",
+    ],
+    dtos.map((d) => [
+      d.depositedAt,
+      d.lead.name,
+      d.jetaFxClientId,
+      d.reference,
+      DEPOSIT_SEQUENCE_LABELS[d.sequence],
+      major(d.amountMinor),
+      major(d.netAmountMinor),
+      DEPOSIT_STATUS_LABELS[d.status],
+      d.creditedTo?.name,
+      d.loggedBy?.name,
+      d.status === "PENDING" ? null : d.reviewedBy?.name,
+      d.status !== "PENDING" && d.reviewedAt ? formatDateTime(d.reviewedAt) : null,
+      d.rejectReason,
+      d.commissionPct ? fractionToPercent(d.commissionPct) : null,
+      major(d.commissionMinor),
+      major(d.slabBaseMinor),
+      d.note,
+      formatDateTime(d.createdAt),
+    ]),
+  );
 }
 
 /**
@@ -511,7 +716,7 @@ export async function getStaffCommission(userId: string, scope: CrmScope): Promi
   const at = now();
   const month = periodRange("month", at);
   const lastMonth = periodRange("lastMonth", at);
-  const sum = async (match: Record<string, unknown>, field: "$commissionMinor" | "$amountMinor") => {
+  const sum = async (match: Record<string, unknown>, field: "$commissionMinor" | typeof COUNTED_MINOR) => {
     const [r] = await LeadDeposit.aggregate<{ v: number; n: number }>([
       { $match: { creditedToId: uid, ...match } },
       { $group: { _id: null, v: { $sum: { $ifNull: [field, 0] } }, n: { $sum: 1 } } },
@@ -523,9 +728,9 @@ export async function getStaffCommission(userId: string, scope: CrmScope): Promi
     sum({ ...verified, depositedAt: between(month.fromDay, month.toDay) }, "$commissionMinor"),
     sum({ ...verified, depositedAt: between(lastMonth.fromDay, lastMonth.toDay) }, "$commissionMinor"),
     sum(verified, "$commissionMinor"),
-    sum({ ...verified, depositedAt: between(month.fromDay, month.toDay) }, "$amountMinor"),
-    sum(verified, "$amountMinor"),
-    sum({ status: "PENDING" }, "$amountMinor"),
+    sum({ ...verified, depositedAt: between(month.fromDay, month.toDay) }, COUNTED_MINOR),
+    sum(verified, COUNTED_MINOR),
+    sum({ status: "PENDING" }, COUNTED_MINOR),
     LeadConversion.countDocuments({ creditedToId: uid, convertedAt: between(month.from, month.to) }),
     LeadConversion.countDocuments({ creditedToId: uid }),
     LeadDeposit.find({ creditedToId: uid }).sort({ depositedAt: -1, createdAt: -1 }).limit(10).lean(),

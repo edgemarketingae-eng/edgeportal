@@ -334,7 +334,10 @@ const leadDepositSchema = new Schema(
     creditedToId: { type: ObjectId, required: true },
     loggedById: { type: ObjectId, required: true },
     sequence: { type: String, enum: DEPOSIT_SEQUENCES, required: true },
+    /** The amount sales logged. */
     amountMinor: money(),
+    /** Set by a commission manager when the deposit that counts differs (e.g. part withdrawn); null = `amountMinor`. */
+    netAmountMinor: { ...money(false), default: null },
     currency: { type: String, default: "USD", required: true },
     depositedAt: { type: Date, required: true },
     jetaFxClientId: { type: String, default: null },

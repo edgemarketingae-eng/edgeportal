@@ -41,7 +41,10 @@ function Row({
           </Text>
           <Pill tone={tone} label={DEPOSIT_STATUS_LABELS[d.status]} />
         </View>
-        <Text variant="label">{formatMoney(d.amountMinor, d.currency)}</Text>
+        <Text variant="label">
+          {formatMoney(d.amountMinor, d.currency)}
+          {d.netAmountMinor !== d.amountMinor && d.status !== "REJECTED" ? ` · net ${formatMoney(d.netAmountMinor, d.currency)}` : ""}
+        </Text>
         <Text variant="caption">
           {[DEPOSIT_SEQUENCE_LABELS[d.sequence], formatDate(d.depositedAt), d.creditedTo?.name].filter(Boolean).join(" · ")}
         </Text>

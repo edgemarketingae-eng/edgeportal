@@ -82,7 +82,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
   const markable = options.products.filter((p) => !converted.has(p.id));
   const live = deposits.filter((d) => d.status !== "REJECTED");
   const nextSequence: DepositSequence = live.some((d) => d.sequence === "FIRST") ? "LATER" : "FIRST";
-  const verifiedMinor = deposits.filter((d) => d.status === "VERIFIED").reduce((n, d) => n + d.amountMinor, 0);
+  const verifiedMinor = deposits.filter((d) => d.status === "VERIFIED").reduce((n, d) => n + d.netAmountMinor, 0);
   const answered = Object.values(l.qualification).some(Boolean);
   const utm = [l.utm.source, l.utm.medium, l.utm.campaign, l.utm.content, l.utm.term].filter(Boolean).join(" / ");
 
@@ -465,6 +465,9 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
                     <p className="flex flex-wrap items-center justify-between gap-2">
                       <span className="font-medium">
                         {formatMoney(d.amountMinor, d.currency)}
+                        {d.netAmountMinor !== d.amountMinor && d.status !== "REJECTED" ? (
+                          <span className="font-normal"> · net {formatMoney(d.netAmountMinor, d.currency)}</span>
+                        ) : null}
                         <span className="text-muted-foreground font-normal"> · {DEPOSIT_SEQUENCE_LABELS[d.sequence]}</span>
                       </span>
                       <DepositStatusBadge status={d.status} />
@@ -496,6 +499,7 @@ export default async function LeadDetailPage(props: PageProps<"/leads/[id]">) {
                             id={d.id}
                             leadName={l.name}
                             amountMinor={d.amountMinor}
+                            netAmountMinor={d.netAmountMinor}
                             sequence={d.sequence}
                             depositedAt={d.depositedAt}
                             clientId={d.jetaFxClientId}

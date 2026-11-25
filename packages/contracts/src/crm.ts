@@ -260,6 +260,8 @@ export const DepositInput = z.object({
 export type DepositInput = z.input<typeof DepositInput>;
 
 export const DepositFilters = z.object({
+  /** Lead name, JetaFX client ID or broker reference. */
+  q: z.string().trim().max(100).optional(),
   status: z.enum(DEPOSIT_STATUSES).optional(),
   /** Credited staff user id (commission managers only). */
   staff: z.string().optional(),
@@ -268,6 +270,9 @@ export const DepositFilters = z.object({
   ...zPage.shape,
 });
 export type DepositFilters = z.input<typeof DepositFilters>;
+
+/** The deposit that counts for commission when it differs from the logged amount (e.g. part withdrawn), in USD. */
+export const DepositNetInput = z.object({ netAmount: zAmount });
 
 const percent = z.coerce.number({ message: "Enter a percentage" }).min(0, "Enter 0 to 100").max(100, "Enter 0 to 100");
 
@@ -465,7 +470,10 @@ export const LeadDepositDto = z.object({
   creditedTo: LeadOwnerRef.nullable(),
   loggedBy: LeadOwnerRef.nullable(),
   sequence: z.enum(DEPOSIT_SEQUENCES),
+  /** As logged by sales. */
   amountMinor: z.number(),
+  /** What counts for commission and totals: `amountMinor` unless a commission manager adjusted it. */
+  netAmountMinor: z.number(),
   currency: z.string(),
   /** YYYY-MM-DD */
   depositedAt: z.string(),
@@ -889,7 +897,20 @@ export const crmRoutes = {
     response: z.object({ id: z.string() }),
   }),
   deposits: route({ method: "GET", path: `${base}/deposits`, query: DepositFilters, response: DepositList }),
-  verifyDeposit: route({ method: "POST", path: `${base}/deposits/:id/verify`, params: idParam, response: zOk }),
+  /** Every deposit matching the list's filters (not just one page). */
+  depositsCsv: route({ method: "GET", path: `${base}/deposits.csv`, query: DepositFilters, response: z.string() }),
+  /** The same as a PDF file (binary; the newest 5,000 at most). */
+  depositsPdf: route({ method: "GET", path: `${base}/deposits.pdf`, query: DepositFilters, response: z.unknown() }),
+  /** `netAmount`: verify at this net amount instead of the stored one (no body = the stored one). */
+  verifyDeposit: route({
+    method: "POST",
+    path: `${base}/deposits/:id/verify`,
+    params: idParam,
+    body: DepositNetInput.partial(),
+    response: zOk,
+  }),
+  /** Change the net amount of a pending or verified deposit; a verified one's commission is recalculated. */
+  setDepositNet: route({ method: "POST", path: `${base}/deposits/:id/net`, params: idParam, body: DepositNetInput, response: zOk }),
   rejectDeposit: route({
     method: "POST",
     path: `${base}/deposits/:id/reject`,

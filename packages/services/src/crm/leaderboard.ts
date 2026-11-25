@@ -3,6 +3,7 @@ import { AuthUser, CrmProduct, Lead, LeadConversion, LeadDeposit, Role, StaffPro
 import { now } from "@edge/domain/clock";
 import type { LeaderboardPeriod } from "@edge/domain/crm/enums";
 import { between, dayRange, hasDays, optId, periodRange, userNames } from "./common";
+import { COUNTED_MINOR } from "./deposits";
 import { productIdsSoldIn } from "./products";
 import { has, type CrmScope } from "./scope";
 
@@ -49,11 +50,11 @@ export async function getLeaderboard(
     ]),
     LeadDeposit.aggregate<{ _id: Types.ObjectId; amount: number; commission: number }>([
       { $match: { status: "VERIFIED", ...inProject, ...(depositedAt ? { depositedAt } : {}) } },
-      { $group: { _id: "$creditedToId", amount: { $sum: "$amountMinor" }, commission: { $sum: { $ifNull: ["$commissionMinor", 0] } } } },
+      { $group: { _id: "$creditedToId", amount: { $sum: COUNTED_MINOR }, commission: { $sum: { $ifNull: ["$commissionMinor", 0] } } } },
     ]),
     LeadDeposit.aggregate<{ _id: null; n: number; amount: number }>([
       { $match: { status: "PENDING", creditedToId: scope.me, ...inProject, ...(depositedAt ? { depositedAt } : {}) } },
-      { $group: { _id: null, n: { $sum: 1 }, amount: { $sum: "$amountMinor" } } },
+      { $group: { _id: null, n: { $sum: 1 }, amount: { $sum: COUNTED_MINOR } } },
     ]),
     salesExecutiveIds(),
     CrmProduct.find({}, { name: 1, status: 1 }).sort({ sortOrder: 1, name: 1 }).lean(),

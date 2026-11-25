@@ -41,6 +41,8 @@ import {
   listCrmRoles,
   listCrmStaff,
   listDeposits,
+  depositsCsv,
+  depositsPdf,
   listLeads,
   listProducts,
   listProjects,
@@ -64,6 +66,7 @@ import {
   saveCrmSettings,
   saveFormOrigins,
   setCrmStaffAvailable,
+  setDepositNet,
   setCrmStaffDisabled,
   setProjectMember,
   setStage,
@@ -214,10 +217,28 @@ export function crmRouter() {
     return { id: await logDeposit(req.valid.params.id, req.valid.body, actor, scope) };
   });
   register(r, crmRoutes.deposits, async (req) => listDeposits(req.valid.query, (await crm(req, "crm.read")).scope));
+  register(r, crmRoutes.depositsCsv, async (req, res) => {
+    const { scope } = await crm(req, "crm.read");
+    const csv = await depositsCsv(req.valid.query, scope);
+    res.setHeader("content-type", "text/csv; charset=utf-8");
+    res.setHeader("content-disposition", `attachment; filename="deposits-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(`\uFEFF${csv}`); // BOM so Excel opens UTF-8 correctly
+  });
+  register(r, crmRoutes.depositsPdf, async (req, res) => {
+    const { scope } = await crm(req, "crm.read");
+    const pdf = await depositsPdf(req.valid.query, scope);
+    res.setHeader("content-type", "application/pdf");
+    res.setHeader("content-disposition", `attachment; filename="deposits-${new Date().toISOString().slice(0, 10)}.pdf"`);
+    res.send(pdf);
+  });
   register(r, crmRoutes.verifyDeposit, async (req) => {
     const { actor, scope } = await crm(req, "crm.commission.manage");
-    await verifyDeposit(req.valid.params.id, actor, scope);
+    await verifyDeposit(req.valid.params.id, actor, scope, req.valid.body.netAmount);
     return ok("Deposit verified. Commission recorded.");
+  });
+  register(r, crmRoutes.setDepositNet, async (req) => {
+    const { actor, scope } = await crm(req, "crm.commission.manage");
+    return ok(await setDepositNet(req.valid.params.id, req.valid.body.netAmount, actor, scope));
   });
   register(r, crmRoutes.rejectDeposit, async (req) => {
     const { actor, scope } = await crm(req, "crm.commission.manage");

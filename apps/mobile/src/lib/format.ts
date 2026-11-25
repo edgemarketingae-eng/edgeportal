@@ -57,10 +57,14 @@ const monthName = new Intl.DateTimeFormat("en-GB", { month: "long", year: "numer
 
 /** The same words the web CRM uses before verifying, because this decides commission. */
 export function verifyPrompt(d: LeadDepositDto) {
-  const what = `${d.lead.name}: ${DEPOSIT_SEQUENCE_LABELS[d.sequence].toLowerCase()} of ${formatMoney(d.amountMinor, d.currency)} on ${formatDate(d.depositedAt)}`;
+  const amount =
+    d.netAmountMinor !== d.amountMinor
+      ? `${formatMoney(d.netAmountMinor, d.currency)} net (logged ${formatMoney(d.amountMinor, d.currency)})`
+      : formatMoney(d.amountMinor, d.currency);
+  const what = `${d.lead.name}: ${DEPOSIT_SEQUENCE_LABELS[d.sequence].toLowerCase()} of ${amount} on ${formatDate(d.depositedAt)}`;
   const effect =
     d.sequence === "FIRST"
       ? "The commission is fixed with today's first-deposit rate."
       : `It joins the ${monthName.format(new Date(`${d.depositedAt.slice(0, 7)}-01T00:00:00.000Z`))} later deposits of the person it counts for: all of them earn the slab rate their total reaches, so their commission is recalculated.`;
-  return `${what}, JetaFX client ${d.jetaFxClientId ?? "unknown"}. Check it against the JetaFX report. ${effect}`;
+  return `${what}, JetaFX client ${d.jetaFxClientId ?? "unknown"}. Check it against the JetaFX report; commission is worked out on the net amount. ${effect}`;
 }

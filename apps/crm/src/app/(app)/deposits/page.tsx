@@ -10,14 +10,21 @@ import { Pagination } from "@edge/ui/blocks/pagination";
 import { TableEmpty } from "@edge/ui/blocks/empty-state";
 import { StatCard } from "@edge/ui/blocks/stat-card";
 import { DepositStatusBadge } from "@edge/ui/blocks/status-badges";
+import { Button } from "@edge/ui/components/button";
 import { Card } from "@edge/ui/components/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@edge/ui/components/table";
 import { PageHeader } from "@edge/ui/shell/app-shell";
 import { api } from "@edge/web/server";
-import { Wallet } from "lucide-react";
+import { FileText, Sheet, Wallet } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { DeleteDepositButton, RejectDepositDialog, VerifyDepositDialog } from "@/components/crm/deposit-actions";
+import {
+  DeleteDepositButton,
+  NetAmountInput,
+  NetDraftsProvider,
+  RejectDepositDialog,
+  VerifyDepositDialog,
+} from "@/components/crm/deposit-actions";
 import { DeleteButton } from "@/components/delete-button";
 import { pageRange } from "@/lib/date-range";
 import { can, load, requireCrm } from "@/lib/load";
@@ -31,16 +38,26 @@ export default async function DepositsPage(props: PageProps<"/deposits">) {
   const canPurge = can(v, "records.delete");
   const sp = await props.searchParams;
   const one = (k: string) => (typeof sp[k] === "string" && sp[k] ? sp[k] : undefined);
-  // Today by deposit date unless a range is picked; older `period=` links map onto a range.
-  const dr = pageRange(sp, { legacy: { param: "period", map: { month: "month", lastMonth: "lastMonth", year: "year", all: "all" } } });
+  const q = one("q");
+  // Today by deposit date unless a range is picked (all dates while searching); older `period=` links map onto a range.
+  const dr = pageRange(sp, {
+    searching: !!q,
+    legacy: { param: "period", map: { month: "month", lastMonth: "lastMonth", year: "year", all: "all" } },
+  });
   const f = {
+    q,
     status: DEPOSIT_STATUSES.find((s) => s === one("status")),
     staff: one("staff"),
     page: Number(one("page")) || 1,
     pageSize: Number(one("pageSize")) || 50,
   };
-  const d = await load(() =>
-    api(crmRoutes.deposits, { query: { ...f, ...(dr.all ? { period: "all" as const } : { from: dr.from, to: dr.to }) } }),
+  const dates = dr.all ? { period: "all" as const } : { from: dr.from, to: dr.to };
+  const d = await load(() => api(crmRoutes.deposits, { query: { ...f, ...dates } }));
+  // What the list shows, with the date range resolved (Today by default): the export covers exactly these, on every page.
+  const shown = new URLSearchParams(
+    Object.entries({ ...f, ...dates })
+      .filter(([k, x]) => !["page", "pageSize"].includes(k) && x != null && x !== "")
+      .map(([k, x]) => [k, String(x)]),
   );
   const s = d.summary;
   const current = new URLSearchParams(
@@ -83,7 +100,34 @@ export default async function DepositsPage(props: PageProps<"/deposits">) {
           );
         })}
       </div>
-      <FilterBar search={false}>
+      <FilterBar
+        q={q}
+        placeholder="Search lead name, JetaFX ID, reference…"
+        extra={
+          <div className="ml-auto flex gap-1.5">
+            <Button asChild variant="outline" size="icon-sm">
+              <a
+                href={`/deposits/export?${shown.toString()}`}
+                download
+                aria-label="Export CSV"
+                title="Export every matching deposit (CSV for Excel)"
+              >
+                <Sheet className="text-edge-emerald" />
+              </a>
+            </Button>
+            <Button asChild variant="outline" size="icon-sm">
+              <a
+                href={`/deposits/export?${new URLSearchParams([...shown, ["format", "pdf"]]).toString()}`}
+                download
+                aria-label="Export PDF"
+                title="Export every matching deposit (PDF to share or print)"
+              >
+                <FileText className="text-red-700" />
+              </a>
+            </Button>
+          </div>
+        }
+      >
         <DateRangeFilter {...dr.filter} prefix="Deposited" />
         <FilterSelect name="status" label="Status" value={f.status} options={DEPOSIT_STATUSES.map((x) => [x, DEPOSIT_STATUS_LABELS[x]])} />
         {d.manage ? (
@@ -124,96 +168,123 @@ export default async function DepositsPage(props: PageProps<"/deposits">) {
             />
           ) : null}
         </div>
-        <Card className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="hidden md:table-cell">Date</TableHead>
-                <TableHead>Lead</TableHead>
-                <TableHead className="hidden lg:table-cell">Deposit</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead className="hidden md:table-cell">Counts for</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="hidden text-right sm:table-cell">Commission</TableHead>
-                <TableHead />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {d.rows.length === 0 ? (
-                <TableEmpty colSpan={8} icon={<Wallet />} title="No deposits match.">
-                  Deposits are logged on the lead page, from its Deposits card.
-                </TableEmpty>
-              ) : (
-                d.rows.map((x) => (
-                  <TableRow key={x.id}>
-                    <TableCell className="hidden whitespace-nowrap md:table-cell">{formatDate(x.depositedAt)}</TableCell>
-                    <TableCell>
-                      <Link href={`/leads/${x.lead.id}`} className="text-edge-emerald font-semibold hover:underline">
-                        {x.lead.name}
-                      </Link>
-                      <span className="text-muted-foreground block text-xs">
-                        <span className="md:hidden">{formatDate(x.depositedAt)} · </span>
-                        JetaFX {x.jetaFxClientId ?? "–"}
-                        {x.reference ? ` · ref ${x.reference}` : ""}
-                      </span>
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell">{DEPOSIT_SEQUENCE_LABELS[x.sequence]}</TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums">{formatMoney(x.amountMinor, x.currency)}</TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      {x.creditedTo?.name ?? "–"}
-                      {x.loggedBy && x.loggedBy.id !== x.creditedTo?.id ? (
-                        <span className="text-muted-foreground block text-xs">logged by {x.loggedBy.name}</span>
-                      ) : null}
-                    </TableCell>
-                    <TableCell>
-                      <DepositStatusBadge status={x.status} />
-                      {x.status === "REJECTED" && x.rejectReason ? (
-                        <span className="text-muted-foreground block text-xs">{x.rejectReason}</span>
-                      ) : null}
-                      {x.reviewedBy && x.status !== "PENDING" ? (
-                        <span className="text-muted-foreground block text-xs">by {x.reviewedBy.name}</span>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="hidden text-right tabular-nums sm:table-cell">
-                      {x.commissionMinor != null ? (
-                        <>
-                          {formatMoney(x.commissionMinor, x.currency)}
-                          {x.commissionPct ? (
-                            <span className="text-muted-foreground block text-xs">
-                              {fractionToPercent(x.commissionPct)}%{x.slabBaseMinor != null ? ` · month ${usd(x.slabBaseMinor)}` : ""}
-                            </span>
+        <NetDraftsProvider>
+          <Card className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="hidden md:table-cell">Date</TableHead>
+                  <TableHead>Lead</TableHead>
+                  <TableHead className="hidden lg:table-cell">Deposit</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="hidden text-right sm:table-cell">Net amount</TableHead>
+                  <TableHead className="hidden md:table-cell">Counts for</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="hidden text-right sm:table-cell">Commission</TableHead>
+                  <TableHead />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {d.rows.length === 0 ? (
+                  <TableEmpty colSpan={9} icon={<Wallet />} title="No deposits match.">
+                    Deposits are logged on the lead page, from its Deposits card.
+                  </TableEmpty>
+                ) : (
+                  d.rows.map((x) => (
+                    <TableRow key={x.id}>
+                      <TableCell className="hidden whitespace-nowrap md:table-cell">{formatDate(x.depositedAt)}</TableCell>
+                      <TableCell>
+                        <Link href={`/leads/${x.lead.id}`} className="text-edge-emerald font-semibold hover:underline">
+                          {x.lead.name}
+                        </Link>
+                        <span className="text-muted-foreground block text-xs">
+                          <span className="md:hidden">{formatDate(x.depositedAt)} · </span>
+                          JetaFX {x.jetaFxClientId ?? "–"}
+                          {x.reference ? ` · ref ${x.reference}` : ""}
+                        </span>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">{DEPOSIT_SEQUENCE_LABELS[x.sequence]}</TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">
+                        {formatMoney(x.amountMinor, x.currency)}
+                        {x.netAmountMinor !== x.amountMinor && x.status !== "REJECTED" ? (
+                          <span className="text-muted-foreground block text-xs font-normal sm:hidden">
+                            net {formatMoney(x.netAmountMinor, x.currency)}
+                          </span>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="hidden text-right tabular-nums sm:table-cell">
+                        {x.status === "REJECTED" ? (
+                          <span className="text-muted-foreground">–</span>
+                        ) : d.manage ? (
+                          <NetAmountInput id={x.id} netAmountMinor={x.netAmountMinor} verified={x.status === "VERIFIED"} />
+                        ) : (
+                          <>
+                            {formatMoney(x.netAmountMinor, x.currency)}
+                            {x.netAmountMinor !== x.amountMinor ? (
+                              <span className="text-muted-foreground block text-xs">adjusted</span>
+                            ) : null}
+                          </>
+                        )}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {x.creditedTo?.name ?? "–"}
+                        {x.loggedBy && x.loggedBy.id !== x.creditedTo?.id ? (
+                          <span className="text-muted-foreground block text-xs">logged by {x.loggedBy.name}</span>
+                        ) : null}
+                      </TableCell>
+                      <TableCell>
+                        <DepositStatusBadge status={x.status} />
+                        {x.status === "REJECTED" && x.rejectReason ? (
+                          <span className="text-muted-foreground block text-xs">{x.rejectReason}</span>
+                        ) : null}
+                        {x.reviewedBy && x.status !== "PENDING" ? (
+                          <span className="text-muted-foreground block text-xs">by {x.reviewedBy.name}</span>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="hidden text-right tabular-nums sm:table-cell">
+                        {x.commissionMinor != null ? (
+                          <>
+                            {formatMoney(x.commissionMinor, x.currency)}
+                            {x.commissionPct ? (
+                              <span className="text-muted-foreground block text-xs">
+                                {fractionToPercent(x.commissionPct)}%{x.slabBaseMinor != null ? ` · month ${usd(x.slabBaseMinor)}` : ""}
+                              </span>
+                            ) : null}
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground">–</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap justify-end gap-1">
+                          {d.manage && x.status === "PENDING" ? (
+                            <VerifyDepositDialog
+                              id={x.id}
+                              leadName={x.lead.name}
+                              amountMinor={x.amountMinor}
+                              netAmountMinor={x.netAmountMinor}
+                              sequence={x.sequence}
+                              depositedAt={x.depositedAt}
+                              clientId={x.jetaFxClientId}
+                            />
                           ) : null}
-                        </>
-                      ) : (
-                        <span className="text-muted-foreground">–</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap justify-end gap-1">
-                        {d.manage && x.status === "PENDING" ? (
-                          <VerifyDepositDialog
-                            id={x.id}
-                            leadName={x.lead.name}
-                            amountMinor={x.amountMinor}
-                            sequence={x.sequence}
-                            depositedAt={x.depositedAt}
-                            clientId={x.jetaFxClientId}
-                          />
-                        ) : null}
-                        {d.manage && x.status !== "REJECTED" ? <RejectDepositDialog id={x.id} verified={x.status === "VERIFIED"} /> : null}
-                        {x.canDelete ? (
-                          <DeleteDepositButton id={x.id} />
-                        ) : canPurge ? (
-                          <DeleteButton type="deposit" id={x.id} iconOnly label="Delete deposit" />
-                        ) : null}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </Card>
+                          {d.manage && x.status !== "REJECTED" ? (
+                            <RejectDepositDialog id={x.id} verified={x.status === "VERIFIED"} />
+                          ) : null}
+                          {x.canDelete ? (
+                            <DeleteDepositButton id={x.id} />
+                          ) : canPurge ? (
+                            <DeleteButton type="deposit" id={x.id} iconOnly label="Delete deposit" />
+                          ) : null}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </Card>
+        </NetDraftsProvider>
         <Pagination page={d.page} pageSize={d.pageSize} total={d.total} noun="deposits" className="mt-4" />
       </FilterResults>
     </FilterScope>

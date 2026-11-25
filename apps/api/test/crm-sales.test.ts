@@ -139,6 +139,26 @@ describe("products, deposits and commission over the API", () => {
       15000,
     );
 
+    // The net amount: commission managers only; a verified deposit's commission follows it.
+    for (const a of [exec.agent, mgr.agent])
+      await a.post(`/api/v1/crm/deposits/${dep}/net`).set(INTERNAL).send({ netAmount: "1000" }).expect(403);
+    await admin.agent.post(`/api/v1/crm/deposits/${dep}/net`).set(INTERNAL).send({ netAmount: "abc" }).expect(400);
+    await admin.agent.post(`/api/v1/crm/deposits/${dep}/net`).set(INTERNAL).send({ netAmount: "1,000" }).expect(200);
+    expect((await LeadDeposit.findById(dep).lean())!).toMatchObject({ netAmountMinor: 100000, commissionMinor: 10000 });
+
+    // Search and CSV export, within what the viewer may see.
+    expect((await exec.agent.get("/api/v1/crm/deposits").query({ q: "api lead" }).set(INTERNAL).expect(200)).body.total).toBe(1);
+    expect((await exec.agent.get("/api/v1/crm/deposits").query({ q: "nobody" }).set(INTERNAL).expect(200)).body.total).toBe(0);
+    const csv = await exec.agent.get("/api/v1/crm/deposits.csv").query({ q: "JX-API" }).set(INTERNAL).expect(200);
+    expect(csv.headers["content-type"]).toMatch(/text\/csv/);
+    expect(csv.headers["content-disposition"]).toMatch(/deposits-\d{4}-\d{2}-\d{2}\.csv/);
+    expect(csv.text).toContain("Api Lead,JX-API,,1st deposit,1500.00,1000.00,Verified");
+    expect((await mgr.agent.get("/api/v1/crm/deposits.csv").set(INTERNAL).expect(200)).text.trim().split("\r\n")).toHaveLength(1);
+    const pdf = await exec.agent.get("/api/v1/crm/deposits.pdf").query({ q: "JX-API" }).set(INTERNAL).responseType("blob").expect(200);
+    expect(pdf.headers["content-type"]).toBe("application/pdf");
+    expect(pdf.headers["content-disposition"]).toMatch(/deposits-\d{4}-\d{2}-\d{2}\.pdf/);
+    expect((pdf.body as Buffer).subarray(0, 5).toString()).toBe("%PDF-");
+
     await mgr.agent.post(`/api/v1/crm/conversions/${conversionId}/delete`).set(INTERNAL).expect(200);
     expect((await Lead.findById(lead).lean())!.productIds).toHaveLength(0);
   });

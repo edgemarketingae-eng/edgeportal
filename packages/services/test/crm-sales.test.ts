@@ -25,6 +25,9 @@ import {
   createStaff,
   deleteDeposit,
   deleteLead,
+  depositExportRows,
+  depositsCsv,
+  depositsPdf,
   deleterFor,
   ensureDefaultProducts,
   getCommissionSettings,
@@ -52,6 +55,7 @@ import {
   removeConversion,
   resetEnvForTests,
   saveCommissionSettings,
+  setDepositNet,
   setStage,
   signLeadPayload,
   TransitionError,
@@ -748,6 +752,138 @@ describe("deposits and commission", () => {
       await exec.scope(),
     );
     await expect(deleteLead(id, admin.actor, await admin.scope())).rejects.toThrow(/deposits/);
+  });
+
+  it("works commission out on the net amount, set when verifying or in the table, before or after verification", async () => {
+    const { exec, admin, mgr, id } = await setup();
+    const as = await admin.scope();
+    const log = async (sequence: "FIRST" | "LATER", amount: string, depositedAt: string) =>
+      logDeposit(id, { sequence, amount, depositedAt, jetaFxClientId: "JX-9" }, exec.actor, await exec.scope());
+    const get = async (dep: string) => (await LeadDeposit.findById(dep).lean())!;
+
+    // Verify a $200 1st deposit at $100 net: 10% of $100.
+    const first = await log("FIRST", "200", "2026-10-05");
+    await expect(verifyDeposit(first, admin.actor, as, "0")).rejects.toBeInstanceOf(ValidationError);
+    await expect(verifyDeposit(first, admin.actor, as, "abc")).rejects.toBeInstanceOf(ValidationError);
+    await verifyDeposit(first, admin.actor, as, "100");
+    expect(await get(first)).toMatchObject({ amountMinor: 20000, netAmountMinor: 10000, commissionPct: "0.100000", commissionMinor: 1000 });
+    expect((await InAppNotification.findOne({ userId: exec.id, title: "Deposit verified" }).lean())!.body).toMatch(
+      /USD 100\.00 net \(logged USD 200\.00\)/,
+    );
+
+    // A net saved on a pending deposit is what verifying counts: $8,000 + $6,000 net = $14,000, 2% (not $28,000 at 2.5%).
+    const a = await log("LATER", "8000", "2026-10-02");
+    await verifyDeposit(a, admin.actor, as);
+    const b = await log("LATER", "20000", "2026-10-03");
+    expect(await setDepositNet(b, "6000", admin.actor, as)).toMatch(/when the deposit is verified/);
+    expect(await get(b)).toMatchObject({ status: "PENDING", netAmountMinor: 600000, commissionMinor: null });
+    await verifyDeposit(b, admin.actor, as);
+    expect([await get(a), await get(b)].map((d) => [d.commissionPct, d.commissionMinor, d.slabBaseMinor])).toEqual([
+      ["0.020000", 16000, 1400000],
+      ["0.020000", 12000, 1400000],
+    ]);
+
+    // Lowering a verified later deposit re-rates its month: $9,000 is back to the 1% base for both.
+    expect(await setDepositNet(b, "1000", admin.actor, as)).toMatch(/Commission recalculated: USD 10\.00/);
+    expect([await get(a), await get(b)].map((d) => [d.commissionPct, d.commissionMinor, d.slabBaseMinor])).toEqual([
+      ["0.010000", 8000, 900000],
+      ["0.010000", 1000, 900000],
+    ]);
+    expect(await InAppNotification.countDocuments({ userId: exec.id, title: "Deposit amount changed" })).toBe(1);
+    expect(await AuditLog.countDocuments({ action: "lead.deposit.net" })).toBe(2);
+
+    // A verified 1st deposit keeps the rate it was verified with; new rates (which re-rate this month) use the net too.
+    await saveCommissionSettings(
+      {
+        firstPct: 20,
+        slabs: [
+          { from: 0, pct: 1 },
+          { from: 25000, pct: 2.5 },
+          { from: 10000, pct: 2 },
+        ],
+      },
+      admin.actor,
+    );
+    expect((await get(b)).commissionMinor).toBe(1000);
+    await setDepositNet(first, "150", admin.actor, as);
+    expect(await get(first)).toMatchObject({ netAmountMinor: 15000, commissionPct: "0.100000", commissionMinor: 1500 });
+    expect(await setDepositNet(first, "150.00", admin.actor, as)).toMatch(/unchanged/);
+
+    // Only commission managers, and not on a rejected deposit.
+    await expect(setDepositNet(first, "120", exec.actor, await exec.scope())).rejects.toBeInstanceOf(NotFoundError);
+    await expect(setDepositNet(first, "120", mgr.actor, await mgr.scope())).rejects.toBeInstanceOf(NotFoundError);
+    const c = await log("LATER", "500", "2026-10-04");
+    await rejectDeposit(c, "Not in the report", admin.actor, as);
+    await expect(setDepositNet(c, "100", admin.actor, as)).rejects.toBeInstanceOf(TransitionError);
+
+    // Totals count the net amounts.
+    const list = await listDeposits({}, await exec.scope());
+    expect(list.summary).toMatchObject({ verifiedCount: 3, verifiedMinor: 15000 + 800000 + 100000, commissionMinor: 1500 + 8000 + 1000 });
+    expect(list.rows.find((r) => r.id === b)).toMatchObject({ amountMinor: 2000000, netAmountMinor: 100000 });
+    expect(list.rows.find((r) => r.id === a)).toMatchObject({ amountMinor: 800000, netAmountMinor: 800000 });
+    expect((await getStaffCommission(exec.id, as)).deposits.all).toBe(915000);
+  });
+
+  it("searches deposits by lead name, JetaFX ID or reference and exports every match as CSV", async () => {
+    const { exec, other, admin, id } = await setup();
+    const as = await admin.scope();
+    const ali = await createLead(
+      { projectId: await general(), name: "Ali Khan", phone: phone(), source: "INSTAGRAM" },
+      exec.actor,
+      await exec.scope(),
+    );
+    const theirs = await createLead(
+      { projectId: await general(), name: "Ali Other", phone: phone(), source: "INSTAGRAM" },
+      other.actor,
+      await other.scope(),
+    );
+    const log = async (who: typeof exec, leadId: string, amount: string, jetaFxClientId: string, reference?: string) =>
+      logDeposit(leadId, { sequence: "FIRST", amount, depositedAt: "2026-10-05", jetaFxClientId, reference }, who.actor, await who.scope());
+    await log(exec, id, "100", "JX-ABC123", "TX-1");
+    await log(exec, ali, "200", "JX-777");
+    await log(other, theirs, "300", "JX-999");
+    const names = async (q: string, scope: CrmScope) => (await listDeposits({ q }, scope)).rows.map((r) => r.lead.name).sort();
+
+    expect(await names("khan ali", as)).toEqual(["Ali Khan"]);
+    expect(await names("ali", as)).toEqual(["Ali Khan", "Ali Other"]);
+    expect(await names("777", as)).toEqual(["Ali Khan"]);
+    expect(await names("jx-abc", as)).toEqual(["Depositor"]);
+    expect(await names("tx-1", as)).toEqual(["Depositor"]);
+    expect(await names("nobody", as)).toEqual([]);
+    // Others only find their own.
+    expect(await names("ali", await exec.scope())).toEqual(["Ali Khan"]);
+    // The totals follow the search.
+    expect((await listDeposits({ q: "ali" }, as)).summary).toMatchObject({ pendingCount: 2, pendingMinor: 50000 });
+
+    // The CSV has every matching deposit, not one page.
+    const all = (await depositsCsv({ pageSize: 1 }, as)).split("\r\n");
+    expect(all).toHaveLength(4);
+    expect(all[0]).toContain("Amount logged (USD),Net amount (USD)");
+    expect(all.find((l) => l.includes("Ali Khan"))).toContain("JX-777,,1st deposit,200.00,200.00,Pending");
+    expect((await depositsCsv({ q: "ali" }, await exec.scope())).split("\r\n")).toHaveLength(2);
+    // Export rows report how many match in all, past a limit.
+    expect(await depositExportRows({}, as, 2)).toMatchObject({ rows: [expect.anything(), expect.anything()], total: 3 });
+  });
+
+  it("exports the filtered deposits as a PDF, paged with the table header on every page", async () => {
+    const { exec, admin, id } = await setup();
+    const pages = (pdf: Buffer) => pdf.toString("latin1").match(/\/Type \/Page\b(?!s)/g)?.length ?? 0;
+    const empty = await depositsPdf({}, await admin.scope());
+    expect(empty.subarray(0, 5).toString()).toBe("%PDF-");
+    expect(pages(empty)).toBe(1);
+    for (let i = 0; i < 60; i++)
+      await logDeposit(
+        id,
+        { sequence: "LATER", amount: String(100 + i), depositedAt: "2026-10-05", jetaFxClientId: "JX-PDF" },
+        exec.actor,
+        await exec.scope(),
+      );
+    const all = await depositsPdf({}, await admin.scope());
+    expect(pages(all)).toBeGreaterThanOrEqual(3);
+    // The Manrope font is embedded (not the built-in Helvetica).
+    expect(all.toString("latin1")).toMatch(/Manrope/);
+    // A search that matches nothing is still a valid one-page PDF.
+    expect(pages(await depositsPdf({ q: "nobody" }, await exec.scope()))).toBe(1);
   });
 });
 

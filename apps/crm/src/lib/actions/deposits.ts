@@ -23,8 +23,15 @@ export async function logDepositAction(_prev: ActionState, form: FormData): Prom
   });
 }
 
+/** `netAmount` (from the deposits table's Net amount cell) verifies at that net amount; without it, at the stored one. */
 export async function verifyDepositAction(_prev: ActionState, form: FormData): Promise<ActionState> {
-  return run(() => api(crmRoutes.verifyDeposit, { params: { id: text(form, "id") } }));
+  const netAmount = text(form, "netAmount");
+  return run(() => api(crmRoutes.verifyDeposit, { params: { id: text(form, "id") }, body: netAmount ? { netAmount } : {} }));
+}
+
+/** Save a deposit's net amount (pending or verified; a verified one's commission is recalculated). */
+export async function setDepositNetAction(id: string, netAmount: string): Promise<ActionState> {
+  return run(() => api(crmRoutes.setDepositNet, { params: { id }, body: { netAmount } }));
 }
 
 export async function rejectDepositAction(_prev: ActionState, form: FormData): Promise<ActionState> {

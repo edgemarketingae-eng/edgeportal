@@ -20,11 +20,13 @@
     "@edge/jobs": "workspace:*",
     "better-auth": "catalog:",
     "decimal.js": "catalog:",
+    "pdfkit": "^0.21.0",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@edge/config": "workspace:*",
     "@types/node": "catalog:",
+    "@types/pdfkit": "^0.17.7",
     "eslint": "catalog:",
     "fast-check": "catalog:",
     "mongodb-memory-server": "catalog:",

@@ -69,6 +69,7 @@ export const listDeposits = defineTool({
     "Broker deposits with totals. People who manage commission see everyone's (and can filter by staffId); others see the " +
     "deposits credited to them.",
   input: {
+    q: z.string().trim().max(100).optional().describe("Search: lead name, JetaFX client ID or broker reference"),
     status: z.enum(DEPOSIT_STATUSES).optional(),
     staffId: zId("Staff user").optional(),
     period: z.enum(LEADERBOARD_PERIODS).optional().describe("By deposit date; default all time"),
@@ -79,9 +80,9 @@ export const listDeposits = defineTool({
   routes: [crmRoutes.deposits],
   perms: ["crm.read"],
   kind: "read",
-  async run({ status, staffId, period, from, to, page, pageSize }, { call }) {
+  async run({ q, status, staffId, period, from, to, page, pageSize }, { call }) {
     const r = await call(crmRoutes.deposits, {
-      query: { status, staff: staffId, period, from, to, page: page ?? 1, pageSize: pageSize ?? 25 },
+      query: { q, status, staff: staffId, period, from, to, page: page ?? 1, pageSize: pageSize ?? 25 },
     });
     return {
       total: r.total,
@@ -94,6 +95,7 @@ export const listDeposits = defineTool({
         lead: d.lead,
         sequence: d.sequence,
         amountMinor: d.amountMinor,
+        netAmountMinor: d.netAmountMinor,
         depositedAt: d.depositedAt,
         status: d.status,
         creditedTo: ref(d.creditedTo),
@@ -112,13 +114,21 @@ export const listDeposits = defineTool({
 export const verifyDeposit = defineTool({
   name: "verify_deposit",
   title: "Verify a deposit",
-  description: "Mark a pending deposit as verified with the broker. Its commission is worked out and credited at this point.",
-  input: { depositId: zId("Deposit") },
+  description:
+    "Mark a pending deposit as verified with the broker. Its commission is worked out on the net amount and credited at " +
+    "this point. Pass netAmountUsd when less (or more) than the logged amount counts, e.g. the lead withdrew part of it.",
+  input: {
+    depositId: zId("Deposit"),
+    netAmountUsd: z.number().positive().optional().describe("The net deposit in USD; default: the logged (or already adjusted) amount"),
+  },
   routes: [crmRoutes.verifyDeposit],
   perms: ["crm.commission.manage"],
   kind: "write",
-  async run({ depositId }, { call }) {
-    return call(crmRoutes.verifyDeposit, { params: { id: depositId } });
+  async run({ depositId, netAmountUsd }, { call }) {
+    return call(crmRoutes.verifyDeposit, {
+      params: { id: depositId },
+      body: netAmountUsd != null ? { netAmount: netAmountUsd.toFixed(2) } : {},
+    });
   },
 });
 

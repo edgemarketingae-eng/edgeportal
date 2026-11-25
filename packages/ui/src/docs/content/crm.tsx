@@ -1134,6 +1134,11 @@ export const crmDocs: DocModule[] = [
                 deposit of yours that month earns that rate on its whole amount. CRM admins set the rates in Settings.
               </>
               <>
+                It is worked out on the deposit&apos;s <b>net amount</b>: what the lead actually kept in the account. If they withdrew part
+                of it right away, a CRM admin sets the lower net amount (Deposits shows it next to what you logged), and you are told when
+                that changes the commission on a verified deposit.
+              </>
+              <>
                 So your commission on earlier deposits goes up when a new one lifts the month into a higher slab, and down if a verified one
                 is rejected. <To href="/deposits">Deposits</To> shows this month&apos;s total, its rate and how much more reaches the next
                 slab.
@@ -1167,9 +1172,13 @@ export const crmDocs: DocModule[] = [
               </>
               <>Compare each one with the JetaFX report: client ID, amount and date.</>
               <>
-                Press <Ui>Verify</Ui> and confirm. A 1st deposit gets today&apos;s first-deposit rate. A later deposit joins its
-                person&apos;s month (by deposit date), and all their later deposits that month are recalculated with the slab the new total
-                reaches, even for a past month.
+                If less counts than was logged (for example they deposited $200 and withdrew $100 straight away), type the real amount in
+                the row&apos;s <Ui>Net amount</Ui> box. It starts at the logged amount, and commission is always worked out on it.
+              </>
+              <>
+                Press <Ui>Verify</Ui> and confirm (the dialog shows the net amount you typed). A 1st deposit gets today&apos;s first-deposit
+                rate. A later deposit joins its person&apos;s month (by deposit date), and all their later deposits that month are
+                recalculated with the slab the new total reaches, even for a past month.
               </>
               <>
                 If it isn&apos;t in the report, press <Ui>Reject</Ui> and give a <Ui>Reason</Ui>. A verified deposit that the broker
@@ -1177,12 +1186,20 @@ export const crmDocs: DocModule[] = [
               </>
             </Steps>
             <P>
+              A verified deposit&apos;s net amount can be changed later too: type it and press the tick (or Enter). Its commission is
+              recalculated (a later deposit&apos;s whole month, since the total picks the slab) and the person it counts for is told. Press
+              Escape to undo what you typed.
+            </P>
+            <P>
               Each person&apos;s total commission is on their page under <To href="/team">Team</To>. Use the <Ui>Credited to</Ui> filter on
               Deposits to see one person&apos;s deposits.
             </P>
             <P>
               Deposits opens on the deposits made <b>today</b> (by deposit date), and the totals at the top follow the list. Use the{" "}
-              <Ui>Deposited</Ui> date filter, or the <Ui>This month</Ui> and <Ui>All</Ui> buttons, to see other days.
+              <Ui>Deposited</Ui> date filter, or the <Ui>This month</Ui> and <Ui>All</Ui> buttons, to see other days. The search box finds
+              deposits by lead name, JetaFX client ID or broker reference, across all dates. The two buttons next to the filters export
+              every deposit the filters match (all pages): <Ui>Export CSV</Ui> (green grid icon) for Excel, and <Ui>Export PDF</Ui>
+              (red document icon) to share or print, with the totals at the top.
             </P>
           </>
         ),

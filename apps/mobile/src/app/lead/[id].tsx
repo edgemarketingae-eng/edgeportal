@@ -177,6 +177,7 @@ function Deposit({
       <View style={styles.spread}>
         <Text variant="heading" style={{ flex: 1 }}>
           {formatMoney(d.amountMinor, d.currency)}
+          {d.netAmountMinor !== d.amountMinor && d.status !== "REJECTED" ? ` · net ${formatMoney(d.netAmountMinor, d.currency)}` : ""}
         </Text>
         <Pill tone={tone} label={DEPOSIT_STATUS_LABELS[d.status]} />
       </View>
@@ -285,7 +286,7 @@ export default function Lead() {
   const otherProjects = d.options.projects.filter((p) => p.id !== lead.project.id);
   // Products this lead's project sells that it hasn't converted to yet (the server sends only the project's products).
   const markable = d.options.products.filter((p) => !d.conversions.some((c) => c.product.id === p.id));
-  const verifiedMinor = d.deposits.filter((x) => x.status === "VERIFIED").reduce((n, x) => n + x.amountMinor, 0);
+  const verifiedMinor = d.deposits.filter((x) => x.status === "VERIFIED").reduce((n, x) => n + x.netAmountMinor, 0);
   const utm = [lead.utm.source, lead.utm.medium, lead.utm.campaign, lead.utm.content, lead.utm.term].filter(Boolean).join(" / ");
   const courseAndBatch = [lead.courseTitle, lead.batchName].filter(Boolean).join(" · ");
   const contactedAt = [

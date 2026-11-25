@@ -15,6 +15,7 @@ export * from "./jobs";
 export * from "./settings";
 export * from "./products";
 export * from "./deposits";
+export * from "./deposits-pdf";
 export * from "./leaderboard";
 export * from "./calls";
 export * from "./devices";
