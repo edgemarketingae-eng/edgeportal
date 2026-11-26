@@ -6,6 +6,7 @@ import { Field, FormError } from "@edge/ui/forms/field";
 import { cn } from "@edge/ui/lib/utils";
 import { ArrowRight, CircleCheck, Lock, MessageCircle } from "lucide-react";
 import { createContext, use, useActionState, useEffect, useState, type ComponentProps, type ReactNode } from "react";
+import { trackMeta } from "@/lib/meta-pixel";
 import { joinFreeClassAction, type JoinState } from "./actions";
 import { display, tw } from "./brand";
 
@@ -52,11 +53,18 @@ export function JoinButton({ children, className, tone = "ink", ...props }: Comp
 
 function JoinForm() {
   const [state, action, pending] = useActionState(joinFreeClassAction, {} as JoinState);
+  const ok = !!state.ok;
   const url = state.ok ? state.contactUrl : null;
   const telegram = state.channel === "TELEGRAM";
   useEffect(() => {
-    if (url) window.location.href = url;
-  }, [url]);
+    if (!ok) return;
+    // The ads count a Lead for every "Contact support" on the landing page that went through.
+    const tracked = trackMeta("Lead", { content_name: "Free class" });
+    if (!url) return;
+    // Give the pixel a moment to send before the chat app takes over the tab.
+    const t = setTimeout(() => (window.location.href = url), tracked ? 400 : 0);
+    return () => clearTimeout(t);
+  }, [ok, url]);
 
   if (state.ok)
     return (

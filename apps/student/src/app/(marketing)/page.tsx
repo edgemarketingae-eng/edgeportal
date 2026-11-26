@@ -1,6 +1,7 @@
 import { studentRoutes, type FreeClassDto } from "@edge/contracts";
 import { formatTime } from "@edge/domain/dates";
 import { api } from "@edge/web/server";
+import { MetaPixel } from "@/lib/meta-pixel";
 import { cn } from "@edge/ui/lib/utils";
 import { CircleCheck, MessageCircle, MousePointerClick, UserRound } from "lucide-react";
 import type { Metadata } from "next";
@@ -60,6 +61,7 @@ const getFreeClass = cache(async (): Promise<FreeClassDto | null> =>
 export default function LandingPage() {
   return (
     <JoinFreeClass>
+      <MetaPixel />
       <div className="relative isolate overflow-x-clip">
         <CrossingLines />
 
